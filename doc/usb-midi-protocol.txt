@@ -36,10 +36,12 @@ Roland SysEx through that connection. This is established by
 CCplMidiClient::EstablishConnection at 0x100003f46 and CCplDeviceIO methods.
 
 The macOS MIDI driver uses USB MIDI framing with cable numbers. Its input
-and output cable mapping tables are identity maps 0..15. The cable number
-corresponding to CTRL is not yet confirmed. Sending control SysEx through
-the only currently exposed ALSA MIDI port is therefore not yet justified;
-that port may be the external DIN MIDI connection.
+and output cable mapping tables are identity maps 0..15. createDev at
+0xd528 creates MIDI first and CTRL second; SetTxEps at 0xc336 and SetRxEps
+at 0xd8cc apply those identity maps. This establishes cable 0 for MIDI and
+cable 1 for CTRL in the reference implementation. The existing Linux
+quirk's cable mask 0x0001 exposes cable 0 only; cable 1 is missing.
+This cable assignment is statically established, not yet hardware-verified.
 
 SysEx envelope
 --------------
@@ -125,6 +127,21 @@ TxSaveLoad at 0x10002a946 writes one command byte to 00 00 00 01.
 Command meanings must be recovered from callers before using persistence
 operations. No initialization, save, or restore operation has been executed.
 
+Audio packing and initial hardware tests
+---------------------------------------
+The macOS CPortProps::BytesPerUsbFrame at 0x13856 multiplies sample counts
+by channel count and three bytes per sample. This agrees with the device's
+three-byte/24-bit format descriptors. The Linux fixed quirk currently
+advertises S32_LE instead. Correcting that discrepancy requires a driver
+change and a real streaming test; it does not by itself prove a complete fix.
+
+Initial tests on the existing unmodified WSL driver:
+  arecord -q -D hw:0,0 -f S32_LE -c 12 -r 44100 -d 1 -t raw /dev/null
+  aplay -q -D hw:0,0 -f S32_LE -c 10 -r 44100 -d 1 -t raw /dev/zero
+Both terminated with Input/output error. The capture was discarded; playback
+contained only zero samples. USB/IP completion messages were present in the
+kernel log. No native-Debian streaming result is available yet.
+
 Evidence and remaining verification
 ----------------------------------
 Named macOS GUI methods were decompiled in Ghidra 12.1.2; selected original
@@ -132,7 +149,12 @@ decompilations and binary resources are ignored under doc/local/.
 tools/ghidra/ExportSelectedFunctions.java exports selected functions from
 a Ghidra project using an address<TAB>label input file.
 
-Next requirements: prove the CTRL USB cable mapping; capture a bulk read
+Next requirements: verify the CTRL USB cable mapping on hardware; capture a bulk read
 and reconcile it with the decoded GUI state; map all parameter bounds,
 sample-rate/clock behavior, messages, and file formats; verify independent
 encoders/decoders against original frames and real device responses.
+
+The initial independent C++ encoder/decoder is in src/Protocol.cpp. Its tests
+check the reference bulk-request and sensitivity frames, malformed frames,
+7-bit constraints, request-size limits, and a synthetic 1146-byte bulk
+roundtrip. The synthetic case is not a captured device response.

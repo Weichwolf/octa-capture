@@ -1,0 +1,37 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "strict",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/strict",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "clang++-19",
+        "OCTA_SANITIZER": "address-undefined"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "strict",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Release", "OCTA_SANITIZER": "none"}
+    },
+    {
+      "name": "thread",
+      "inherits": "strict",
+      "binaryDir": "${sourceDir}/build/thread",
+      "cacheVariables": {"OCTA_SANITIZER": "thread"}
+    }
+  ],
+  "buildPresets": [
+    {"name": "strict", "configurePreset": "strict", "jobs": 2},
+    {"name": "release", "configurePreset": "release", "jobs": 2},
+    {"name": "thread", "configurePreset": "thread", "jobs": 2}
+  ],
+  "testPresets": [
+    {"name": "strict", "configurePreset": "strict", "output": {"outputOnFailure": true}},
+    {"name": "release", "configurePreset": "release", "output": {"outputOnFailure": true}},
+    {"name": "thread", "configurePreset": "thread", "output": {"outputOnFailure": true}}
+  ]
+}

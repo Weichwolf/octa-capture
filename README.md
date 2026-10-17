@@ -6,7 +6,7 @@ The target platform is native Debian. Development and local functional testing a
 
 ## Status
 
-Environment preparation and protocol analysis; no custom driver or GUI implemented yet. The connected device is already detected by `snd-usb-audio`. Recording, playback, and full device control have not been verified.
+Protocol analysis and implementation are in progress. The first native library encodes and validates the recovered SysEx framing; it does not yet control the device. No custom kernel driver or GUI is implemented yet. The connected device is detected by `snd-usb-audio`, but initial recording and silent-playback tests under WSL failed with I/O errors.
 
 ## Planned interface
 
@@ -23,6 +23,16 @@ source /etc/octa-capture-dev.env
 ```
 
 The script currently exists only in `/tmp` and is not part of the repository. The WSL kernel build takes time and several GB of disk space. Modules must match the kernel version of each test system.
+
+The native userspace code uses C++23, CMake/Ninja, and LLVM 19. Debian packages for its quality gates are `clang-19`, `clang-tidy-19`, `clang-format-19`, and `libclang-rt-19-dev`, in addition to `build-essential`, `cmake`, and `ninja-build`.
+
+```bash
+make test       # strict warnings, clang-tidy, ASan/UBSan, and protocol tests
+make lint       # format and full native static analysis
+make release    # optimized build and tests
+```
+
+Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. The separate `thread` preset is available for concurrent code. Userspace flags are not applied to kernel builds.
 
 ## Documentation
 
