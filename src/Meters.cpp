@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <vector>
 
 namespace octa {
@@ -53,6 +54,23 @@ std::expected<double, MeterError> input_meter_db(std::uint16_t value) {
 std::expected<std::vector<std::uint8_t>, ProtocolError> encode_meter_switch(bool enabled) {
   const std::array payload = {static_cast<std::uint8_t>(enabled)};
   return encode(Command::data, meter_switch_address, payload);
+}
+
+std::expected<std::optional<InputMeters>, ProtocolError> MeterReceiver::feed(std::uint8_t byte) {
+  const auto result = receiver_.feed(byte);
+  if (!result) { return std::unexpected(result.error()); }
+  const auto &message = *result;
+  if (!message.has_value() || message->command != Command::data ||
+      message->address != meter_address) {
+    return std::optional<InputMeters>{};
+  }
+  const auto meters = decode_input_meters(*message);
+  if (!meters) {
+    const auto error =
+        meters.error() == MeterError::size ? ProtocolError::size : ProtocolError::midi_data;
+    return std::unexpected(error);
+  }
+  return std::optional<InputMeters>(*meters);
 }
 
 }

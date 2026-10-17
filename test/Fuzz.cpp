@@ -89,6 +89,18 @@ void typed_controls(std::span<const std::uint8_t> bytes) {
 }
 
 void meter_packets(std::span<const std::uint8_t> bytes) {
+  octa::MeterReceiver receiver;
+  for (const auto byte : bytes) {
+    const auto result = receiver.feed(byte);
+    if (!result) { continue; }
+    const auto &packet = *result;
+    if (packet.has_value()) {
+      for (const auto value : *packet) {
+        const auto decibels = octa::input_meter_db(value);
+        require(decibels.has_value());
+      }
+    }
+  }
   constexpr std::size_t meter_bytes = 16;
   std::vector<std::uint8_t> payload(meter_bytes);
   const auto count = std::min(bytes.size(), payload.size());
@@ -106,6 +118,18 @@ void meter_packets(std::span<const std::uint8_t> bytes) {
     constexpr double silence = -96.0;
     require(decibels && std::isfinite(*decibels) && *decibels >= silence && *decibels <= 0.0);
   }
+  const auto frame = octa::encode(message.command, message.address, message.payload);
+  require(frame.has_value());
+  if (!frame) { return; }
+  bool recovered = false;
+  for (const auto byte : *frame) {
+    const auto result = receiver.feed(byte);
+    require(result.has_value());
+    if (!result) { return; }
+    const auto &packet = *result;
+    if (packet.has_value()) { recovered = *packet == *meters; }
+  }
+  require(recovered);
 }
 
 void frames(std::span<const std::uint8_t> bytes) {

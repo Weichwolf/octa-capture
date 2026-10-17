@@ -32,6 +32,8 @@ add_executable(octa-audio-check src/AudioCheck.cpp)
 target_link_libraries(octa-audio-check PRIVATE octa_quality PkgConfig::ALSA)
 add_library(octa_midi STATIC src/Midi.cpp)
 target_link_libraries(octa_midi PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
+add_executable(octa-meters src/MeterMain.cpp)
+target_link_libraries(octa-meters PRIVATE octa_midi)
 add_executable(octa-state src/State.cpp)
 target_link_libraries(octa-state PRIVATE octa_midi)
 add_executable(octa-dsp src/DspMain.cpp)
@@ -68,7 +70,13 @@ add_test(NAME dsp-control COMMAND dsp_control_test)
 add_executable(meters_test test/Meters.cpp)
 target_link_libraries(meters_test PRIVATE octa_protocol)
 add_test(NAME meters COMMAND meters_test)
-set_tests_properties(protocol preamp control dsp dsp-update dsp-control meters PROPERTIES TIMEOUT 20
+add_executable(midi_test test/Midi.cpp)
+target_link_libraries(midi_test PRIVATE octa_midi)
+add_test(NAME midi COMMAND midi_test)
+add_executable(midi_transport_test test/MidiTransport.cpp)
+target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
+add_test(NAME midi-transport COMMAND midi_transport_test)
+set_tests_properties(protocol preamp control dsp dsp-update dsp-control meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 add_custom_target(format-check
@@ -85,6 +93,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
+    "${CMAKE_SOURCE_DIR}/src/MeterMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Dsp.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspUpdate.cpp"
@@ -101,6 +110,8 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/test/DspUpdate.cpp"
     "${CMAKE_SOURCE_DIR}/test/DspControl.cpp"
     "${CMAKE_SOURCE_DIR}/test/Meters.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Midi.cpp"
+    "${CMAKE_SOURCE_DIR}/test/MidiTransport.cpp"
     "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
   VERBATIM)
 
@@ -118,6 +129,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
+    "${CMAKE_SOURCE_DIR}/src/MeterMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Dsp.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspUpdate.cpp"
@@ -134,6 +146,8 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/test/DspUpdate.cpp"
     "${CMAKE_SOURCE_DIR}/test/DspControl.cpp"
     "${CMAKE_SOURCE_DIR}/test/Meters.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Midi.cpp"
+    "${CMAKE_SOURCE_DIR}/test/MidiTransport.cpp"
     "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
   VERBATIM)
 
@@ -144,6 +158,7 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
+    "${CMAKE_SOURCE_DIR}/src/MeterMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Dsp.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspUpdate.cpp"
@@ -160,6 +175,8 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/test/DspUpdate.cpp"
     "${CMAKE_SOURCE_DIR}/test/DspControl.cpp"
     "${CMAKE_SOURCE_DIR}/test/Meters.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Midi.cpp"
+    "${CMAKE_SOURCE_DIR}/test/MidiTransport.cpp"
     ${octa_fuzz_sources}
   DEPENDS format-check
   VERBATIM)

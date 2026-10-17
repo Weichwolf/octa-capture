@@ -297,6 +297,14 @@ in two seconds while duplex audio ran. All eight levels were zero. The
 captured silent frame is a regression fixture; nonzero channel identity
 and calibrated levels still need signal-based tests. Meter output was
 explicitly disabled afterward.
+The octa-meters observer uses one exclusive CTRL connection, validates each
+complete packet, and attempts disable on completion, callback cancellation
+and errors. Normal completion, SIGINT, SIGTERM, a closed stdout pipe and
+rejection of a competing observer were hardware-checked; passive reads
+confirmed no remaining level stream and the bulk state was unchanged.
+Offline transport tests cover partial transfers, malformed packets, read/
+write failures and deadlines. Unplugging or forced termination can prevent
+cleanup. A shared connection for simultaneous controls remains required.
 
 Auto-Sens messages (static analysis only)
 ---------------------------------------

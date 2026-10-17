@@ -3,9 +3,11 @@
 
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
+#include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 
+#include <algorithm>
 #include <alsa/asoundlib.h>
 #include <array>
 #include <cerrno>
@@ -30,6 +32,25 @@ constexpr auto query_timeout = std::chrono::seconds(3);
 constexpr int maximum_poll_descriptors = 32;
 constexpr std::size_t input_chunk_size = 512;
 
+struct Connection {
+  RawMidi input;
+  RawMidi output;
+};
+
+std::expected<Connection, MidiError> open_ctrl(std::string_view port) {
+  if (!port.starts_with("hw:") || port.find('\0') != std::string_view::npos) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "hardware MIDI port"});
+  }
+  const std::string name(port);
+  snd_rawmidi_t *raw_input = nullptr;
+  snd_rawmidi_t *raw_output = nullptr;
+  const int opened = snd_rawmidi_open(&raw_input, &raw_output, name.c_str(), SND_RAWMIDI_NONBLOCK);
+  Connection connection = {.input = RawMidi(raw_input, &snd_rawmidi_close),
+                           .output = RawMidi(raw_output, &snd_rawmidi_close)};
+  if (opened < 0) { return std::unexpected(MidiError{.code = opened, .operation = "open CTRL"}); }
+  return connection;
+}
+
 std::expected<void, MidiError> wait_ready(snd_rawmidi_t *handle, Clock::time_point deadline) {
   const int count = snd_rawmidi_poll_descriptors_count(handle);
   if (count <= 0 || count > maximum_poll_descriptors) {
@@ -42,11 +63,13 @@ std::expected<void, MidiError> wait_ready(snd_rawmidi_t *handle, Clock::time_poi
     return std::unexpected(MidiError{.code = -EIO, .operation = "poll descriptors"});
   }
   while (true) {
-    const auto remaining =
-        std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now());
-    if (remaining.count() <= 0) {
-      return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "state reply"});
+    const auto until = deadline - Clock::now();
+    if (until.count() <= 0) {
+      return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "MIDI readiness"});
     }
+    auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(until);
+    // poll takes integer milliseconds; rounding down would expire early.
+    if (remaining < until) { ++remaining; }
     const int polled =
         poll(descriptors.data(), descriptors.size(), static_cast<int>(remaining.count()));
     if (polled < 0 && errno == EINTR) { continue; }
@@ -120,26 +143,73 @@ std::expected<Message, MidiError> receive_state(snd_rawmidi_t *input, Clock::tim
 
 std::expected<Message, MidiError> query_state(std::string_view port,
                                               std::span<const std::uint8_t> update) {
-  if (!port.starts_with("hw:") || port.find('\0') != std::string_view::npos) {
-    return std::unexpected(MidiError{.code = -EINVAL, .operation = "hardware MIDI port"});
-  }
-  const std::string name(port);
-  snd_rawmidi_t *raw_input = nullptr;
-  snd_rawmidi_t *raw_output = nullptr;
-  const int opened = snd_rawmidi_open(&raw_input, &raw_output, name.c_str(), SND_RAWMIDI_NONBLOCK);
-  const RawMidi input(raw_input, &snd_rawmidi_close);
-  const RawMidi output(raw_output, &snd_rawmidi_close);
-  if (opened < 0) { return std::unexpected(MidiError{.code = opened, .operation = "open CTRL"}); }
+  auto connection = open_ctrl(port);
+  if (!connection) { return std::unexpected(connection.error()); }
   const auto deadline = Clock::now() + query_timeout;
   if (!update.empty()) {
-    const auto sent = send_frame(output.get(), update, deadline);
+    const auto sent = send_frame(connection->output.get(), update, deadline);
     if (!sent) { return std::unexpected(sent.error()); }
   }
   const auto frame = request(bulk_address, bulk_size);
   if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "encode request"}); }
-  const auto sent = send_frame(output.get(), *frame, deadline);
+  const auto sent = send_frame(connection->output.get(), *frame, deadline);
   if (!sent) { return std::unexpected(sent.error()); }
-  return receive_state(input.get(), deadline);
+  return receive_state(connection->input.get(), deadline);
+}
+
+std::expected<std::size_t, MidiError>
+receive_bytes(snd_rawmidi_t *input, std::span<std::uint8_t> buffer, Clock::time_point deadline) {
+  while (Clock::now() < deadline) {
+    const auto received = snd_rawmidi_read(input, buffer.data(), buffer.size());
+    if (received == -EINTR) { continue; }
+    if (received == -EAGAIN) {
+      const auto ready = wait_ready(input, deadline);
+      if (!ready) { return std::unexpected(ready.error()); }
+      continue;
+    }
+    if (received <= 0) {
+      return std::unexpected(MidiError{.code = received < 0 ? static_cast<int>(received) : -EIO,
+                                       .operation = "read meters"});
+    }
+    const auto count = static_cast<std::size_t>(received);
+    if (count > buffer.size()) {
+      return std::unexpected(MidiError{.code = -EIO, .operation = "MIDI read size"});
+    }
+    return count;
+  }
+  return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "meter reply"});
+}
+
+std::expected<std::size_t, MidiError>
+receive_meters(snd_rawmidi_t *input, Clock::time_point end, const MeterListener &listener) {
+  MeterReceiver receiver;
+  std::array<std::uint8_t, input_chunk_size> bytes{};
+  std::size_t packets = 0;
+  auto active_until = Clock::now() + query_timeout;
+  while (Clock::now() < end) {
+    const auto count = receive_bytes(input, bytes, std::min(end, active_until));
+    if (!count) {
+      if (count.error().code == -ETIMEDOUT && Clock::now() >= end && packets != 0) {
+        return packets;
+      }
+      return std::unexpected(count.error());
+    }
+    for (const auto byte : std::span(bytes).first(*count)) {
+      const auto result = receiver.feed(byte);
+      if (!result) {
+        return std::unexpected(MidiError{.code = -EBADMSG, .operation = "meter envelope"});
+      }
+      const auto &meters = *result;
+      if (!meters.has_value()) { continue; }
+      ++packets;
+      active_until = Clock::now() + query_timeout;
+      if (!listener(*meters) || Clock::now() >= end) { return packets; }
+    }
+  }
+  if (packets == 0) {
+    return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "meter reply"});
+  }
+  return packets;
 }
 
 }
@@ -174,6 +244,35 @@ std::expected<Message, MidiError> write_dsp(std::string_view port, const DspChan
     return std::unexpected(MidiError{.code = -EIO, .operation = "DSP readback"});
   }
   return reply;
+}
+
+std::expected<std::size_t, MidiError> observe_input_meters(std::string_view port,
+                                                           std::chrono::milliseconds duration,
+                                                           const MeterListener &listener) {
+  constexpr auto maximum_duration = std::chrono::minutes(1);
+  if (duration.count() <= 0 || duration > maximum_duration) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "meter duration"});
+  }
+  if (!listener) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "meter callback"});
+  }
+  const auto enable = encode_meter_switch(true);
+  const auto disable = encode_meter_switch(false);
+  if (!enable || !disable) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "meter switch encoding"});
+  }
+  auto connection = open_ctrl(port);
+  if (!connection) { return std::unexpected(connection.error()); }
+  const auto end = Clock::now() + duration;
+  const auto enabled = send_frame(connection->output.get(), *enable, Clock::now() + query_timeout);
+  const auto result = enabled
+                          ? receive_meters(connection->input.get(), end, listener)
+                          : std::expected<std::size_t, MidiError>(std::unexpected(enabled.error()));
+  // The stop command is attempted even after a failed/partial start or malformed input.
+  const auto disabled =
+      send_frame(connection->output.get(), *disable, Clock::now() + query_timeout);
+  if (!disabled) { return std::unexpected(disabled.error()); }
+  return result;
 }
 
 }

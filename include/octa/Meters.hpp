@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <vector>
 
 namespace octa {
@@ -18,5 +19,14 @@ enum class MeterError : std::uint8_t { message, size, data };
 [[nodiscard]] std::expected<double, MeterError> input_meter_db(std::uint16_t value);
 [[nodiscard]] std::expected<std::vector<std::uint8_t>, ProtocolError>
 encode_meter_switch(bool enabled);
+
+// Bounded incremental receiver; ignores other valid device messages.
+class MeterReceiver {
+public:
+  [[nodiscard]] std::expected<std::optional<InputMeters>, ProtocolError> feed(std::uint8_t byte);
+
+private:
+  SysExReceiver receiver_;
+};
 
 }

@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <span>
 #include <string_view>
 
 namespace {
@@ -78,6 +79,59 @@ bool malformed() {
   return require(!octa::decode_input_meters(message), "request is not a level packet");
 }
 
+bool streaming() {
+  const auto control = octa::encode_meter_switch(true);
+  constexpr std::array<std::uint8_t, 16> levels = {0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8};
+  const auto frame = octa::encode(octa::Command::data, {0, 10, 0, 1}, levels);
+  if (!control || !frame) { return false; }
+  octa::MeterReceiver receiver;
+  for (const auto byte : *control) {
+    const auto result = receiver.feed(byte);
+    if (!require(result && !result->has_value(), "ignore a valid non-meter notification")) {
+      return false;
+    }
+  }
+  bool received = false;
+  for (const auto byte : *frame) {
+    constexpr std::uint8_t clock = 0xf8;
+    const auto realtime = receiver.feed(clock);
+    if (!require(realtime && !realtime->has_value(), "interleaved realtime byte")) { return false; }
+    const auto result = receiver.feed(byte);
+    if (!require(result.has_value(), "fragmented level packet")) { return false; }
+    const auto &packet = *result;
+    if (packet.has_value()) {
+      constexpr octa::InputMeters expected = {1, 2, 3, 4, 5, 6, 7, 8};
+      if (!require(!received && *packet == expected, "one complete bank in channel order")) {
+        return false;
+      }
+      received = true;
+    }
+  }
+  return require(received, "one complete fragmented meter bank");
+}
+
+bool stream_recovery() {
+  constexpr std::array<std::uint8_t, 16> levels{};
+  const auto frame = octa::encode(octa::Command::data, {0, 10, 0, 1}, levels);
+  if (!frame) { return false; }
+  octa::MeterReceiver receiver;
+  const auto short_frame =
+      octa::encode(octa::Command::data, {0, 10, 0, 1}, std::span(levels).first(levels.size() - 1));
+  if (!short_frame) { return false; }
+  bool rejected = false;
+  for (const auto byte : *short_frame) {
+    const auto result = receiver.feed(byte);
+    if (!result) { rejected = result.error() == octa::ProtocolError::size; }
+  }
+  bool recovered = false;
+  for (const auto byte : *frame) {
+    const auto result = receiver.feed(byte);
+    if (!result) { return false; }
+    recovered = recovered || result->has_value();
+  }
+  return require(rejected && recovered, "reject malformed known packets and recover");
+}
+
 bool decibels() {
   constexpr std::uint16_t full_scale = 16383;
   constexpr std::uint16_t midpoint = 8192;
@@ -96,7 +150,8 @@ bool decibels() {
 }
 
 int main() {
-  return reference_levels() && switch_frames() && captured_silence() && malformed() && decibels()
+  return reference_levels() && switch_frames() && captured_silence() && malformed() &&
+                 streaming() && stream_recovery() && decibels()
              ? 0
              : 1;
 }
