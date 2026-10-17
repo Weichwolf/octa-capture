@@ -43,6 +43,44 @@ cable 1 for CTRL in the reference implementation. The existing Linux
 quirk's cable mask 0x0001 exposes cable 0 only; cable 1 is missing.
 This cable assignment is statically established, not yet hardware-verified.
 
+USB clock requests
+------------------
+CuUsbDev::DevReqCall2 at 0x1732c issues vendor control transfers with
+wIndex=0. Fsc_GetStatChk1 at 0x174bc uses:
+
+  bmRequestType=c0 (device-to-host, vendor, device)
+  bRequest=03, wValue=0001, wIndex=0000, wLength=0004
+
+Bytes 0..2 hold the sample rate in little-endian order; byte 3 holds flags.
+The reference interprets flag bits 0 and 1 as clear/set conditions; the
+precise user-facing meaning of these conditions still needs verification.
+
+Clock query, 2026-10-17, WSL2 USB/IP:
+  response: 80 bb 00 00
+  decoded: 48000 Hz, flags=00
+The returned rate matches the device's current 48 kHz setting, as confirmed
+by the user.
+It was exclusively attached to WSL; the Windows driver could not access it.
+This confirms the rate query at that setting, not streaming or other rates.
+The query does not claim interfaces, detach snd-usb-audio, or change settings.
+
+The independent native implementation is src/Usb.cpp, exposed by octa-probe.
+It builds with strict compiler warnings and clang-tidy. Its first hardware
+run returned LIBUSB_ERROR_TIMEOUT (-7); repeating the same request through
+Python also timed out. The cause is unresolved. The earlier successful
+response must not be treated as proof of reliable repeated communication.
+The native run produced no ASan/UBSan finding; protocol unit tests passed.
+
+Fsc_GetStatChk2 at 0x1757e reads c0/03/0002/0000, length 1, and compares
+the result with 01. The hardware returned 01. Fsc_GetDIN at 0x17606 reads
+c0/05/0000/0000, length 1; that query timed out in the initial test.
+
+SendFsC at 0x177c8 sends the following clock-change request:
+  bmRequestType=40, bRequest=03, wValue=0008, wIndex=0000, wLength=0004
+  payload: 01 rate_low rate_middle rate_high
+It then polls Fsc_GetStatChk1, checking flags and the requested rate.
+This write sequence is a static finding; it has not yet been run on hardware.
+
 SysEx envelope
 --------------
 Byte positions (hexadecimal byte values, zero-based offsets):
