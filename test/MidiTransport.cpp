@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "../src/PresetDevice.hpp"
+#include "octa/AutoSense.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
@@ -234,8 +235,12 @@ bool session_queries() {
     const auto nested = session->read_bulk_state();
     const auto receive = session->receive(std::chrono::milliseconds(1));
     const auto disable = session->set_input_meters(false);
+    const auto start_auto = session->start_auto_sense(1);
+    const auto stop_auto = session->stop_auto_sense(octa::AutoSenseAction::cancel);
     busy = busy && !nested && nested.error().code == -EBUSY && !receive &&
-           receive.error().code == -EBUSY && !disable && disable.error().code == -EBUSY;
+           receive.error().code == -EBUSY && !disable && disable.error().code == -EBUSY &&
+           !start_auto && start_auto.error().code == -EBUSY && !stop_auto &&
+           stop_auto.error().code == -EBUSY;
   });
   const auto trailing = session->receive(std::chrono::seconds(1));
   const auto disabled = session->set_input_meters(false);
@@ -286,6 +291,123 @@ bool session_writes() {
                      wrong_preamp.error().code == -EIO && !invalid &&
                      invalid.error().code == -EINVAL && before == io.writes && io.opens == 1,
                  "typed writes validate before transmission and verify readback on one connection");
+}
+
+bool auto_sense_session() {
+  io = {};
+  constexpr std::uint8_t selected = 0x81;
+  const auto start = octa::encode_auto_sense_start(selected);
+  const auto stop = octa::encode_auto_sense_stop(octa::AutoSenseAction::finish);
+  const auto request = octa::request(octa::bulk_address, octa::bulk_size);
+  if (!start || !stop || !request) { return false; }
+  auto reply = *start;
+  append_bytes(reply, bulk_frame());
+  io.replies = {reply};
+  octa::AutoSenseChannels channels{};
+  {
+    auto session = octa::MidiSession::open("hw:fake");
+    if (!session || !session->start_auto_sense(selected)) { return false; }
+    const auto writes = io.writes;
+    const auto repeated = session->start_auto_sense(selected);
+    const bool blocked = !repeated && repeated.error().code == -EALREADY && io.writes == writes;
+    bool valid_notification = false;
+    const auto current = session->read_bulk_state([&](const octa::Message &message) {
+      const auto updated = octa::apply_auto_sense_update(channels, message);
+      valid_notification = updated && *updated;
+    });
+    const auto finished = session->stop_auto_sense(octa::AutoSenseAction::finish);
+    if (!require(blocked && current && finished && valid_notification && channels.front() &&
+                     channels.back() && std::ranges::count(channels, true) == 2,
+                 "Auto-Sens notifications share a queried CTRL session; repeated starts blocked")) {
+      return false;
+    }
+  }
+  auto expected = *start;
+  append_bytes(expected, *request);
+  append_bytes(expected, *stop);
+  return require(io.outgoing == expected && io.opens == 1 && io.closes == 2,
+                 "successful finish sends no additional cancellation on destruction");
+}
+
+bool auto_sense_cleanup() {
+  io = {};
+  const auto start = octa::encode_auto_sense_start(1);
+  const auto cancel = octa::encode_auto_sense_stop(octa::AutoSenseAction::cancel);
+  if (!start || !cancel) { return false; }
+  {
+    auto session = octa::MidiSession::open("hw:fake");
+    if (!session || !session->set_input_meters(true) || !session->start_auto_sense(1)) {
+      return false;
+    }
+    auto moved = std::move(*session);
+    const auto repeated = moved.start_auto_sense(1);
+    if (!require(!repeated && repeated.error().code == -EALREADY && io.closes == 0,
+                 "move transfers active Auto-Sens ownership")) {
+      return false;
+    }
+  }
+  auto expected = switch_frame(true);
+  append_bytes(expected, *start);
+  append_bytes(expected, *cancel);
+  append_bytes(expected, switch_frame(false));
+  return require(io.outgoing == expected && io.closes == 2,
+                 "moved session cancels owned Auto-Sens before meter disable and close");
+}
+
+bool auto_sense_failures(bool fail_start) {
+  io = {};
+  const auto start = octa::encode_auto_sense_start(1);
+  const auto finish = octa::encode_auto_sense_stop(octa::AutoSenseAction::finish);
+  const auto cancel = octa::encode_auto_sense_stop(octa::AutoSenseAction::cancel);
+  if (!start || !finish || !cancel) { return false; }
+  constexpr std::size_t partial_bytes = 3;
+  {
+    auto session = octa::MidiSession::open("hw:fake");
+    if (!session) { return false; }
+    if (fail_start) { io.fail_write = 2; }
+    const auto started = session->start_auto_sense(1);
+    if (fail_start) {
+      if (!require(!started && started.error().code == -EIO, "failed Auto-Sens start")) {
+        return false;
+      }
+    } else {
+      if (!started) { return false; }
+      io.fail_write = io.writes + 2;
+      const auto stopped = session->stop_auto_sense(octa::AutoSenseAction::finish);
+      if (!require(!stopped && stopped.error().code == -EIO, "failed Auto-Sens finish")) {
+        return false;
+      }
+    }
+  }
+  std::vector<std::uint8_t> expected;
+  if (fail_start) {
+    append_bytes(expected, std::span(*start).first(partial_bytes));
+  } else {
+    append_bytes(expected, *start);
+    append_bytes(expected, std::span(*finish).first(partial_bytes));
+  }
+  append_bytes(expected, *cancel);
+  return require(io.outgoing == expected && io.closes == 2,
+                 "partial start/finish failure retains ownership for destructor cancellation");
+}
+
+bool auto_sense_rejection() {
+  io = {};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  const auto empty = session->start_auto_sense(0);
+  if (!require(!empty && empty.error().code == -EINVAL, "empty Auto-Sens selection")) {
+    return false;
+  }
+  constexpr unsigned int byte_values = 256;
+  for (unsigned int value = 2; value < byte_values; ++value) {
+    const auto stopped = session->stop_auto_sense(static_cast<octa::AutoSenseAction>(value));
+    if (!require(!stopped && stopped.error().code == -EINVAL && io.writes == 0 && io.position == 0,
+                 "invalid Auto-Sens selection/action rejected before MIDI I/O")) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool memory_operations() {
@@ -545,10 +667,13 @@ bool session_uncertain() {
   const auto failed = session->read_bulk_state();
   const auto before = io.writes;
   const auto retry = session->read_bulk_state();
+  const auto start_auto = session->start_auto_sense(1);
   const bool no_retry = io.writes == before;
+  const auto cancel_auto = session->stop_auto_sense(octa::AutoSenseAction::cancel);
   const auto stop = session->set_input_meters(false);
   return require(!failed && failed.error().code == -EBADMSG && !retry &&
-                     retry.error().code == -EPROTO && no_retry && stop,
+                     retry.error().code == -EPROTO && !start_auto &&
+                     start_auto.error().code == -EPROTO && no_retry && cancel_auto && stop,
                  "unresolved query requires reopening, while meter disable remains available");
 }
 
@@ -686,11 +811,13 @@ int main() {
   }
   const bool passed = memory_cli_passed && successful_stream() && input_failure(false) &&
                       input_failure(true) && write_failures() && deadlines() && open_failure() &&
-                      session_buffering() && session_queries() && session_stale_fragment() &&
-                      session_writes() && memory_operations() && memory_rejection() &&
-                      memory_partial_failure() && preset_transfer() && preset_rejection() &&
-                      preset_readback_failure() && preset_partial_failure() &&
-                      session_uncertain() && session_receive_bounds() && impossible_transfers();
+                      auto_sense_session() && auto_sense_cleanup() && auto_sense_failures(true) &&
+                      auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&
+                      session_queries() && session_stale_fragment() && session_writes() &&
+                      memory_operations() && memory_rejection() && memory_partial_failure() &&
+                      preset_transfer() && preset_rejection() && preset_readback_failure() &&
+                      preset_partial_failure() && session_uncertain() && session_receive_bounds() &&
+                      impossible_transfers();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;

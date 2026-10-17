@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/Midi.hpp"
 
+#include "octa/AutoSense.hpp"
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
@@ -184,6 +185,12 @@ struct MidiSession::Impl {
   explicit Impl(Connection opened) : connection(std::move(opened)) {}
 
   ~Impl() {
+    if (auto_sense_may_be_active) {
+      if (const auto stopped = stop_auto_sense(AutoSenseAction::cancel); !stopped) {
+        std::cerr << "OCTA-CAPTURE Auto-Sens cleanup failed: " << stopped.error().operation << " ("
+                  << stopped.error().code << ")\n";
+      }
+    }
     if (meters_may_be_active) {
       if (const auto stopped = switch_meters(false); !stopped) {
         std::cerr << "OCTA-CAPTURE meter cleanup failed: " << stopped.error().operation << " ("
@@ -205,6 +212,16 @@ struct MidiSession::Impl {
     if (enabled) { meters_may_be_active = true; }
     const auto sent = send_frame(connection.output.get(), *frame, Clock::now() + query_timeout);
     if (sent && !enabled) { meters_may_be_active = false; }
+    return sent;
+  }
+
+  std::expected<void, MidiError> stop_auto_sense(AutoSenseAction action) {
+    const auto frame = encode_auto_sense_stop(action);
+    if (!frame) {
+      return std::unexpected(MidiError{.code = -EINVAL, .operation = "Auto-Sens action"});
+    }
+    const auto sent = send_frame(connection.output.get(), *frame, Clock::now() + query_timeout);
+    if (sent) { auto_sense_may_be_active = false; }
     return sent;
   }
 
@@ -273,6 +290,7 @@ struct MidiSession::Impl {
   std::size_t length = 0;
   bool busy = false;
   bool meters_may_be_active = false;
+  bool auto_sense_may_be_active = false;
   bool request_pending = false;
   bool frame_is_current = false;
   bool query_uncertain = false;
@@ -297,6 +315,38 @@ std::expected<void, MidiError> MidiSession::set_input_meters(bool enabled) {
   }
   const ActiveOperation active(impl_->busy);
   return impl_->switch_meters(enabled);
+}
+
+std::expected<void, MidiError> MidiSession::start_auto_sense(std::uint8_t channels) {
+  const auto frame = encode_auto_sense_start(channels);
+  if (!frame) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "Auto-Sens channels"});
+  }
+  if (!impl_) { return std::unexpected(MidiError{.code = -ENODEV, .operation = "closed session"}); }
+  if (impl_->busy) {
+    return std::unexpected(MidiError{.code = -EBUSY, .operation = "busy session"});
+  }
+  if (impl_->query_uncertain) {
+    return std::unexpected(MidiError{.code = -EPROTO, .operation = "unresolved CTRL query"});
+  }
+  if (impl_->auto_sense_may_be_active) {
+    return std::unexpected(MidiError{.code = -EALREADY, .operation = "Auto-Sens already started"});
+  }
+  const ActiveOperation active(impl_->busy);
+  impl_->auto_sense_may_be_active = true;
+  return send_frame(impl_->connection.output.get(), *frame, Clock::now() + query_timeout);
+}
+
+std::expected<void, MidiError> MidiSession::stop_auto_sense(AutoSenseAction action) {
+  if (action != AutoSenseAction::finish && action != AutoSenseAction::cancel) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "Auto-Sens action"});
+  }
+  if (!impl_) { return std::unexpected(MidiError{.code = -ENODEV, .operation = "closed session"}); }
+  if (impl_->busy) {
+    return std::unexpected(MidiError{.code = -EBUSY, .operation = "busy session"});
+  }
+  const ActiveOperation active(impl_->busy);
+  return impl_->stop_auto_sense(action);
 }
 
 std::expected<Message, MidiError> MidiSession::receive(std::chrono::milliseconds timeout) {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "octa/AutoSense.hpp"
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Midi.hpp"
@@ -44,11 +45,30 @@ void check_message(const octa::Message &message) {
   require(decoded && *decoded == message);
 }
 
+void exercise_auto_sense(octa::MidiSession &session) {
+  const std::uint8_t selected = io.bytes.empty() ? std::uint8_t{1} : io.bytes.front();
+  const auto started = session.start_auto_sense(selected);
+  if (selected == 0) {
+    require(!started && started.error().code == -EINVAL);
+  } else {
+    require(started.has_value());
+  }
+  const auto action = static_cast<octa::AutoSenseAction>(io.bytes.empty() ? 0 : io.bytes.back());
+  const auto writes = io.writes;
+  const auto stopped = session.stop_auto_sense(action);
+  if (action != octa::AutoSenseAction::finish && action != octa::AutoSenseAction::cancel) {
+    require(!stopped && stopped.error().code == -EINVAL && io.writes == writes);
+  } else {
+    require(stopped.has_value());
+  }
+}
+
 void exercise_session() {
   auto session = octa::MidiSession::open("hw:fuzz");
   require(session.has_value());
   if (!session) { return; }
   require(session->set_input_meters(true).has_value());
+  exercise_auto_sense(*session);
   const auto received = session->receive(std::chrono::seconds(1));
   if (received) { check_message(*received); }
   const auto reply = session->read_bulk_state(&check_message);

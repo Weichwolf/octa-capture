@@ -351,8 +351,8 @@ active. It also passed alongside timed 48 kHz duplex streaming (12 capture,
 10 playback channels), with the complete bulk state unchanged afterward.
 Native Debian validation remains required.
 
-Auto-Sens messages (static analysis only)
----------------------------------------
+Auto-Sens messages and session control
+-------------------------------------
 TxASensStart at 0x1000288f8 sends 00 02 01 04 with a nonzero eight-input
 selection mask as two nibbles, low nibble first. Its two-byte notification
 uses four channel flags in each byte (CCplDev::SetEach2 at 0x10000a372).
@@ -363,7 +363,28 @@ TxASensStop at 0x10002888a sends one byte to 00 02 01 05: 00 finishes,
 src/AutoSense.cpp implements these bounded codecs and atomic activity
 updates. Offline fixtures check the wire bytes, all 255 nonempty channel
 masks, reserved flag bits, repeated updates and rejection without mutation.
-No automatic gain operation has been run or exposed through live I/O yet.
+Original TxASensStart execution in an isolated CPU emulator matches all
+255 nonempty masks; TxASensStop matches both finish/cancel frames:
+  python3 tools/emulate-auto-sense.py gui-x86_64
+This optional check uses Python Unicorn and the same pinned executable as
+the memory-command reference check; it never opens physical MIDI ports.
+
+MidiSession::start_auto_sense(mask) sends the selection on the owned CTRL
+connection; stop_auto_sense(finish/cancel) sends the corresponding stop.
+Invalid values are rejected before MIDI I/O. Another start is rejected
+while that session may own an active operation. A failed/partial start
+still marks ownership; only a completely transmitted stop clears it.
+Destruction attempts cancel before meter disable and handle release.
+Explicit stop reports errors and remains available after unresolved bulk
+queries; a new start requires reopening after those query errors.
+This ownership flag does not represent observed device activity. Use
+receive/query listeners and apply_auto_sense_update for notifications;
+a successful send does not confirm that Auto-Sens started or completed.
+Fault tests cover partial start/finish writes, destructor cancellation,
+move ownership, shared queries/notifications and reentrancy. The MIDI
+fuzzer also exercises selections, actions and cleanup with fake ALSA.
+No automatic gain operation has been run on hardware; a CLI, gain-result
+checks and restoration on errors still require implementation.
 
 Audio packing and initial hardware tests
 ---------------------------------------

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
+#include "octa/AutoSense.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
@@ -35,8 +36,8 @@ using MessageListener = std::function<void(const Message &)>;
 class MidiSession {
 public:
   [[nodiscard]] static std::expected<MidiSession, MidiError> open(std::string_view port);
-  // Best-effort meter disable before releasing the connection. Use explicit
-  // disable to receive any cleanup error.
+  // Best-effort Auto-Sens cancel and meter disable before releasing the
+  // connection. Explicit stop/disable reports cleanup errors.
   ~MidiSession();
   MidiSession(MidiSession &&) noexcept;
   MidiSession &operator=(MidiSession &&) noexcept;
@@ -44,6 +45,11 @@ public:
   MidiSession &operator=(const MidiSession &) = delete;
 
   [[nodiscard]] std::expected<void, MidiError> set_input_meters(bool enabled);
+  // Successful transmission does not confirm activity/completion. Receive
+  // notifications separately. A failed start still requires cancel/cleanup.
+  [[nodiscard]] std::expected<void, MidiError> start_auto_sense(std::uint8_t channels);
+  [[nodiscard]] std::expected<void, MidiError> stop_auto_sense(AutoSenseAction action);
+
   // Preserves partial frames and unread bytes across calls. Timeout: 1..60000 ms.
   [[nodiscard]] std::expected<Message, MidiError> receive(std::chrono::milliseconds timeout);
   [[nodiscard]] std::expected<Message, MidiError>
