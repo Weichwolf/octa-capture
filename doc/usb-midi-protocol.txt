@@ -304,7 +304,24 @@ rejection of a competing observer were hardware-checked; passive reads
 confirmed no remaining level stream and the bulk state was unchanged.
 Offline transport tests cover partial transfers, malformed packets, read/
 write failures and deadlines. Unplugging or forced termination can prevent
-cleanup. A shared connection for simultaneous controls remains required.
+cleanup.
+MidiSession keeps one CTRL connection and a bounded persistent receive
+buffer for meter traffic, bulk queries and typed writes with readback.
+It dispatches intervening notifications through the query listener, drains
+already queued messages before transmitting, and excludes completion of
+an older partial bulk frame from the new query. Queries are serialized;
+reentrant calls return EBUSY. After an unresolved query, reopen the session
+before querying again: the protocol has no transaction IDs for correlating
+a late reply. Explicit meter disable remains available after query errors;
+destruction attempts cleanup as a fallback and reports failures to stderr.
+In-flight meter packets can still arrive after the disable command. The
+shared-session checker validates these and requires 200 ms of quiet within
+a three-second settling deadline before reporting successful shutdown.
+The shared connection was hardware-verified with eight bulk queries,
+including four writes of the current pan value, while meters remained
+active. It also passed alongside timed 48 kHz duplex streaming (12 capture,
+10 playback channels), with the complete bulk state unchanged afterward.
+Native Debian validation remains required.
 
 Auto-Sens messages (static analysis only)
 ---------------------------------------

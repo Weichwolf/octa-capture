@@ -15,7 +15,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <iostream>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -106,105 +108,67 @@ std::expected<void, MidiError> send_frame(snd_rawmidi_t *output,
       return std::unexpected(MidiError{.code = written < 0 ? static_cast<int>(written) : -EIO,
                                        .operation = "send request"});
     }
-    pending = pending.subspan(static_cast<std::size_t>(written));
+    const auto count = static_cast<std::size_t>(written);
+    if (count > pending.size()) {
+      return std::unexpected(MidiError{.code = -EIO, .operation = "MIDI write size"});
+    }
+    pending = pending.subspan(count);
   }
   return {};
 }
 
-std::expected<Message, MidiError> receive_state(snd_rawmidi_t *input, Clock::time_point deadline) {
-  SysExReceiver receiver;
-  std::array<std::uint8_t, input_chunk_size> bytes{};
-  while (Clock::now() < deadline) {
-    const auto received = snd_rawmidi_read(input, bytes.data(), bytes.size());
-    if (received == -EINTR) { continue; }
-    if (received == -EAGAIN) {
-      const auto ready = wait_ready(input, deadline);
-      if (!ready) { return std::unexpected(ready.error()); }
-      continue;
-    }
-    if (received <= 0) {
-      return std::unexpected(MidiError{.code = received < 0 ? static_cast<int>(received) : -EIO,
-                                       .operation = "read state"});
-    }
-    for (const auto byte : std::span(bytes).first(static_cast<std::size_t>(received))) {
-      auto message = receiver.feed(byte);
-      if (!message) {
-        return std::unexpected(MidiError{.code = -EBADMSG, .operation = "decode state"});
-      }
-      auto &candidate = *message;
-      if (candidate.has_value() && candidate->command == Command::data &&
-          candidate->address == bulk_address && candidate->payload.size() == bulk_size) {
-        return std::move(*candidate);
-      }
-    }
+std::expected<std::size_t, MidiError> read_chunk(snd_rawmidi_t *input,
+                                                 std::span<std::uint8_t> buffer) {
+  const auto received = snd_rawmidi_read(input, buffer.data(), buffer.size());
+  if (received <= 0) {
+    return std::unexpected(MidiError{.code = received < 0 ? static_cast<int>(received) : -EIO,
+                                     .operation = "read MIDI"});
   }
-  return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "state reply"});
+  const auto count = static_cast<std::size_t>(received);
+  if (count > buffer.size()) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "MIDI read size"});
+  }
+  return count;
 }
 
-std::expected<Message, MidiError> query_state(std::string_view port,
-                                              std::span<const std::uint8_t> update) {
-  auto connection = open_ctrl(port);
-  if (!connection) { return std::unexpected(connection.error()); }
-  const auto deadline = Clock::now() + query_timeout;
-  if (!update.empty()) {
-    const auto sent = send_frame(connection->output.get(), update, deadline);
-    if (!sent) { return std::unexpected(sent.error()); }
-  }
-  const auto frame = request(bulk_address, bulk_size);
-  if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "encode request"}); }
-  const auto sent = send_frame(connection->output.get(), *frame, deadline);
-  if (!sent) { return std::unexpected(sent.error()); }
-  return receive_state(connection->input.get(), deadline);
-}
+class ActiveOperation {
+public:
+  explicit ActiveOperation(bool &active) : active_(active) { active_ = true; }
+
+  ~ActiveOperation() { active_ = false; }
+
+  ActiveOperation(const ActiveOperation &) = delete;
+  ActiveOperation &operator=(const ActiveOperation &) = delete;
+  ActiveOperation(ActiveOperation &&) = delete;
+  ActiveOperation &operator=(ActiveOperation &&) = delete;
+
+private:
+  bool &active_;
+};
 
 std::expected<std::size_t, MidiError>
-receive_bytes(snd_rawmidi_t *input, std::span<std::uint8_t> buffer, Clock::time_point deadline) {
-  while (Clock::now() < deadline) {
-    const auto received = snd_rawmidi_read(input, buffer.data(), buffer.size());
-    if (received == -EINTR) { continue; }
-    if (received == -EAGAIN) {
-      const auto ready = wait_ready(input, deadline);
-      if (!ready) { return std::unexpected(ready.error()); }
-      continue;
-    }
-    if (received <= 0) {
-      return std::unexpected(MidiError{.code = received < 0 ? static_cast<int>(received) : -EIO,
-                                       .operation = "read meters"});
-    }
-    const auto count = static_cast<std::size_t>(received);
-    if (count > buffer.size()) {
-      return std::unexpected(MidiError{.code = -EIO, .operation = "MIDI read size"});
-    }
-    return count;
-  }
-  return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "meter reply"});
-}
-
-std::expected<std::size_t, MidiError>
-receive_meters(snd_rawmidi_t *input, Clock::time_point end, const MeterListener &listener) {
-  MeterReceiver receiver;
-  std::array<std::uint8_t, input_chunk_size> bytes{};
+receive_meters(MidiSession &session, Clock::time_point end, const MeterListener &listener) {
   std::size_t packets = 0;
   auto active_until = Clock::now() + query_timeout;
   while (Clock::now() < end) {
-    const auto count = receive_bytes(input, bytes, std::min(end, active_until));
-    if (!count) {
-      if (count.error().code == -ETIMEDOUT && Clock::now() >= end && packets != 0) {
+    const auto until = std::min(end, active_until) - Clock::now();
+    auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(until);
+    if (remaining < until) { ++remaining; }
+    auto message = session.receive(std::max(remaining, std::chrono::milliseconds(1)));
+    if (!message) {
+      if (message.error().code == -ETIMEDOUT && Clock::now() >= end && packets != 0) {
         return packets;
       }
-      return std::unexpected(count.error());
+      return std::unexpected(message.error());
     }
-    for (const auto byte : std::span(bytes).first(*count)) {
-      const auto result = receiver.feed(byte);
-      if (!result) {
-        return std::unexpected(MidiError{.code = -EBADMSG, .operation = "meter envelope"});
-      }
-      const auto &meters = *result;
-      if (!meters.has_value()) { continue; }
-      ++packets;
-      active_until = Clock::now() + query_timeout;
-      if (!listener(*meters) || Clock::now() >= end) { return packets; }
+    if (message->command != Command::data || message->address != Address{0, 10, 0, 1}) { continue; }
+    const auto meters = decode_input_meters(*message);
+    if (!meters) {
+      return std::unexpected(MidiError{.code = -EBADMSG, .operation = "meter packet"});
     }
+    ++packets;
+    active_until = Clock::now() + query_timeout;
+    if (!listener(*meters) || Clock::now() >= end) { return packets; }
   }
   if (packets == 0) {
     return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "meter reply"});
@@ -214,14 +178,184 @@ receive_meters(snd_rawmidi_t *input, Clock::time_point end, const MeterListener 
 
 }
 
-std::expected<Message, MidiError> read_bulk_state(std::string_view port) {
-  return query_state(port, {});
+struct MidiSession::Impl {
+  explicit Impl(Connection opened) : connection(std::move(opened)) {}
+
+  ~Impl() {
+    if (meters_may_be_active) {
+      if (const auto stopped = switch_meters(false); !stopped) {
+        std::cerr << "OCTA-CAPTURE meter cleanup failed: " << stopped.error().operation << " ("
+                  << stopped.error().code << ")\n";
+      }
+    }
+  }
+
+  Impl(const Impl &) = delete;
+  Impl &operator=(const Impl &) = delete;
+  Impl(Impl &&) = delete;
+  Impl &operator=(Impl &&) = delete;
+
+  std::expected<void, MidiError> switch_meters(bool enabled) {
+    const auto frame = encode_meter_switch(enabled);
+    if (!frame) {
+      return std::unexpected(MidiError{.code = -EINVAL, .operation = "meter switch encoding"});
+    }
+    if (enabled) { meters_may_be_active = true; }
+    const auto sent = send_frame(connection.output.get(), *frame, Clock::now() + query_timeout);
+    if (sent && !enabled) { meters_may_be_active = false; }
+    return sent;
+  }
+
+  std::expected<std::optional<Message>, MidiError> buffered_message() {
+    while (position < length) {
+      const auto byte = bytes[position++];
+      constexpr std::uint8_t start_exclusive = 0xf0;
+      if (byte == start_exclusive) { frame_is_current = request_pending; }
+      auto decoded = receiver.feed(byte);
+      if (!decoded) {
+        return std::unexpected(MidiError{.code = -EBADMSG, .operation = "MIDI envelope"});
+      }
+      auto &message = *decoded;
+      if (message.has_value()) { return std::move(message); }
+    }
+    return std::nullopt;
+  }
+
+  std::expected<Message, MidiError> next_message(Clock::time_point deadline) {
+    while (Clock::now() < deadline) {
+      auto decoded = buffered_message();
+      if (!decoded) { return std::unexpected(decoded.error()); }
+      auto &message = *decoded;
+      if (message.has_value()) { return std::move(*message); }
+      const auto read = read_chunk(connection.input.get(), bytes);
+      if (read) {
+        position = 0;
+        length = *read;
+      } else if (read.error().code == -EAGAIN) {
+        const auto ready = wait_ready(connection.input.get(), deadline);
+        if (!ready) { return std::unexpected(ready.error()); }
+      } else if (read.error().code != -EINTR) {
+        return std::unexpected(read.error());
+      }
+    }
+    return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "MIDI reply"});
+  }
+
+  std::expected<void, MidiError> drain(const MessageListener &listener,
+                                       Clock::time_point deadline) {
+    while (Clock::now() < deadline) {
+      auto decoded = buffered_message();
+      if (!decoded) { return std::unexpected(decoded.error()); }
+      const auto &message = *decoded;
+      if (message.has_value()) {
+        if (listener) { listener(*message); }
+        continue;
+      }
+      const auto read = read_chunk(connection.input.get(), bytes);
+      if (read) {
+        position = 0;
+        length = *read;
+      } else if (read.error().code == -EAGAIN) {
+        return {};
+      } else if (read.error().code != -EINTR) {
+        return std::unexpected(read.error());
+      }
+    }
+    return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "drain MIDI"});
+  }
+
+  Connection connection;
+  SysExReceiver receiver;
+  std::array<std::uint8_t, input_chunk_size> bytes{};
+  std::size_t position = 0;
+  std::size_t length = 0;
+  bool busy = false;
+  bool meters_may_be_active = false;
+  bool request_pending = false;
+  bool frame_is_current = false;
+  bool query_uncertain = false;
+};
+
+MidiSession::MidiSession(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+
+MidiSession::~MidiSession() = default;
+MidiSession::MidiSession(MidiSession &&) noexcept = default;
+MidiSession &MidiSession::operator=(MidiSession &&) noexcept = default;
+
+std::expected<MidiSession, MidiError> MidiSession::open(std::string_view port) {
+  auto opened = open_ctrl(port);
+  if (!opened) { return std::unexpected(opened.error()); }
+  return MidiSession(std::make_unique<Impl>(std::move(*opened)));
 }
 
-std::expected<Message, MidiError> write_preamp(std::string_view port, PreampChange change) {
+std::expected<void, MidiError> MidiSession::set_input_meters(bool enabled) {
+  if (!impl_) { return std::unexpected(MidiError{.code = -ENODEV, .operation = "closed session"}); }
+  if (impl_->busy) {
+    return std::unexpected(MidiError{.code = -EBUSY, .operation = "busy session"});
+  }
+  const ActiveOperation active(impl_->busy);
+  return impl_->switch_meters(enabled);
+}
+
+std::expected<Message, MidiError> MidiSession::receive(std::chrono::milliseconds timeout) {
+  constexpr auto maximum_timeout = std::chrono::minutes(1);
+  if (timeout.count() <= 0 || timeout > maximum_timeout) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "MIDI timeout"});
+  }
+  if (!impl_) { return std::unexpected(MidiError{.code = -ENODEV, .operation = "closed session"}); }
+  if (impl_->busy) {
+    return std::unexpected(MidiError{.code = -EBUSY, .operation = "busy session"});
+  }
+  const ActiveOperation active(impl_->busy);
+  return impl_->next_message(Clock::now() + timeout);
+}
+
+std::expected<Message, MidiError> MidiSession::query(std::span<const std::uint8_t> update,
+                                                     const MessageListener &listener) {
+  if (!impl_) { return std::unexpected(MidiError{.code = -ENODEV, .operation = "closed session"}); }
+  if (impl_->busy) {
+    return std::unexpected(MidiError{.code = -EBUSY, .operation = "busy session"});
+  }
+  if (impl_->query_uncertain) {
+    return std::unexpected(MidiError{.code = -EPROTO, .operation = "unresolved CTRL query"});
+  }
+  const ActiveOperation active(impl_->busy);
+  const auto deadline = Clock::now() + query_timeout;
+  impl_->frame_is_current = false;
+  const auto drained = impl_->drain(listener, deadline);
+  if (!drained) { return std::unexpected(drained.error()); }
+  impl_->query_uncertain = true;
+  if (!update.empty()) {
+    const auto sent = send_frame(impl_->connection.output.get(), update, deadline);
+    if (!sent) { return std::unexpected(sent.error()); }
+  }
+  const auto frame = request(bulk_address, bulk_size);
+  if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "encode request"}); }
+  const auto sent = send_frame(impl_->connection.output.get(), *frame, deadline);
+  if (!sent) { return std::unexpected(sent.error()); }
+  const ActiveOperation pending(impl_->request_pending);
+  while (Clock::now() < deadline) {
+    auto message = impl_->next_message(deadline);
+    if (!message) { return message; }
+    if (impl_->frame_is_current && message->command == Command::data &&
+        message->address == bulk_address && message->payload.size() == bulk_size) {
+      impl_->query_uncertain = false;
+      return message;
+    }
+    if (listener) { listener(*message); }
+  }
+  return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "state reply"});
+}
+
+std::expected<Message, MidiError> MidiSession::read_bulk_state(const MessageListener &listener) {
+  return query({}, listener);
+}
+
+std::expected<Message, MidiError> MidiSession::write_preamp(PreampChange change,
+                                                            const MessageListener &listener) {
   const auto frame = encode_preamp_change(change);
   if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "preamp value"}); }
-  auto state = query_state(port, *frame);
+  auto state = query(*frame, listener);
   if (!state) { return state; }
   const auto bank = decode_preamps(*state);
   if (!bank) { return std::unexpected(MidiError{.code = -EBADMSG, .operation = "preamp state"}); }
@@ -232,10 +366,11 @@ std::expected<Message, MidiError> write_preamp(std::string_view port, PreampChan
   return state;
 }
 
-std::expected<Message, MidiError> write_dsp(std::string_view port, const DspChange &change) {
+std::expected<Message, MidiError> MidiSession::write_dsp(const DspChange &change,
+                                                         const MessageListener &listener) {
   const auto frame = encode_dsp_change(change);
   if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "DSP value"}); }
-  auto reply = query_state(port, *frame);
+  auto reply = query(*frame, listener);
   if (!reply) { return reply; }
   const auto state = decode_dsp(*reply);
   if (!state) { return std::unexpected(MidiError{.code = -EBADMSG, .operation = "DSP state"}); }
@@ -244,6 +379,30 @@ std::expected<Message, MidiError> write_dsp(std::string_view port, const DspChan
     return std::unexpected(MidiError{.code = -EIO, .operation = "DSP readback"});
   }
   return reply;
+}
+
+std::expected<Message, MidiError> read_bulk_state(std::string_view port) {
+  auto session = MidiSession::open(port);
+  if (!session) { return std::unexpected(session.error()); }
+  return session->read_bulk_state();
+}
+
+std::expected<Message, MidiError> write_preamp(std::string_view port, PreampChange change) {
+  if (!encode_preamp_change(change)) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "preamp value"});
+  }
+  auto session = MidiSession::open(port);
+  if (!session) { return std::unexpected(session.error()); }
+  return session->write_preamp(change);
+}
+
+std::expected<Message, MidiError> write_dsp(std::string_view port, const DspChange &change) {
+  if (!encode_dsp_change(change)) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "DSP value"});
+  }
+  auto session = MidiSession::open(port);
+  if (!session) { return std::unexpected(session.error()); }
+  return session->write_dsp(change);
 }
 
 std::expected<std::size_t, MidiError> observe_input_meters(std::string_view port,
@@ -256,21 +415,14 @@ std::expected<std::size_t, MidiError> observe_input_meters(std::string_view port
   if (!listener) {
     return std::unexpected(MidiError{.code = -EINVAL, .operation = "meter callback"});
   }
-  const auto enable = encode_meter_switch(true);
-  const auto disable = encode_meter_switch(false);
-  if (!enable || !disable) {
-    return std::unexpected(MidiError{.code = -EINVAL, .operation = "meter switch encoding"});
-  }
-  auto connection = open_ctrl(port);
-  if (!connection) { return std::unexpected(connection.error()); }
+  auto session = MidiSession::open(port);
+  if (!session) { return std::unexpected(session.error()); }
   const auto end = Clock::now() + duration;
-  const auto enabled = send_frame(connection->output.get(), *enable, Clock::now() + query_timeout);
+  const auto enabled = session->set_input_meters(true);
   const auto result = enabled
-                          ? receive_meters(connection->input.get(), end, listener)
+                          ? receive_meters(*session, end, listener)
                           : std::expected<std::size_t, MidiError>(std::unexpected(enabled.error()));
-  // The stop command is attempted even after a failed/partial start or malformed input.
-  const auto disabled =
-      send_frame(connection->output.get(), *disable, Clock::now() + query_timeout);
+  const auto disabled = session->set_input_meters(false);
   if (!disabled) { return std::unexpected(disabled.error()); }
   return result;
 }

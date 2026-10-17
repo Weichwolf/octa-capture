@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
+#include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
@@ -16,6 +18,7 @@
 #include <sys/poll.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -23,6 +26,10 @@ namespace {
 struct FakeIo {
   std::vector<std::uint8_t> incoming;
   std::vector<std::uint8_t> outgoing;
+  std::vector<std::vector<std::uint8_t>> replies;
+  octa::SysExReceiver requests;
+  std::size_t reply_position = 0;
+  unsigned int opens = 0;
   std::size_t position = 0;
   std::size_t read_size = 1;
   std::size_t write_size = 3;
@@ -31,6 +38,8 @@ struct FakeIo {
   unsigned int fail_write = 0;
   int open_error = 0;
   int read_error = 0;
+  bool oversized_read = false;
+  bool oversized_write = false;
 };
 
 FakeIo io;
@@ -111,8 +120,9 @@ bool write_failures() {
   io.fail_write = 2; // The complete enable succeeds, then the stop fails.
   const auto stop = octa::observe_input_meters(
       "hw:fake", std::chrono::seconds(1), [](const octa::InputMeters &) { return false; });
-  return require(!stop && stop.error().code == -EIO && io.writes == 2 && io.closes == 2,
-                 "stop transmission failure is reported and both handles close");
+  return require(!stop && stop.error().code == -EIO && io.writes == 3 && io.closes == 2 &&
+                     sent_stop(switch_frame(true).size()),
+                 "stop failure is reported; destruction retries cleanup before both handles close");
 }
 
 bool deadlines() {
@@ -140,6 +150,177 @@ bool deadlines() {
                  "no packets is a timeout and still sends the stop command");
 }
 
+void append_bytes(std::vector<std::uint8_t> &destination, std::span<const std::uint8_t> bytes) {
+  destination.insert(destination.end(), bytes.begin(), bytes.end());
+}
+
+std::vector<std::uint8_t> bulk_frame(std::uint8_t marker = 0) {
+  std::vector<std::uint8_t> payload(octa::bulk_size);
+  payload.front() = marker;
+  const auto frame = octa::encode(octa::Command::data, octa::bulk_address, payload);
+  return frame ? *frame : std::vector<std::uint8_t>{};
+}
+
+bool session_buffering() {
+  io = {};
+  constexpr std::size_t whole_chunk = 512;
+  io.read_size = whole_chunk;
+  io.incoming = level_frame();
+  append_bytes(io.incoming, level_frame());
+  {
+    auto session = octa::MidiSession::open("hw:fake");
+    if (!session || !session->set_input_meters(true)) { return false; }
+    const auto first = session->receive(std::chrono::seconds(1));
+    const bool all_read = io.position == io.incoming.size();
+    const auto second = session->receive(std::chrono::seconds(1));
+    if (!require(first && second && *first == *second && all_read && io.opens == 1,
+                 "two complete packets in one read remain available across receive calls")) {
+      return false;
+    }
+    auto moved = std::move(*session);
+    const auto closed = session->receive(std::chrono::milliseconds(1));
+    if (!require(!closed && closed.error().code == -ENODEV && io.closes == 0,
+                 "moving the session transfers ownership without closing either handle")) {
+      return false;
+    }
+    const auto frame = level_frame();
+    constexpr std::size_t split = 12;
+    append_bytes(io.incoming, std::span(frame).first(split));
+    const auto partial = moved.receive(std::chrono::milliseconds(2));
+    append_bytes(io.incoming, std::span(frame).subspan(split));
+    const auto recovered = moved.receive(std::chrono::seconds(1));
+    if (!require(!partial && partial.error().code == -ETIMEDOUT && recovered &&
+                     *recovered == *first,
+                 "partial frames survive a receive timeout and a moved owner")) {
+      return false;
+    }
+  }
+  return require(io.closes == 2 && sent_stop(switch_frame(true).size()),
+                 "destruction disables an active meter stream before closing handles");
+}
+
+bool session_queries() {
+  io = {};
+  constexpr std::size_t whole_chunk = 512;
+  io.read_size = whole_chunk;
+  io.incoming = level_frame();
+  append_bytes(io.incoming, bulk_frame(1)); // Complete stale reply, already queued.
+  auto reply = level_frame();
+  append_bytes(reply, bulk_frame(2));
+  append_bytes(reply, level_frame());
+  io.replies.push_back(reply);
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session || !session->set_input_meters(true)) { return false; }
+  unsigned int notifications = 0;
+  bool busy = true;
+  const auto state = session->read_bulk_state([&](const octa::Message &) {
+    ++notifications;
+    const auto nested = session->read_bulk_state();
+    const auto receive = session->receive(std::chrono::milliseconds(1));
+    const auto disable = session->set_input_meters(false);
+    busy = busy && !nested && nested.error().code == -EBUSY && !receive &&
+           receive.error().code == -EBUSY && !disable && disable.error().code == -EBUSY;
+  });
+  const auto trailing = session->receive(std::chrono::seconds(1));
+  const auto disabled = session->set_input_meters(false);
+  return require(
+      state && state->payload.front() == 2 && notifications == 3 && busy && trailing &&
+          octa::decode_input_meters(*trailing) && disabled && io.opens == 1,
+      "one connection drains stale replies, dispatches side messages, preserves trailing "
+      "packets and rejects reentrant operations");
+}
+
+bool session_stale_fragment() {
+  io = {};
+  const auto old = bulk_frame(1);
+  constexpr std::size_t split = 16;
+  append_bytes(io.incoming, std::span(old).first(split));
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  const auto partial = session->receive(std::chrono::milliseconds(2));
+  std::vector<std::uint8_t> reply;
+  append_bytes(reply, std::span(old).subspan(split));
+  append_bytes(reply, bulk_frame(2));
+  io.replies.push_back(reply);
+  unsigned int stale = 0;
+  const auto state = session->read_bulk_state([&](const octa::Message &message) {
+    if (message.address == octa::bulk_address && message.payload.front() == 1) { ++stale; }
+  });
+  return require(!partial && partial.error().code == -ETIMEDOUT && state &&
+                     state->payload.front() == 2 && stale == 1,
+                 "completion of an older partial bulk frame cannot satisfy a new query");
+}
+
+bool session_writes() {
+  io = {};
+  const auto zero = bulk_frame();
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  io.replies = {zero, zero, zero, zero};
+  const auto dsp = session->write_dsp(octa::RouteChange{.pair = 0, .selection = 0});
+  const auto wrong_dsp = session->write_dsp(octa::RouteChange{.pair = 0, .selection = 1});
+  const auto preamp = session->write_preamp(
+      {.channel = 0, .parameter = octa::PreampParameter::low_cut, .value = 0});
+  const auto wrong_preamp = session->write_preamp(
+      {.channel = 0, .parameter = octa::PreampParameter::low_cut, .value = 1});
+  const auto before = io.writes;
+  constexpr std::uint8_t invalid_pair = 255;
+  const auto invalid = session->write_dsp(octa::RouteChange{.pair = invalid_pair, .selection = 0});
+  return require(dsp && !wrong_dsp && wrong_dsp.error().code == -EIO && preamp && !wrong_preamp &&
+                     wrong_preamp.error().code == -EIO && !invalid &&
+                     invalid.error().code == -EINVAL && before == io.writes && io.opens == 1,
+                 "typed writes validate before transmission and verify readback on one connection");
+}
+
+bool session_uncertain() {
+  io = {};
+  auto malformed = bulk_frame();
+  malformed[malformed.size() - 2] ^= 1;
+  io.replies = {malformed};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  const auto failed = session->read_bulk_state();
+  const auto before = io.writes;
+  const auto retry = session->read_bulk_state();
+  const bool no_retry = io.writes == before;
+  const auto stop = session->set_input_meters(false);
+  return require(!failed && failed.error().code == -EBADMSG && !retry &&
+                     retry.error().code == -EPROTO && no_retry && stop,
+                 "unresolved query requires reopening, while meter disable remains available");
+}
+
+bool session_receive_bounds() {
+  io = {};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  constexpr std::array<std::int64_t, 3> invalid = {-1, 0, 60001};
+  for (const auto timeout : invalid) {
+    const auto result = session->receive(std::chrono::milliseconds(timeout));
+    if (!require(!result && result.error().code == -EINVAL && io.position == 0,
+                 "invalid receive timeouts rejected without reading")) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool impossible_transfers() {
+  io = {};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  io.oversized_read = true;
+  const auto read = session->receive(std::chrono::seconds(1));
+  io.oversized_read = false;
+  io.oversized_write = true;
+  const auto write = session->set_input_meters(true);
+  io.oversized_write = false;
+  const auto stop = session->set_input_meters(false);
+  return require(!read && read.error().code == -EIO && read.error().operation == "MIDI read size" &&
+                     !write && write.error().code == -EIO &&
+                     write.error().operation == "MIDI write size" && stop,
+                 "impossible transfer sizes are rejected before forming a subspan");
+}
+
 bool open_failure() {
   io = {};
   io.open_error = -EACCES;
@@ -158,6 +339,7 @@ extern "C" int snd_rawmidi_open(snd_rawmidi_t **in_rmidi,
                                 const char * /*name*/,
                                 int /*mode*/) {
   if (io.open_error != 0) { return io.open_error; }
+  ++io.opens;
   const std::array handles{in_rmidi, out_rmidi};
   *handles.front() = reinterpret_cast<snd_rawmidi_t *>(&input_token);
   *handles.back() = reinterpret_cast<snd_rawmidi_t *>(&output_token);
@@ -171,6 +353,7 @@ extern "C" int snd_rawmidi_close(snd_rawmidi_t * /*rmidi*/) {
 
 extern "C" ssize_t snd_rawmidi_read(snd_rawmidi_t * /*rmidi*/, void *buffer, std::size_t size) {
   if (io.read_error != 0) { return io.read_error; }
+  if (io.oversized_read) { return static_cast<ssize_t>(size + 1); }
   if (io.position == io.incoming.size()) { return -EAGAIN; }
   const auto count = std::min({size, io.read_size, io.incoming.size() - io.position});
   std::ranges::copy(std::span(io.incoming).subspan(io.position, count),
@@ -182,10 +365,20 @@ extern "C" ssize_t snd_rawmidi_read(snd_rawmidi_t * /*rmidi*/, void *buffer, std
 extern "C" ssize_t
 snd_rawmidi_write(snd_rawmidi_t * /*rmidi*/, const void *buffer, std::size_t size) {
   ++io.writes;
+  if (io.oversized_write) { return static_cast<ssize_t>(size + 1); }
   if (io.writes == io.fail_write) { return -EIO; }
   const auto count = std::min(size, io.write_size);
   const std::span bytes(static_cast<const std::uint8_t *>(buffer), count);
   io.outgoing.insert(io.outgoing.end(), bytes.begin(), bytes.end());
+  for (const auto byte : bytes) {
+    const auto result = io.requests.feed(byte);
+    if (!result) { continue; }
+    const auto &message = *result;
+    if (message.has_value() && message->command == octa::Command::request &&
+        io.reply_position < io.replies.size()) {
+      append_bytes(io.incoming, io.replies[io.reply_position++]);
+    }
+  }
   return static_cast<ssize_t>(count);
 }
 
@@ -212,7 +405,9 @@ extern "C" int snd_rawmidi_poll_descriptors_revents(snd_rawmidi_t * /*rawmidi*/,
 int main() {
   if (pipe(wake_pipe.data()) != 0) { return 1; }
   const bool passed = successful_stream() && input_failure(false) && input_failure(true) &&
-                      write_failures() && deadlines() && open_failure();
+                      write_failures() && deadlines() && open_failure() && session_buffering() &&
+                      session_queries() && session_stale_fragment() && session_writes() &&
+                      session_uncertain() && session_receive_bounds() && impossible_transfers();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;

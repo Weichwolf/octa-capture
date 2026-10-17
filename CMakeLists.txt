@@ -32,6 +32,8 @@ add_executable(octa-audio-check src/AudioCheck.cpp)
 target_link_libraries(octa-audio-check PRIVATE octa_quality PkgConfig::ALSA)
 add_library(octa_midi STATIC src/Midi.cpp)
 target_link_libraries(octa_midi PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
+add_executable(octa-session-check src/SessionCheck.cpp)
+target_link_libraries(octa-session-check PRIVATE octa_midi)
 add_executable(octa-meters src/MeterMain.cpp)
 target_link_libraries(octa-meters PRIVATE octa_midi)
 add_executable(octa-state src/State.cpp)
@@ -42,10 +44,13 @@ add_executable(octa-control src/ControlMain.cpp)
 target_link_libraries(octa-control PRIVATE octa_midi)
 
 if(OCTA_FUZZING)
-  set(octa_fuzz_sources "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp")
+  set(octa_fuzz_sources "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp" "${CMAKE_SOURCE_DIR}/test/MidiFuzz.cpp")
   add_executable(protocol_fuzz test/Fuzz.cpp)
   target_link_libraries(protocol_fuzz PRIVATE octa_protocol)
   target_link_options(protocol_fuzz PRIVATE -fsanitize=fuzzer)
+  add_executable(midi_fuzz test/MidiFuzz.cpp)
+  target_link_libraries(midi_fuzz PRIVATE octa_midi PkgConfig::ALSA)
+  target_link_options(midi_fuzz PRIVATE -fsanitize=fuzzer)
 endif()
 
 enable_testing()
@@ -98,6 +103,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/MeterMain.cpp"
+    "${CMAKE_SOURCE_DIR}/src/SessionCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Dsp.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspUpdate.cpp"
@@ -119,6 +125,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/test/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/test/MidiTransport.cpp"
     "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
+    "${CMAKE_SOURCE_DIR}/test/MidiFuzz.cpp"
   VERBATIM)
 
 add_custom_target(format
@@ -137,6 +144,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/MeterMain.cpp"
+    "${CMAKE_SOURCE_DIR}/src/SessionCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Dsp.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspUpdate.cpp"
@@ -158,6 +166,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/test/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/test/MidiTransport.cpp"
     "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
+    "${CMAKE_SOURCE_DIR}/test/MidiFuzz.cpp"
   VERBATIM)
 
 add_custom_target(lint
@@ -168,6 +177,7 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/MeterMain.cpp"
+    "${CMAKE_SOURCE_DIR}/src/SessionCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Dsp.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspUpdate.cpp"

@@ -8,8 +8,11 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <functional>
+#include <memory>
+#include <span>
 #include <string_view>
 
 namespace octa {
@@ -17,6 +20,42 @@ namespace octa {
 struct MidiError {
   int code;
   std::string_view operation;
+};
+
+// Notifications encountered while awaiting a bulk reply; callbacks must be short.
+using MessageListener = std::function<void(const Message &)>;
+
+// Thread-confined owner of one CTRL connection. Serializes queries and meter
+// traffic without reopening the port. Reentrant operations return -EBUSY.
+// Callbacks must not move/destroy this session. After an unresolved query,
+// queries return -EPROTO until reopened; meter disable remains available.
+class MidiSession {
+public:
+  [[nodiscard]] static std::expected<MidiSession, MidiError> open(std::string_view port);
+  // Best-effort meter disable before releasing the connection. Use explicit
+  // disable to receive any cleanup error.
+  ~MidiSession();
+  MidiSession(MidiSession &&) noexcept;
+  MidiSession &operator=(MidiSession &&) noexcept;
+  MidiSession(const MidiSession &) = delete;
+  MidiSession &operator=(const MidiSession &) = delete;
+
+  [[nodiscard]] std::expected<void, MidiError> set_input_meters(bool enabled);
+  // Preserves partial frames and unread bytes across calls. Timeout: 1..60000 ms.
+  [[nodiscard]] std::expected<Message, MidiError> receive(std::chrono::milliseconds timeout);
+  [[nodiscard]] std::expected<Message, MidiError>
+  read_bulk_state(const MessageListener &listener = {});
+  [[nodiscard]] std::expected<Message, MidiError>
+  write_preamp(PreampChange change, const MessageListener &listener = {});
+  [[nodiscard]] std::expected<Message, MidiError> write_dsp(const DspChange &change,
+                                                            const MessageListener &listener = {});
+
+private:
+  struct Impl;
+  explicit MidiSession(std::unique_ptr<Impl> impl);
+  [[nodiscard]] std::expected<Message, MidiError> query(std::span<const std::uint8_t> update,
+                                                        const MessageListener &listener);
+  std::unique_ptr<Impl> impl_;
 };
 
 // Deadline covers write and reply.
