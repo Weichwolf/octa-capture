@@ -59,6 +59,8 @@ make release    # optimized build and tests
 ./build/strict/octa-probe   # read-only clock status, requires USB device access
 ./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
 ./build/strict/octa-status  # kernel-owned rate/source/display status as JSON
+./build/strict/octa-panel display 0  # select Mixer A on the device LCD
+./build/strict/octa-panel identify   # original identification/blink command
 ./build/strict/octa-preset inspect settings.octa  # offline Ver100 file summary
 ./build/strict/octa-preset export > current.octa  # read current device state and export
 ./build/strict/octa-preset normalize settings.octa > normalized.octa
@@ -101,6 +103,8 @@ Device controls use the exclusive CTRL MIDI port. `MidiSession` shares it betwee
 The [persistent GUI bridge](doc/gui-backend.md) shares one C++ device session between meter events and serialized control requests. `tools/check-bridge.py --write` checks its live control/readback and recovery path. The local HTTP panel uses this bridge for live controls and meters. `tools/check-gui.sh` checks the running panel in disposable headless Chromium; `--write` additionally exercises hardware changes, settings download/upload and complete raw recovery.
 
 `octa-dsp` controls mixer buses A–D, masters, reverb and individual output routes. Channels and output pairs start at 1; values are decimal wire indices/coefficients. `--dry-run` opens no device. Writes validate control bounds and verify readback; see the [protocol reference](doc/usb-midi-protocol.txt).
+
+`octa-panel display 0..3|identify` sends the original LCD-selection or identification command and checks that audio settings remain unchanged. Mixer B–D selection is rejected at 192 kHz. A bulk reply does not confirm the physical LCD or blink.
 
 The [Ver100 preset tools](doc/preset-format.txt) support original `.octa` files, current-state export, offline preparation, live application and raw recovery. Live changes require a new private recovery file. `routing multi-monitor|playback` applies the original five-route presets, checks the entire state after every route and attempts recovery on failure/interruption. Patchbay presets are unavailable at 192 kHz. `memory-store/load` send persistent-memory commands, but persistence remains hardware-unverified; a runtime snapshot cannot undo overwritten device memory.
 

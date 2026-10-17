@@ -31,6 +31,7 @@ export class BrowserClient {
     await client.call('Runtime.enable');
     await client.call('Page.enable');
     await client.call('Log.enable');
+    await client.call('Network.enable', {maxPostDataSize: 4096});
     await client.call('Emulation.setDeviceMetricsOverride', {width: 1100, height: 650, deviceScaleFactor: 1, mobile: false});
     return client;
   }
@@ -41,6 +42,8 @@ export class BrowserClient {
     this.pending = new Map();
     this.exceptions = [];
     this.securityErrors = [];
+    this.controls = [];
+    this.controlRequests = new Map();
     socket.addEventListener('message', event => {
       const value = JSON.parse(event.data);
       if (value.id) {
@@ -54,6 +57,20 @@ export class BrowserClient {
         this.exceptions.push(value.params.exceptionDetails);
       } else if (value.method === 'Log.entryAdded' && value.params.entry.source === 'security' && value.params.entry.level === 'error') {
         this.securityErrors.push(value.params.entry.text);
+      } else if (value.method === 'Network.requestWillBeSent') {
+        const request = value.params.request;
+        if (request.url.endsWith('/api/control') && typeof request.postData === 'string') {
+          const control = {...JSON.parse(request.postData), httpStatus: null};
+          this.controls.push(control);
+          this.controlRequests.set(value.params.requestId, control);
+          if (this.controls.length > 1000) this.controls.shift();
+        }
+      } else if (value.method === 'Network.responseReceived' || value.method === 'Network.loadingFailed') {
+        const control = this.controlRequests.get(value.params.requestId);
+        if (control) {
+          control.httpStatus = value.params.response?.status ?? 0;
+          this.controlRequests.delete(value.params.requestId);
+        }
       }
     });
   }
@@ -73,11 +90,11 @@ export class BrowserClient {
     return response.result.value;
   }
 
-  async click(selector, clickCount = 1) {
+  async click(selector, clickCount = 1, button = 'left') {
     await this.ready(selector);
     const rectangle = await this.evaluate(`(() => {const node=document.querySelector(${JSON.stringify(selector)});if(!node)throw new Error('Missing control');const r=node.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
-    await this.call('Input.dispatchMouseEvent', {type: 'mousePressed', button: 'left', clickCount, ...rectangle});
-    await this.call('Input.dispatchMouseEvent', {type: 'mouseReleased', button: 'left', clickCount, ...rectangle});
+    await this.call('Input.dispatchMouseEvent', {type: 'mousePressed', button, clickCount, ...rectangle});
+    await this.call('Input.dispatchMouseEvent', {type: 'mouseReleased', button, clickCount, ...rectangle});
   }
 
   async key(selector, key) {

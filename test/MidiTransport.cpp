@@ -6,6 +6,7 @@
 #include "octa/Initialization.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
+#include "octa/PanelCommand.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
 #include "octa/PresetState.hpp"
@@ -188,6 +189,99 @@ std::vector<std::uint8_t> bulk_frame(std::uint8_t marker = 0) {
   payload.front() = marker;
   const auto frame = octa::encode(octa::Command::data, octa::bulk_address, payload);
   return frame ? *frame : std::vector<std::uint8_t>{};
+}
+
+bool panel_operations() {
+  constexpr std::array commands = {
+      octa::PanelCommand{.action = octa::PanelAction::select_mixer, .bus = 0},
+      octa::PanelCommand{.action = octa::PanelAction::select_mixer, .bus = 3},
+      octa::PanelCommand{.action = octa::PanelAction::identify}};
+  for (const auto command : commands) {
+    for (const bool report_selection : {false, true}) {
+      io = {};
+      auto before = octa::decode(bulk_frame());
+      if (!before) { return false; }
+      before->payload[4] = 1;
+      auto after = *before;
+      if (report_selection && command.action == octa::PanelAction::select_mixer) {
+        after.payload[4] = command.bus;
+      }
+      const auto initial = octa::encode(before->command, before->address, before->payload);
+      const auto final = octa::encode(after.command, after.address, after.payload);
+      const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+      const auto frame = octa::encode_panel_command(command);
+      if (!initial || !final || !query || !frame) { return false; }
+      io.replies = {*initial, *final};
+      auto session = octa::MidiSession::open("hw:fake");
+      if (!session) { return false; }
+      const auto result = session->panel_command(command);
+      auto expected = *query;
+      append_bytes(expected, *frame);
+      append_bytes(expected, *query);
+      if (!require(
+              result && *result == after && io.outgoing == expected,
+              "panel command is bracketed by two fresh queries; LCD bulk cache may be stale")) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool panel_rejection() {
+  io = {};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  const auto invalid =
+      session->panel_command({.action = octa::PanelAction::select_mixer, .bus = 4});
+  if (!require(!invalid && invalid.error().code == -EINVAL && io.writes == 0,
+               "invalid panel selector rejected before I/O")) {
+    return false;
+  }
+  auto before = octa::decode(bulk_frame());
+  if (!before) { return false; }
+  before->payload[2] = 3;
+  const auto frame = octa::encode(before->command, before->address, before->payload);
+  if (!frame) { return false; }
+  io.replies = {*frame};
+  const auto high_rate =
+      session->panel_command({.action = octa::PanelAction::select_mixer, .bus = 1});
+  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+  return require(!high_rate && high_rate.error().code == -EINVAL && query && io.outgoing == *query,
+                 "192 kHz permits only mixer A, checked before a selection write");
+}
+
+bool panel_failures() {
+  io = {};
+  auto changed = octa::decode(bulk_frame());
+  if (!changed) { return false; }
+  constexpr std::size_t volume_offset = 0x120;
+  changed->payload[volume_offset] = 1;
+  const auto encoded = octa::encode(changed->command, changed->address, changed->payload);
+  if (!encoded) { return false; }
+  io.replies = {bulk_frame(), *encoded};
+  {
+    auto session = octa::MidiSession::open("hw:fake");
+    if (!session) { return false; }
+    const auto failed = session->panel_command({.action = octa::PanelAction::identify});
+    if (!require(!failed && failed.error().code == -EIO,
+                 "unrelated audio change is not a successful panel command")) {
+      return false;
+    }
+  }
+  io = {};
+  constexpr std::size_t whole_write = 512;
+  io.write_size = whole_write;
+  io.fail_write = 2;
+  io.replies = {bulk_frame()};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  const auto failed = session->panel_command({.action = octa::PanelAction::identify});
+  const auto writes = io.writes;
+  const auto retry = session->read_bulk_state();
+  return require(!failed && failed.error().code == -EIO && !retry &&
+                     retry.error().code == -EPROTO && io.writes == writes,
+                 "failed panel transfer requires a fresh session");
 }
 
 bool session_buffering() {
@@ -1307,7 +1401,8 @@ int main() {
       session_queries() && session_stale_fragment() && session_writes() && memory_operations() &&
       memory_rejection() && memory_partial_failure() && preset_transfer() && preset_rejection() &&
       preset_readback_failure() && preset_partial_failure() && session_uncertain() &&
-      session_receive_bounds() && impossible_transfers();
+      session_receive_bounds() && impossible_transfers() && panel_operations() &&
+      panel_rejection() && panel_failures();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;

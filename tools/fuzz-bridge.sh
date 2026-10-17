@@ -18,6 +18,7 @@ corpus = Path('build/fuzz/bridge-corpus')
 seeds = ['1 state', '2 meters 1', '3 preamp 0 4 100', '4 preamp 6 5 1',
          '5 mixer 0 0 0 8 2097152', '6 master 1 3 1 1 8388607',
          '7 reverb 2 4 49', '8 route 4 8', '9 preamp 256 4 1',
+         '11 display 0', '12 display 3', '13 identify', '14 display 4', '15 identify 0',
          '4294967295 state', '4294967296 state', '1 state\x00']
 for index, seed in enumerate(seeds):
     (corpus / f'request-{index}').write_bytes(seed.encode('ascii'))

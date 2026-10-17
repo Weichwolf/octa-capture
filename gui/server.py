@@ -28,6 +28,7 @@ ASSETS = {'/': ('index.html', 'text/html; charset=utf-8'),
           '/app.js': ('app.js', 'text/javascript; charset=utf-8'),
           '/parameters.js': ('parameters.js', 'text/javascript; charset=utf-8'),
           '/meters.js': ('meters.js', 'text/javascript; charset=utf-8'),
+          '/menus.js': ('menus.js', 'text/javascript; charset=utf-8'),
           '/favicon.svg': ('favicon.svg', 'image/svg+xml'),
           '/style.css': ('style.css', 'text/css; charset=utf-8')}
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "

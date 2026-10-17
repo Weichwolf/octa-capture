@@ -5,6 +5,7 @@
 #include "octa/DspControl.hpp"
 #include "octa/Initialization.hpp"
 #include "octa/Meters.hpp"
+#include "octa/PanelCommand.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
 #include "octa/Protocol.hpp"
@@ -55,6 +56,10 @@ public:
   [[nodiscard]] std::expected<Message, MidiError> receive(std::chrono::milliseconds timeout);
   [[nodiscard]] std::expected<Message, MidiError>
   read_bulk_state(const MessageListener &listener = {});
+  // Confirm unchanged audio settings around the original panel command. Bulk
+  // byte 4 can retain its previous value; physical LCD/blink needs observation.
+  [[nodiscard]] std::expected<Message, MidiError>
+  panel_command(PanelCommand command, const MessageListener &listener = {});
   [[nodiscard]] std::expected<Message, MidiError>
   write_preamp(PreampChange change, const MessageListener &listener = {});
   [[nodiscard]] std::expected<Message, MidiError> write_dsp(const DspChange &change,

@@ -6,6 +6,7 @@
 #include "octa/DspControl.hpp"
 #include "octa/Initialization.hpp"
 #include "octa/Meters.hpp"
+#include "octa/PanelCommand.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
 #include "octa/PresetState.hpp"
@@ -402,6 +403,28 @@ std::expected<Message, MidiError> MidiSession::query(std::span<const std::uint8_
 
 std::expected<Message, MidiError> MidiSession::read_bulk_state(const MessageListener &listener) {
   return query({}, listener);
+}
+
+std::expected<Message, MidiError> MidiSession::panel_command(PanelCommand command,
+                                                             const MessageListener &listener) {
+  const auto frame = encode_panel_command(command);
+  if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "panel command"}); }
+  const auto before = query({}, listener);
+  if (!before) { return before; }
+  if (!validate_bulk_write(*before)) {
+    return std::unexpected(MidiError{.code = -EBADMSG, .operation = "panel command state"});
+  }
+  constexpr std::size_t rate_offset = 2;
+  constexpr std::uint8_t highest_rate = 3;
+  if (command.action == PanelAction::select_mixer && command.bus != 0 &&
+      before->payload[rate_offset] == highest_rate) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "192 kHz mixer selection"});
+  }
+  auto after = query(*frame, listener);
+  if (after && !panel_command_preserves_state(*before, *after, command)) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "panel audio-state preservation"});
+  }
+  return after;
 }
 
 std::expected<Message, MidiError> MidiSession::write_preamp(PreampChange change,

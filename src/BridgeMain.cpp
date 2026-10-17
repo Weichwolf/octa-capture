@@ -3,6 +3,7 @@
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
+#include "octa/PanelCommand.hpp"
 #include "octa/PcmMeterControl.hpp"
 #include "octa/PcmMeters.hpp"
 #include "octa/Preamp.hpp"
@@ -89,6 +90,8 @@ std::expected<octa::Message, octa::MidiError> execute(octa::MidiSession &session
           return session.write_preamp(change, notification);
         } else if constexpr (std::is_same_v<Change, octa::DspChange>) {
           return session.write_dsp(change, notification);
+        } else if constexpr (std::is_same_v<Change, octa::PanelCommand>) {
+          return session.panel_command(change, notification);
         } else {
           return std::unexpected(octa::MidiError{.code = -EINVAL, .operation = "bridge command"});
         }

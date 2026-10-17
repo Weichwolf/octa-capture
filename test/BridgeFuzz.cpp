@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/Bridge.hpp"
 #include "octa/DspControl.hpp"
+#include "octa/PanelCommand.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 
@@ -21,6 +22,9 @@ bool valid(const octa::BridgeCommand &command) {
           return encoded && octa::decode(*encoded).has_value();
         } else if constexpr (std::is_same_v<Change, octa::DspChange>) {
           const auto encoded = octa::encode_dsp_change(change);
+          return encoded && octa::decode(*encoded).has_value();
+        } else if constexpr (std::is_same_v<Change, octa::PanelCommand>) {
+          const auto encoded = octa::encode_panel_command(change);
           return encoded && octa::decode(*encoded).has_value();
         } else {
           return true;

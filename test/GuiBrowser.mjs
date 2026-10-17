@@ -54,6 +54,10 @@ try {
     return pcm?.enabled && pcm.error === 0 && pcm.capture.fresh && pcm.playback.fresh &&
       pcm.received_age_ms < 500;
   }, 'actual kernel capture and playback PCM meters');
+  await browser.click('[aria-label="Input 1 compressor bypass"]', 1, 'right');
+  assert.deepEqual(await browser.evaluate('[...document.querySelectorAll("#menus button")].map(node=>node.textContent)'),
+    ['Bypass Off All Ch.', 'Bypass On All Ch.']);
+  await browser.key('#menus button', 'Escape');
   if (write) {
     const sensitivity = '#preamp-view .preamp-strip:first-child .sensitivity';
     const original = before.preamps[0].sensitivity_index;
@@ -111,8 +115,79 @@ try {
     await hardware(state => state.mixers[0].input.channels[0].pan === expected, 'mixer pan hardware readback');
     await api('/api/control', {kind: 'mixer', source: 'input', bus: 0, channel: 0, parameter: 'pan', value: initialPan});
     console.log('PASS direct mixer pan: reference rounding and hardware readback');
+    const routes = enabled => enabled ? [0, 1, 2, 3, 0] : [0, 5, 6, 7, 8];
+    const toggleMultiple = async enabled => {
+      await browser.click('#header-action');
+      await until(() => browser.evaluate('document.querySelector("#confirm").open'), 'multi-mixer confirmation');
+      await browser.click('#confirm-yes');
+      await hardware(state => JSON.stringify(state.output_routes) === JSON.stringify(routes(enabled)),
+        `multi-mixer ${enabled ? 'enable' : 'disable'} patchbay`);
+      await until(() => browser.evaluate(`document.querySelector('#header-action').classList.contains('lit') === ${enabled}`), 'multi-mixer lamp');
+    };
+    if ((await api('/api/state')).state.output_routes.some(route => route >= 1 && route <= 3)) {
+      await toggleMultiple(false);
+    }
+    await toggleMultiple(true);
+    assert.equal(await browser.evaluate('document.querySelectorAll("#mixer-tabs > button:not([hidden])").length'), 4);
+    for (const selected of [1, 2, 3, 0]) {
+      const start = browser.controls.length;
+      await browser.click(`#mixer-tabs > button:nth-of-type(${selected + 1})`);
+      await until(() => browser.controls.slice(start).some(body => body.kind === 'display' && body.bus === selected && body.httpStatus === 200),
+        `mixer ${selected} sends its real display command`);
+    }
+    const identifyStart = browser.controls.length;
+    await browser.click('#device-status');
+    await until(() => browser.controls.slice(identifyStart).some(body => body.kind === 'identify' && body.httpStatus === 200), 'identification command');
+    await api('/api/control', {kind: 'display', bus: 0});
+    await toggleMultiple(false);
+    assert.equal(await browser.evaluate('document.querySelectorAll("#mixer-tabs > button:not([hidden])").length'), 1);
+    // Restore even nonstandard original routing/display metadata before proceeding.
+    await browser.blank(); await api('/api/disconnect', {});
+    await run(path.join(root, 'build/strict/octa-preset'), ['restore', recovery], {timeout: 20000});
+    await browser.call('Page.navigate', {url: launch});
+    await until(() => browser.evaluate('document.querySelector("#connection-message").hidden'), 'reconnected after raw recovery');
+    await browser.click('#view-switch');
+    assert.deepEqual((await api('/api/state')).state, before);
+    console.log('PASS multi-mixer on/off, real LCD/identify commands, tab gating and complete raw recovery');
   }
-  // Dialog inspection is read-only. Dangerous power/memory/initialization controls are never clicked.
+  await browser.click('[data-menu="device"]');
+  const submenuParent = '#menus .menu[data-depth="0"] > button[aria-haspopup="menu"]';
+  const submenuButtons = '#menus .menu[data-depth="1"] button';
+  await browser.key(submenuParent, 'ArrowRight');
+  assert.deepEqual(await browser.evaluate(`[...document.querySelectorAll(${JSON.stringify(submenuButtons)})].map(node=>node.textContent)`),
+    ['All', 'MIC PRE', 'DIRECT MIX', 'REVERB', 'PATCHBAY']);
+  await browser.key(submenuButtons, 'Escape');
+  assert.equal(await browser.evaluate('document.querySelectorAll("#menus .menu").length'), 1);
+  await browser.key(submenuParent, 'Escape');
+  assert.equal(await browser.evaluate('document.querySelectorAll("#menus .menu").length'), 0);
+  for (const [selector, count, parameter] of [['[aria-label="input 1 volume"]', 10, 'volume'],
+    ['[aria-label="input 1 / PAN"]', 2, 'pan'], ['[aria-label="Input 1 / REVERB"]', 10, 'send']]) {
+    await browser.click(selector, 1, 'right');
+    await browser.key(submenuParent, 'ArrowRight');
+    assert.equal(await browser.evaluate(`document.querySelectorAll(${JSON.stringify(submenuButtons)}).length`), count);
+    assert.equal(await browser.evaluate('[...document.querySelectorAll("#menus .menu")].every(node=>{const r=node.getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight;})'), true);
+    if (write) {
+      const start = browser.controls.length;
+      await browser.click(`${submenuButtons}:nth-of-type(${parameter === 'pan' ? 1 : count})`);
+      const targets = parameter === 'pan' ? [0, 32768, 0, 32768, 0, 32768, 0, 32768, 0, 32768] : Array(10).fill(0);
+      await until(() => new Set(browser.controls.slice(start).filter(body => body.kind === 'mixer' && body.source === 'input' &&
+        body.bus === 0 && body.parameter === parameter && body.value === targets[body.channel] && body.httpStatus === 200).map(body => body.channel)).size === 10,
+      `ten acknowledged All Ch. ${parameter} commands`);
+      await hardware(state => parameter === 'send' ? state.reverb.input_send.every((value, channel) => value === targets[channel]) :
+        state.mixers[0].input.channels.every((value, channel) => value[parameter] === targets[channel]), `All Ch. ${parameter} readback`);
+      for (let channel = 0; channel < 10; channel++) {
+        const value = parameter === 'send' ? before.reverb.input_send[channel] : before.mixers[0].input.channels[channel][parameter];
+        await api('/api/control', {kind: 'mixer', source: 'input', bus: 0, channel, parameter, value});
+      }
+      assert.deepEqual((await api('/api/state')).state, before, `All Ch. ${parameter} full restoration`);
+    } else {
+      await browser.key(submenuButtons, 'Escape');
+      await browser.key(submenuParent, 'Escape');
+    }
+    assert.equal(await browser.evaluate(`document.activeElement.matches(${JSON.stringify(selector)})`), true);
+  }
+  console.log('PASS original context labels, Initialize/All Ch. submenus and keyboard navigation');
+  // Dialog inspection is read-only. Dangerous power/memory controls are never clicked.
   for (const name of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about']) {
     await browser.evaluate(`document.querySelector('#${name}').showModal()`);
     assert.equal(await browser.evaluate(`document.querySelector('#${name}').open`), true);

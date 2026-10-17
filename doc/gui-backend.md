@@ -28,6 +28,8 @@ indices/coefficients. No filenames, shell commands or arbitrary SysEx are accept
 | `master SOURCE BUS CHANNEL PARAMETER VALUE` | Typed master update |
 | `reverb PARAMETER BANK VALUE` | Type=0/pre-delay=1/time=2 |
 | `route PAIR SELECTION` | Physical output pair routing |
+| `display BUS` | Select device LCD mixer A=0 through D=3; B–D unavailable at 192 kHz |
+| `identify` | Send the original device identification/blink command |
 
 The C++ parser applies the same validated selectors/bounds as the existing
 control APIs before any command write. It rejects extra fields, signed/fractional
@@ -85,6 +87,19 @@ Origin. Actions are serialized. Concurrent short polls do not falsely mark the
 panel busy; bulk operations expose a transaction flag and retain the last state.
 No client-supplied path or shell command is accepted. Export/import temporarily
 release the bridge so the existing recovery-aware CLI owns CTRL exclusively.
+
+Panel commands use the same endpoint: `{"kind":"display","bus":1}` or
+`{"kind":"identify"}`. Their fresh bulk reply verifies preservation of audio
+settings, not physical LCD selection or blinking. Clicking the device name sends
+identification; selecting a different visible mixer tab sends LCD selection.
+
+The Multiple Direct Mixer switch follows both original handlers: enable assigns
+output routes `[0,1,2,3,0]`; disable initializes Patch Bay and selects Mixer A.
+Its lamp and B–D tab visibility derive from actual B–D output routes. It is hidden
+in the preamp view and unavailable at 192 kHz. Both directions ask for confirmation.
+Initialize and context menus have keyboard-accessible submenus. Mixer level/send
+All Ch. affects ten strips; pan offers alternating Left/Right or Center. Compressor
+Bypass Off All Ch. enables compression; Bypass On All Ch. disables it.
 
 Recovery files are created privately under `$XDG_STATE_HOME/octa-capture`
 (default `~/.local/state/octa-capture`), or `--data-dir`. Keep them after an
@@ -154,7 +169,8 @@ tools/check-gui.sh --write
 ```
 
 `--write` uses actual browser keyboard/pointer/file events, verifies hardware
-readback, Auto-Sens finish/cancel and restores a fresh raw snapshot, then checks release of CTRL. The
+readback, multiple-mixer routing, panel commands, ten-channel context actions and
+Auto-Sens finish/cancel, and restores fresh raw snapshots, then checks release of CTRL. The
 checker saves private screenshots and recovery files under `build/gui/`.
 `tools/verify-gui-parameters.py MAC-GUI WINDOWS-GUI [--cpu]` compares all fader
 and compressor tables; `--cpu` additionally executes original macOS inverse-fader

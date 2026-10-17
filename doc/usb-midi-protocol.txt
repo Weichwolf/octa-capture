@@ -491,6 +491,28 @@ the original state even when using this variant:
   python3 tools/check-direct-out.py --write --linked-masters
 Native Debian and physical signal response remain unverified.
 
+LCD mixer selection and identification
+--------------------------------------
+TxDMix (macOS 0x100002410) sends DT1 to 00 02 00 03, payload 00..03
+for Mixer A..D. TxBlink (0x10000b49c) sends DT1 to 00 00 00 00,
+payload 00. The five complete frames match isolated execution of the
+hash-pinned original with tools/emulate-panel-commands.py gui-x86_64.
+octa-panel display 0..3|identify [hw:CTRL-port] and the persistent bridge
+validate selectors before I/O, query before/after, and reject unrelated state
+changes. B-D display selection is rejected at 192 kHz. The observed bulk
+byte 4 can remain unchanged; the preservation check also accepts the selected
+bus there. Bulk replies do not confirm physical LCD selection or blinking.
+All five standalone commands and browser requests preserve the complete raw
+audio state in WSL tests. Physical panel confirmation remains outstanding.
+
+The Multiple Direct Mixer header is a routing action. macOS CBtnPatch::Do
+(0x100001340) and Windows 0x140016e60 confirm: if any output selects B-D,
+send TxInit(4), then TxDMix(0); otherwise set five routes to [0,1,2,3,0].
+Both branches ask for confirmation. The lamp is true for any B-D output
+route; the switch is visible only in Mixer view below 192 kHz. Both branches
+are browser/hardware tested with complete recovery. This is distinct from
+the local Preamp/Mixer view selector.
+
 Initialization
 --------------
 CCplDeviceIO::TxInit (macOS 1.5.9, 0x100026c28) writes one byte to

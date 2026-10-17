@@ -26,6 +26,8 @@ class Controls(unittest.TestCase):
             ({'kind': 'reverb', 'parameter': 'time', 'bank': 4, 'value': 49},
              ('reverb', [2, 4, 49])),
             ({'kind': 'route', 'pair': 4, 'selection': 8}, ('route', [4, 8])),
+            ({'kind': 'display', 'bus': 3}, ('display', [3])),
+            ({'kind': 'identify'}, ('identify', [])),
         ]
         for body, expected in examples:
             self.assertEqual(validate_control(body), expected)
@@ -52,6 +54,8 @@ class Controls(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(InvalidControl):
                 validate_control({**original, **changes})
         for body in (None, [], {}, {'kind': True},
+                     {'kind': 'display', 'bus': 4}, {'kind': 'display', 'bus': True},
+                     {'kind': 'display', 'bus': -1}, {'kind': 'identify', 'bus': 0},
                      {'kind': 'reverb', 'parameter': 'type', 'bank': 1, 'value': 0},
                      {'kind': 'reverb', 'parameter': 'pre-delay', 'bank': 0, 'value': 0}):
             with self.subTest(body=body), self.assertRaises(InvalidControl):

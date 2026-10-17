@@ -2,6 +2,7 @@
 #include "octa/Bridge.hpp"
 
 #include "octa/DspControl.hpp"
+#include "octa/PanelCommand.hpp"
 #include "octa/Preamp.hpp"
 
 #include <algorithm>
@@ -89,6 +90,13 @@ std::optional<BridgeCommand> command(std::string_view operation, Values args) {
   if (operation == "state" && args.empty()) { return StateQuery{}; }
   if (operation == "meters" && args.size() == 1 && args.front() <= 1) {
     return MeterSwitch{.enabled = args.front() != 0};
+  }
+  if (operation == "display" && args.size() == 1 && args.front() < 4) {
+    return PanelCommand{.action = PanelAction::select_mixer,
+                        .bus = static_cast<std::uint8_t>(args.front())};
+  }
+  if (operation == "identify" && args.empty()) {
+    return PanelCommand{.action = PanelAction::identify};
   }
   if (operation == "preamp" && args.size() == 3 && bytes(args)) {
     const PreampChange change = {.channel = static_cast<std::uint8_t>(args[0]),

@@ -2,6 +2,7 @@
 import {PRE_DELAY, PREAMP_MAX, VOLUME, GRAPH_MIN_DB, volumeIndex,
   volumeText, parameterText, panToWire, wireToPan, panText, compressorOutput, sensitivityIndex} from './parameters.js';
 import {MeterBallistics, METER_TICK_MS, meterDb, meterY} from './meters.js';
+import {PopupMenus} from './menus.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -11,6 +12,9 @@ const el = (tag, className = '', text = '') => {
   node.textContent = text;
   return node;
 };
+const popups = new PopupMenus($('#menus'), () => {
+  for (const button of all('[data-menu]')) button.setAttribute('aria-expanded', 'false');
+});
 const tokenFromLink = new URLSearchParams(location.hash.slice(1)).get('token');
 let token = tokenFromLink;
 try {
@@ -197,7 +201,7 @@ class Knob {
     this.node.classList.remove('dragging');
   }
   keyboard(event) {
-    if (!connected || busy || this.node.closest('.unavailable-channel')) return;
+    if (!connected || busy || this.editing || this.node.closest('.unavailable-channel')) return;
     let value = this.value;
     const step = event.shiftKey ? 1 : this.step;
     if (['ArrowUp', 'ArrowRight'].includes(event.key)) value += step;
@@ -218,6 +222,7 @@ class Knob {
     this.output.addEventListener('dblclick', () => this.beginEdit());
     this.output.addEventListener('blur', () => this.finishEdit(true));
     this.output.addEventListener('keydown', event => {
+      if (event.ctrlKey || event.metaKey) return;
       if (!this.editing) {
         if (event.key === 'Enter' || event.key === 'F2') {
           event.preventDefault(); event.stopPropagation(); this.beginEdit();
@@ -372,7 +377,13 @@ function makeMixers() {
     const tab = el('button', '', letter);
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-selected', String(index === bus));
-    tab.addEventListener('click', () => { bus = index; if (documentState) update(documentState); });
+    tab.addEventListener('click', () => {
+      if (index !== bus && connected && !busy) {
+        bus = index;
+        queueChange({kind: 'display', bus});
+        if (documentState) update(documentState);
+      }
+    });
     $('#mixer-tabs').append(tab);
   }
   $('#mixer-tabs').append(el('span', 'routing-summary'));
@@ -483,7 +494,8 @@ function update(result) {
   const state = result.state;
   const rateIndex = parseInt(state.payload_hex.slice(4, 6), 16);
   const rate = [44100, 48000, 96000, 192000][rateIndex];
-  if (rateIndex === 3) bus = 0;
+  const multiple = state.output_routes.some(route => route >= 1 && route <= 3);
+  if (rateIndex === 3 || !multiple) bus = 0;
   for (const strip of all('.preamp-strip, .mixer-strip')) {
     strip.classList.toggle('unavailable-channel', rateIndex === 3 && Number(strip.dataset.channel) >= 4);
   }
@@ -507,8 +519,14 @@ function update(result) {
   for (const {canvas, channel} of plots) drawCurve(canvas, state.preamps[channel].compressor);
   for (const node of all('.mixer-send, .master-return')) node.style.visibility = bus === 0 && rateIndex !== 3 ? 'visible' : 'hidden';
   for (const [index, tab] of all('#mixer-tabs > button').entries()) {
-    tab.setAttribute('aria-selected', String(index === bus)); tab.disabled = rateIndex === 3 && index !== 0;
+    tab.setAttribute('aria-selected', String(index === bus));
+    tab.hidden = index !== 0 && (rateIndex === 3 || !multiple);
+    tab.disabled = busy || (rateIndex === 3 && index !== 0);
   }
+  const multiActive = activeView === 'mixer' && rateIndex !== 3 && multiple;
+  $('#header-action').classList.toggle('lit', multiActive);
+  $('#header-action').setAttribute('aria-pressed', String(multiActive));
+  $('#header-action').disabled = busy || (activeView === 'mixer' && rateIndex === 3);
   for (const title of all('.group-title[data-source]')) {
     title.textContent = `${title.dataset.source === 'input' ? 'INPUT' : 'WAVE OUT'} MIXER ${'ABCD'[bus]}`;
   }
@@ -658,28 +676,16 @@ function cancelAutoSense() {
 }
 
 function closeMenus() {
-  $('#menus').replaceChildren();
-  for (const button of all('[data-menu]')) button.setAttribute('aria-expanded', 'false');
+  popups.close();
 }
 
 function openMenu(items, x, y) {
-  closeMenus();
-  const menu = el('div', 'menu'); menu.setAttribute('role', 'menu');
-  for (const item of items) {
-    if (!item) { menu.append(el('hr')); continue; }
-    const button = el('button', '', item.label);
-    button.setAttribute('role', 'menuitem'); button.disabled = Boolean(item.disabled);
-    if (item.shortcut) button.append(el('span', 'shortcut', item.shortcut));
-    button.addEventListener('click', () => { closeMenus(); void item.run?.(); });
-    menu.append(button);
-  }
-  $('#menus').append(menu);
-  menu.style.left = `${Math.min(x, innerWidth - menu.offsetWidth - 4)}px`;
-  menu.style.top = `${Math.max(0, Math.min(y, innerHeight - menu.offsetHeight - 4))}px`;
+  popups.open(items, x, y);
 }
 
 function controlMenu(event, control) {
   event.preventDefault(); if (!connected || busy) return;
+  event.currentTarget.focus({preventScroll: true});
   const items = [];
   const set = (label, value) => ({label, run: () => queueChange({...control, value})});
   if (['volume', 'send', 'return'].includes(control.parameter)) {
@@ -690,10 +696,23 @@ function controlMenu(event, control) {
   const allChannels = value => {
     const count = control.kind === 'preamp' ? 8 : 10;
     const step = ['link', 'mono', 'stereo-link'].includes(control.parameter) ? 2 : 1;
-    for (let channel = 0; channel < count; channel += step) queueChange({...control, channel, value});
+    for (let channel = 0; channel < count; channel += step) {
+      queueChange({...control, channel, value: typeof value === 'function' ? value(channel) : value});
+    }
   };
-  if (control.kind === 'preamp' && control.parameter === 'sensitivity') {
+  if (control.kind === 'mixer' && ['volume', 'send'].includes(control.parameter)) {
+    items.push(null, {label: 'All Ch.', children: VOLUME_LABELS.map((label, index) =>
+      ({label, run: () => allChannels(VOLUME_PRESETS[index])}))});
+  } else if (control.kind === 'mixer' && control.parameter === 'pan') {
+    items.push(null, {label: 'All Ch.', children: [
+      {label: 'Left / Right', run: () => allChannels(channel => channel % 2 === 0 ? 0 : 32768)},
+      {label: 'Center', run: () => allChannels(16384)},
+    ]});
+  } else if (control.kind === 'preamp' && control.parameter === 'sensitivity') {
     items.push({label: 'Minimum All Ch.', run: () => allChannels(0)});
+  } else if (control.kind === 'preamp' && control.parameter === 'compressor') {
+    items.push({label: 'Bypass Off All Ch.', run: () => allChannels(1)},
+      {label: 'Bypass On All Ch.', run: () => allChannels(0)});
   } else if (control.kind !== 'master' && ['phantom', 'low-cut', 'phase', 'compressor', 'stereo-link', 'link', 'mono', 'solo', 'mute'].includes(control.parameter)) {
     if (control.parameter !== 'phantom') items.push({label: 'On All Ch.', run: () => allChannels(1)});
     items.push({label: 'Off All Ch.', run: () => allChannels(0)});
@@ -712,7 +731,7 @@ async function saveSettings() {
 
 function menu(name, anchor) {
   const items = name === 'driver' ? [
-    {label: 'Driver Settings…', disabled: !connected, run: () => showDialog('settings')}, null,
+    {label: 'Driver Settings…', disabled: !connected || busy, run: () => showDialog('settings')}, null,
     {label: 'Always on top', disabled: true}, {label: 'Show README', disabled: true},
     {label: 'About Driver & Control Panel…', run: () => showDialog('about')}, null,
     {label: 'Exit', shortcut: 'Alt+F4', run: async () => {
@@ -725,12 +744,14 @@ function menu(name, anchor) {
     {label: 'Load settings…', shortcut: 'Ctrl+O', run: () => $('#load-file').click()}, null,
     {label: 'Open the Patch Bay…', shortcut: 'Ctrl+P', run: () => showDialog('patchbay')}, null,
     {label: 'Directly Output the Inputs', run: () => operation({action: 'direct-out'}, 'This will change the patchbay and direct mixer settings. Do you want to continue?')}, null,
-    ...[['all', 'All'], ['preamps', 'MIC PRE'], ['direct-mix', 'DIRECT MIX'], ['reverb', 'REVERB'], ['patchbay', 'PATCHBAY']].map(([target, label]) =>
-      ({label: `Initialize… ${label}`, run: () => operation({action: 'initialize', target}, `OK to initialize ${label} settings?`)})), null,
+    {label: 'Initialize…', children:
+      [['all', 'All'], ['preamps', 'MIC PRE'], ['direct-mix', 'DIRECT MIX'], ['reverb', 'REVERB'], ['patchbay', 'PATCHBAY']].map(([target, label]) =>
+        ({label, run: () => operation({action: 'initialize', target}, `OK to initialize ${label} settings?`)}))}, null,
     {label: 'Show the signal flow', run: () => showDialog('diagram')},
   ];
   const rect = anchor.getBoundingClientRect();
-  openMenu(items, rect.left, rect.bottom);
+  const enabledItems = name === 'device' ? items.map(item => item ? {...item, disabled: !canOperate()} : null) : items;
+  openMenu(enabledItems, rect.left, rect.bottom);
   anchor.setAttribute('aria-expanded', 'true');
 }
 
@@ -818,10 +839,25 @@ function setupEvents() {
     $('#preamp-view').hidden = activeView !== 'preamp'; $('#mixer-view').hidden = activeView !== 'mixer';
     $('#view-switch').textContent = activeView === 'preamp' ? 'DIRECT MIXER ▾' : 'MIC PRE ▾';
     $('#header-action > span:last-child').textContent = activeView === 'preamp' ? 'AUTO-SENS' : 'MULTIPLE DIRECT MIXER';
+    if (documentState) update(documentState);
   });
   $('#header-action').addEventListener('click', () => {
     if (activeView === 'preamp') showDialog('auto-sens');
-    else void operation({action: 'routing', preset: 'multi-monitor'}, 'This will enable four independent monitor mixes and change the patchbay settings. Do you want to continue?');
+    else {
+      const multiple = documentState?.state.output_routes.some(route => route >= 1 && route <= 3);
+      const action = multiple ? {action: 'initialize', target: 'patchbay'} : {action: 'routing', preset: 'multi-monitor'};
+      void operation(action, 'This will change the patchbay settings. Do you want to continue?');
+    }
+  });
+  $('#device-status').setAttribute('role', 'button');
+  $('#device-status').setAttribute('aria-label', 'Identify OCTA-CAPTURE');
+  $('#device-status').title = 'Identify this OCTA-CAPTURE by blinking its display.';
+  $('#device-status').tabIndex = 0;
+  $('#device-status').addEventListener('click', () => queueChange({kind: 'identify'}));
+  $('#device-status').addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault(); queueChange({kind: 'identify'});
+    }
   });
 }
 

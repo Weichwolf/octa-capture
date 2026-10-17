@@ -126,6 +126,7 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .menu button:hover, .menu button:focus { background: #bdd1e7; outline: 0; }
 .menu hr { margin: 3px; border: 0; border-top: 1px solid #bbb; }
 .menu .shortcut { color: #555; }
+.menu .submenu-arrow { align-self: center; font-size: 9px; }
 #toast { position: fixed; z-index: 60; bottom: 18px; left: 50%; transform: translateX(-50%); max-width: 600px; padding: 12px 18px; color: #fff; background: #342b25; border: 1px solid #917c58; box-shadow: 0 3px 16px #0008; }
 dialog { min-width: 240px; max-width: 650px; padding: 0; border: 2px ridge #ccc; background: #eee; color: #111; box-shadow: 0 8px 30px #0009; font: 12px Arial,sans-serif; }
 dialog::backdrop { background: #0004; }

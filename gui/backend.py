@@ -96,6 +96,12 @@ def validate_control(body):
     if kind == 'route':
         fields(body, ('pair', 'selection'))
         return kind, [integer(body['pair'], 0, 4), integer(body['selection'], 0, 8)]
+    if kind == 'display':
+        fields(body, ('bus',))
+        return kind, [integer(body['bus'], 0, 3)]
+    if kind == 'identify':
+        fields(body, ())
+        return kind, []
     raise InvalidControl('Unknown control kind.')
 
 
@@ -271,7 +277,7 @@ class Bridge:
         return response
 
     def request(self, operation, arguments=()):
-        if operation not in ('state', 'meters', 'preamp', 'mixer', 'master', 'reverb', 'route'):
+        if operation not in ('state', 'meters', 'preamp', 'mixer', 'master', 'reverb', 'route', 'display', 'identify'):
             raise InvalidControl('Unsupported backend operation.')
         if any(type(value) is not int or not 0 <= value <= 0xffffffff for value in arguments):
             raise InvalidControl('Invalid backend argument.')

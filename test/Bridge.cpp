@@ -32,6 +32,9 @@ bool valid_requests() {
                                    "12 reverb 1 4 12",
                                    "13 reverb 2 1 0",
                                    "14 route 4 8",
+                                   "16 display 0",
+                                   "17 display 3",
+                                   "18 identify",
                                    "4294967295 state",
                                    " \t15\tpreamp 7 12 74\r "};
   for (const auto *example : examples) {
@@ -59,6 +62,12 @@ bool invalid_requests() {
                                    "1 state 0",
                                    "1 meters 2",
                                    "1 meters 256",
+                                   "1 display",
+                                   "1 display -1",
+                                   "1 display 4",
+                                   "1 display 256",
+                                   "1 display 1 2",
+                                   "1 identify 0",
                                    "1 preamp 256 4 20",
                                    "1 preamp 0 256 20",
                                    "1 preamp 0 4 256",
