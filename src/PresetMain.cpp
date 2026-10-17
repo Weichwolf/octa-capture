@@ -117,6 +117,24 @@ void print_summary(const octa::Preset &preset) {
             << preset.preamps.size() << R"(,"mixer_buses":)" << preset.mixers.size() << "}\n";
 }
 
+int routing_command(std::span<char *> arguments) {
+  if (arguments.size() < 4 || arguments.size() > 5) {
+    std::cerr
+        << "Usage: octa-preset routing multi-monitor|playback NEW-RECOVERY.syx [hw:CTRL-port]\n";
+    return 2;
+  }
+  const std::string_view name = arguments[2];
+  if (name != "multi-monitor" && name != "playback") {
+    std::cerr << "Unknown routing preset.\n";
+    return 2;
+  }
+  const auto preset = name == "multi-monitor" ? octa::cli::RoutingPreset::multi_monitor
+                                              : octa::cli::RoutingPreset::playback;
+  const std::string_view port =
+      arguments.size() == 5 ? arguments[4] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
+  return octa::cli::apply_routing(preset, {.port = port, .snapshot_path = arguments[3]});
+}
+
 std::optional<int> device_command(std::string_view mode, int argc, char **argv) {
   if (mode == "export" && (argc == 2 || argc == 3)) {
     const std::string_view port = argc == 3 ? argv[2] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
@@ -144,18 +162,23 @@ std::optional<int> device_command(std::string_view mode, int argc, char **argv) 
 
 int main(int argc, char **argv) {
   const std::string_view mode = argc >= 2 ? argv[1] : "";
+  if (mode == "routing") {
+    return routing_command(std::span(argv, static_cast<std::size_t>(argc)));
+  }
   const auto device = device_command(mode, argc, argv);
   if (device.has_value()) { return *device; }
   const bool file_mode =
       mode == "inspect" || mode == "normalize" || mode == "prepare" || mode == "apply";
   if (!valid_arguments(mode, argc) || !file_mode) {
-    std::cerr << "Usage: octa-preset inspect|normalize FILE\n"
-                 "       octa-preset export [hw:CTRL-port] > settings.octa\n"
-                 "       octa-preset prepare FILE CURRENT.syx > prepared.syx (offline)\n"
-                 "       octa-preset apply FILE NEW-RECOVERY.syx [hw:CTRL-port]\n"
-                 "       octa-preset restore|restore-auto RECOVERY.syx [hw:CTRL-port]\n"
-                 "       octa-preset memory-store|memory-load NEW-RECOVERY.syx [hw:CTRL-port]\n"
-                 "normalize and export write binary Ver100 files to stdout.\n";
+    std::cerr
+        << "Usage: octa-preset inspect|normalize FILE\n"
+           "       octa-preset export [hw:CTRL-port] > settings.octa\n"
+           "       octa-preset prepare FILE CURRENT.syx > prepared.syx (offline)\n"
+           "       octa-preset apply FILE NEW-RECOVERY.syx [hw:CTRL-port]\n"
+           "       octa-preset restore|restore-auto RECOVERY.syx [hw:CTRL-port]\n"
+           "       octa-preset memory-store|memory-load NEW-RECOVERY.syx [hw:CTRL-port]\n"
+           "       octa-preset routing multi-monitor|playback NEW-RECOVERY.syx [hw:CTRL-port]\n"
+           "normalize and export write binary Ver100 files to stdout.\n";
     return 2;
   }
   const auto preset = load_file(argv[2]);

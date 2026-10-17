@@ -2,6 +2,7 @@
 #include "PresetDevice.hpp"
 
 #include "octa/AutoSense.hpp"
+#include "octa/DspControl.hpp"
 #include "octa/Midi.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
@@ -9,6 +10,7 @@
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
@@ -163,6 +165,37 @@ int failed_change(const MidiError &error,
   return interrupted != 0 ? interrupted_status : 1;
 }
 
+std::expected<Message, MidiError> attempt_routing(RoutingPreset preset, ApplyState &state) {
+  auto session = MidiSession::open(state.options.port);
+  if (!session) { return std::unexpected(session.error()); }
+  const auto before = capture_snapshot(*session, state);
+  if (!before) { return before; }
+  // The original patchbay is unavailable at rate index 3 (192 kHz).
+  if (before->payload[2] >= 3) {
+    return std::unexpected(MidiError{.code = -ENOTSUP, .operation = "routing sample-rate limit"});
+  }
+  constexpr std::array<std::uint8_t, 5> multi_monitor = {0, 1, 2, 3, 0};
+  constexpr std::array<std::uint8_t, 5> playback = {0, 5, 6, 7, 8};
+  const auto &routes = preset == RoutingPreset::multi_monitor ? multi_monitor : playback;
+  auto expected = *before;
+  constexpr std::size_t routing_offset = 5;
+  for (std::size_t pair = 0; pair < routes.size(); ++pair) {
+    if (interrupted != 0) {
+      return std::unexpected(MidiError{.code = -EINTR, .operation = "routing interrupted"});
+    }
+    state.write_attempted = true;
+    const auto reply = session->write_dsp(
+        RouteChange{.pair = static_cast<std::uint8_t>(pair), .selection = routes[pair]});
+    if (!reply) { return reply; }
+    expected.payload[routing_offset + pair] = routes[pair];
+    if (*reply != expected) {
+      return std::unexpected(
+          MidiError{.code = -EIO, .operation = "routing unrelated state change"});
+    }
+  }
+  return expected;
+}
+
 using Clock = std::chrono::steady_clock;
 
 struct AutoSenseProgress {
@@ -313,6 +346,26 @@ int operate_memory(MemoryAction action, ApplyOptions options) {
             << " command sent; current bulk state read. Recovery snapshot: "
             << options.snapshot_path
             << "\nPersistent storage/load completion is not verified by the bulk reply.\n"
+            << std::flush;
+  return std::cout.good() ? 0 : 1;
+}
+
+int apply_routing(RoutingPreset preset, ApplyOptions options) {
+  if (preset != RoutingPreset::multi_monitor && preset != RoutingPreset::playback) {
+    return failure({.code = -EINVAL, .operation = "routing preset"});
+  }
+  if (!install_handlers()) {
+    return failure({.code = -errno, .operation = "routing signal handlers"});
+  }
+  ApplyState state{.options = options, .snapshot = std::nullopt, .write_attempted = false};
+  auto result = attempt_routing(preset, state);
+  if (result && interrupted != 0) {
+    result = std::unexpected(MidiError{.code = -EINTR, .operation = "routing interrupted"});
+  }
+  if (!result) { return failed_change(result.error(), state, true); }
+  std::cout << "Routing preset applied; complete bulk readback verified after every route. "
+               "Recovery snapshot: "
+            << options.snapshot_path << '\n'
             << std::flush;
   return std::cout.good() ? 0 : 1;
 }

@@ -85,6 +85,14 @@ def main():
             result = run(binary, [mode, snapshot, 'invalid'], expected=1)
             require(b'hardware MIDI port' in result.stderr and not snapshot.exists(),
                     'Invalid memory port accessed the backup path')
+    with tempfile.TemporaryDirectory(prefix='octa-routing-cli-test-') as directory:
+        snapshot = Path(directory) / 'recovery.syx'
+        run(binary, ['routing'], expected=2)
+        run(binary, ['routing', 'unknown', snapshot], expected=2)
+        for name in ('multi-monitor', 'playback'):
+            result = run(binary, ['routing', name, snapshot, 'invalid'], expected=1)
+            require(b'hardware MIDI port' in result.stderr and not snapshot.exists(),
+                    'Invalid routing port accessed the recovery path')
     for mode in ('normalize', 'inspect'):
         with open('/dev/full', 'wb') as full:
             result = run(binary, [mode, fixtures / 'preset-ver100-windows-0.octa'], expected=1, stdout=full)

@@ -22,7 +22,12 @@ connected at 480 Mbit/s through USB/IP in the development environment.
 Interface 3 is the reference driver's status polling interface: CuDevPoll::Open
 selects alternate 1 and reads its interrupt pipe. Eight-byte packets are
 hardware-verified, with the rate in little-endian bytes 3..5 and alternating
-packet byte 0 (00/01). Other status fields still need mapping. Interface 4's
+packet byte 0 (00/01). CuDevPoll::send (0xa7ea) maps packet byte 2 to a
+boolean, bytes 3..5 to the 24-bit rate, byte 6 to a raw setting byte and
+byte 7 to another boolean. GetAllStat (0xa6c2) seeks phase 0 followed by
+phase 1 with a nonzero rate. The user-facing meanings of bytes 1, 2, 6, 7
+still need tracing; neither boolean is established as the clock source.
+This status pipe is not exposed by the Linux backend yet. Interface 4's
 meaning is not yet established.
 Audio alternate settings 1,2,3,4 advertise 44100,48000,96000,192000 Hz.
 Descriptors advertise 10 output/12 input channels at the first three rates
@@ -30,8 +35,10 @@ and four channels in each direction at 192000 Hz. This matches the record/
 playback specification in the English v1.6 owner's manual, p. 95:
 https://static.roland.com/assets/media/pdf/OCTA-CAPTURE_v1.6_OM.pdf
 Signal/channel mapping still needs hardware verification.
-The existing snd-usb-audio quirk only exposes 44100 Hz, S32_LE, 10 output
-and 12 input channels. MIDI currently exposes one ALSA raw-MIDI subdevice.
+The unmodified snd-usb-audio quirk exposes only 44100 Hz, S32_LE, 10 output
+and 12 input channels, with one raw-MIDI subdevice. The standalone module
+instead uses all descriptor rates/channel counts and exposes MIDI plus CTRL;
+see the streaming verification below.
 
 Control transport
 -----------------
@@ -85,6 +92,14 @@ rate and clear flags, then checks readiness before selecting audio alternate
 settings. It rejects status flag bit 1 rather than overriding that condition.
 ALSA stream preparation and independent USB readback have passed at all four
 supported rates under WSL. This does not establish working audio streaming.
+
+The owner's manual describes CLOCK as INTERNAL or synchronization to a
+signal at the coaxial input. DIGITAL=AUTO receives that input and follows
+its sampling frequency; DIGITAL=OFF disables it. This does not establish
+a freely selectable clock-source command. Fsc_SetDIN (0x17704) sends
+40/05/0000/0000 with two bytes, 40 followed by a setting byte. The setting
+values, external-clock conditions and live write behavior remain unverified;
+no such write has been issued by our implementation.
 
 SysEx envelope
 --------------
@@ -274,6 +289,31 @@ source groups; master volumes; reverb sends, return, type and all active
 parameter banks; all five output routes. Expected stereo coupling was
 checked. The complete raw payload matched the snapshot after every
 restoration. Link/mono controls and physical DSP response remain unverified.
+
+Routing presets
+---------------
+CDlgPatchBay::OnSetSelAlt (0x100026646) sends five TxOutSel calls in pair
+order 0..4 with selections 0,1,2,3,0: mixers A/B/C/D on analog output pairs
+1..4 and mixer A on coaxial output. CCplPnl::OnSetSelDirect (0x100029ea2)
+sends 0,5,6,7,8: mixer A, then playback pairs 3–4 through 9–10. The optional
+reference check executes original TxOutSel (0x1000262c8) for all ten frames:
+  python3 tools/emulate-routing-presets.py gui-x86_64
+The GUI's Multi-Monitor view preference is separate from these route writes;
+these presets do not implement Directly Output the Inputs or factory reset.
+
+The routing CLI saves a new private raw snapshot and verifies the complete
+expected bulk state after every route. Unrelated changes, errors and
+SIGINT/SIGTERM trigger attempted full recovery on a fresh connection. The
+original patchbay is unavailable at 192 kHz (manual, p. 51); presets reject
+rate index 3 or unknown indices before any route write. Failure/interruption
+can leave intermediate routes until recovery succeeds; disconnection or
+forced termination can prevent restoration. Retain the raw recovery file.
+Both presets and exact full-state restoration passed on WSL at 48 kHz with
+strict and release binaries; an existing backup file was preserved without
+parameter changes. tools/check-routing-presets.py is read-only by default;
+--write runs these checks and independently restores/checks the raw state.
+Offline fault tests cover partial transfer, unrelated state changes,
+interruption and the 192 kHz write guard. Native Debian remains unverified.
 
 TxSaveLoad at 0x10002a946 writes one command byte to 00 00 00 01.
 The confirmed callers at 0x10002a328 (Store Memory) and 0x10002a2ea

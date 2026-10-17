@@ -47,7 +47,9 @@ def verify(executable, cases):
         write_pointer(cpu, stack, stop)
         cpu.reg_write(registers.UC_X86_REG_RSP, stack)
         cpu.reg_write(registers.UC_X86_REG_RDI, context)
-        cpu.reg_write(registers.UC_X86_REG_RSI, argument)
+        arguments = argument if isinstance(argument, tuple) else (argument, 0)
+        cpu.reg_write(registers.UC_X86_REG_RSI, arguments[0])
+        cpu.reg_write(registers.UC_X86_REG_RDX, arguments[1])
         cpu.emu_start(address, stop, timeout=5_000_000, count=10000)
         if cpu.reg_read(registers.UC_X86_REG_RIP) != stop or frames != [expected]:
-            raise RuntimeError(f'{address:#x}, argument {argument}: reference MIDI frame mismatch')
+            raise RuntimeError(f'{address:#x}, arguments {argument}: reference MIDI frame mismatch')

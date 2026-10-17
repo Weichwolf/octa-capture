@@ -26,20 +26,10 @@ The following requirements remain open until verified individually:
 9. Real hardware verification on WSL2 and native Debian, distinguishing
    observations, static-analysis findings, hypotheses, and simulations.
 
-Current evidence
-----------------
-- Original Windows GUI starts under Wine. Preamp/compressor, Driver menu,
-  and About dialog observed; hardware access is not verified.
-- Device enumerates as an ALSA capture/playback card. Existing kernel
-  quirk advertises 44.1 kHz only; streaming has not yet been tested.
-- Windows resource extraction and macOS package extraction succeeded.
-- All 37 extracted Windows PNG resources are byte-identical to named
-  macOS GUI PNG resources. Shared resources prove shared artwork, not
-  full protocol equivalence or verified Linux behavior.
-- macOS x86_64 audio, MIDI, and GUI slices retain useful function symbols.
-- A matching WSL kernel build is already running. Do not start a duplicate
-  build; inspect its live process and artifacts before module work.
-
-Next: recover GUI parameter conversions and device messages from the named
-macOS functions; cross-check with Windows classes/resources and actual USB
-descriptors. Establish read-only device state access before enabling writes.
+Verification sources
+--------------------
+Current implemented behavior, protocol evidence and remaining hardware
+limits are recorded in usb-midi-protocol.txt and preset-format.txt.
+Build/install instructions are in ../README.md and ../kernel/README.md.
+Native Debian hardware, calibrated signal tests, full GUI parity and
+kernel sanitizer/fault-injection checks remain required.

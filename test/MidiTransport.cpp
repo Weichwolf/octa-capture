@@ -57,6 +57,9 @@ struct FakeIo {
   std::vector<std::uint8_t> auto_stop_reply;
   int auto_signal = 0;
   bool auto_fail_stop = false;
+  unsigned int route_commands = 0;
+  unsigned int fail_route = 0;
+  unsigned int interrupt_route = 0;
   int memory_signal = 0;
   bool fail_after_memory = false;
   unsigned int read_failures = 0;
@@ -495,6 +498,70 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
       "Auto-Sens workflow snapshots, completion, bounded result changes and raw recovery");
 }
 
+enum class RoutingScenario : std::uint8_t {
+  success,
+  mismatch,
+  transfer_failure,
+  interruption,
+  unsupported_rate
+};
+
+bool routing_workflow(octa::cli::RoutingPreset preset, RoutingScenario scenario) {
+  io = {};
+  auto original = octa::decode(bulk_frame());
+  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+  if (!original || !query) { return false; }
+  if (scenario == RoutingScenario::unsupported_rate) { original->payload[2] = 3; }
+  const auto baseline = octa::encode(original->command, original->address, original->payload);
+  if (!baseline) { return false; }
+  io.replies = {*baseline};
+  const std::array<std::uint8_t, 5> multi = {0, 1, 2, 3, 0};
+  const std::array<std::uint8_t, 5> playback = {0, 5, 6, 7, 8};
+  const auto &routes = preset == octa::cli::RoutingPreset::multi_monitor ? multi : playback;
+  auto target = *original;
+  const bool success = scenario == RoutingScenario::success;
+  unsigned int steps = 2;
+  if (success) { steps = 5; }
+  if (scenario == RoutingScenario::transfer_failure) { io.fail_route = 3; }
+  if (scenario == RoutingScenario::interruption) { io.interrupt_route = 2; }
+  constexpr std::size_t low_cut_offset = 0x17;
+  for (unsigned int pair = 0; pair < steps; ++pair) {
+    target.payload[5 + pair] = routes[pair];
+    if (scenario == RoutingScenario::mismatch && pair == 1) { target.payload[low_cut_offset] = 1; }
+    const auto reply = octa::encode(target.command, target.address, target.payload);
+    if (!reply) { return false; }
+    io.replies.push_back(*reply);
+  }
+  io.replies.push_back(*baseline);
+  auto directory = std::to_array("/tmp/octa-routing-test-XXXXXX");
+  if (mkdtemp(directory.data()) == nullptr) { return false; }
+  const auto path = std::string(directory.data()) + "/recovery.syx";
+  std::stringbuf errors;
+  auto *previous_errors = std::cerr.rdbuf(&errors);
+  const int status =
+      octa::cli::apply_routing(preset, {.port = "hw:fake", .snapshot_path = path.c_str()});
+  std::cerr.rdbuf(previous_errors);
+  std::ifstream file(path, std::ios::binary);
+  std::array<std::uint8_t, octa::bulk_size + 14> bytes{};
+  file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  const bool saved = file.gcount() == static_cast<std::streamsize>(baseline->size()) &&
+                     std::ranges::equal(std::span(bytes).first(baseline->size()), *baseline);
+  const bool recovered = !success && scenario != RoutingScenario::unsupported_rate;
+  const unsigned int connections = recovered ? 2U : 1U;
+  const bool recovery_verified =
+      !recovered || errors.str().contains("Original raw state restored and verified.");
+  int expected_status = success ? 0 : 1;
+  constexpr int interrupted_status = 130;
+  if (scenario == RoutingScenario::interruption) { expected_status = interrupted_status; }
+  const bool rate_guard = scenario != RoutingScenario::unsupported_rate || io.outgoing == *query;
+  const bool removed_file = unlink(path.c_str()) == 0;
+  const bool removed_directory = rmdir(directory.data()) == 0;
+  return require(status == expected_status && saved && io.opens == connections &&
+                     io.closes == connections * 2 && recovery_verified && rate_guard &&
+                     removed_file && removed_directory,
+                 "routing preset verified full state and recovery; 192 kHz writes refused");
+}
+
 bool memory_operations() {
   io = {};
   auto reply = level_frame();
@@ -803,6 +870,14 @@ bool open_failure() {
                  "failed open never starts the meter stream");
 }
 
+int handle_fake_route(const octa::Message &message) {
+  if (message.address[0] != 0 || message.address[1] != 3 || message.address[2] != 0) { return 0; }
+  ++io.route_commands;
+  if (io.route_commands == io.fail_route) { io.fail_write = io.writes + 2; }
+  if (io.route_commands == io.interrupt_route && kill(getpid(), SIGINT) != 0) { return -errno; }
+  return 0;
+}
+
 int handle_fake_data(const octa::Message &message) {
   if (message.command != octa::Command::data) { return 0; }
   if (message.address == octa::Address{0, 0, 0, 1}) {
@@ -817,7 +892,7 @@ int handle_fake_data(const octa::Message &message) {
   if (message.address == octa::Address{0, 2, 1, 5}) {
     append_bytes(io.incoming, io.auto_stop_reply);
   }
-  return 0;
+  return handle_fake_route(message);
 }
 
 void handle_fake_request(const octa::Message &message) {
@@ -925,8 +1000,19 @@ int main() {
           auto_sense_workflow(action, scenario) && auto_sense_workflow_passed;
     }
   }
+  bool routing_passed = true;
+  for (const auto preset :
+       {octa::cli::RoutingPreset::multi_monitor, octa::cli::RoutingPreset::playback}) {
+    for (const auto scenario : {RoutingScenario::success,
+                                RoutingScenario::mismatch,
+                                RoutingScenario::transfer_failure,
+                                RoutingScenario::interruption,
+                                RoutingScenario::unsupported_rate}) {
+      routing_passed = routing_workflow(preset, scenario) && routing_passed;
+    }
+  }
   const bool passed =
-      memory_cli_passed && auto_sense_workflow_passed && successful_stream() &&
+      routing_passed && memory_cli_passed && auto_sense_workflow_passed && successful_stream() &&
       input_failure(false) && input_failure(true) && write_failures() && deadlines() &&
       open_failure() && auto_sense_session() && auto_sense_cleanup() && auto_sense_failures(true) &&
       auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&

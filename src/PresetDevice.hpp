@@ -23,6 +23,9 @@ struct AutoSenseOptions {
   AutoSenseAction action;
 };
 
+enum class RoutingPreset : std::uint8_t { multi_monitor, playback };
+
+int apply_routing(RoutingPreset preset, ApplyOptions options);
 int run_auto_sense(AutoSenseOptions request, ApplyOptions options);
 int operate_memory(MemoryAction action, ApplyOptions options);
 int apply_preset(const Preset &preset, ApplyOptions options);
