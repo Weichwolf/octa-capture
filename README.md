@@ -8,6 +8,8 @@ The target platform is native Debian. Development and local functional testing a
 
 Protocol analysis and implementation are in progress. Available: a SysEx codec and an experimental USB clock probe. Reliable device communication, audio streaming, the driver extensions, and the GUI remain unfinished.
 
+The driver will be a [standalone kernel module](kernel/README.md); Debian users will not need to patch or rebuild their kernel.
+
 ## Planned interface
 
 Reproduce the Windows GUI as closely as possible using HTML/CSS/JavaScript. Test it through a local HTTP server first, then embed it in GTK4/WebKitGTK. A separate backend controls the device; audio streaming remains in the driver, independent of the GUI.
@@ -24,7 +26,7 @@ source /etc/octa-capture-dev.env
 
 The script currently exists only in `/tmp` and is not part of the repository. The WSL kernel build takes time and several GB of disk space. Modules must match the kernel version of each test system.
 
-The native userspace code uses C++23, CMake/Ninja, LLVM 19, and libusb. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, and `libusb-1.0-0-dev`.
+The native userspace code uses C++23, CMake/Ninja, LLVM 19, and libusb. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, and `shellcheck`.
 
 ```bash
 make test       # strict warnings, clang-tidy, ASan/UBSan, and protocol tests
