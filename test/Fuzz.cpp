@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "octa/Dsp.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 
@@ -36,7 +37,11 @@ void check_preamp(octa::PreampBank &bank, const octa::Message &message) {
 
 void frames(std::span<const std::uint8_t> bytes) {
   const auto decoded = octa::decode(bytes);
-  if (decoded) { round_trip(*decoded); }
+  if (decoded) {
+    round_trip(*decoded);
+    const auto dsp = octa::decode_dsp(*decoded);
+    if (dsp) { require(decoded->address == octa::bulk_address); }
+  }
   octa::SysExReceiver receiver;
   octa::PreampBank bank{};
   for (const auto byte : bytes) {
@@ -97,6 +102,8 @@ void structured(std::span<const std::uint8_t> bytes) {
       require(observed && *observed == change.value);
     }
   }
+  const auto dsp = octa::decode_dsp(message);
+  if (dsp) { round_trip(message); }
   const auto preamps = octa::decode_preamps(message);
   if (preamps) { round_trip(message); }
 
@@ -107,7 +114,7 @@ void structured(std::span<const std::uint8_t> bytes) {
     constexpr std::uint8_t data_mask = 0x7f;
     return static_cast<std::uint8_t>(byte & data_mask);
   });
-  const octa::Message synthetic = {
+  octa::Message synthetic = {
       .command = octa::Command::data, .address = octa::bulk_address, .payload = bulk};
   const auto decoded = octa::decode_preamps(synthetic);
   require(decoded.has_value());
@@ -115,6 +122,11 @@ void structured(std::span<const std::uint8_t> bytes) {
     bank = *decoded;
     check_preamp(bank, message);
   }
+  for (auto &byte : synthetic.payload) {
+    constexpr std::uint8_t nibble_mask = 15;
+    byte &= nibble_mask;
+  }
+  require(octa::decode_dsp(synthetic).has_value());
 }
 
 }

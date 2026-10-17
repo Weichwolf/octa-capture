@@ -6,7 +6,7 @@ The target platform is native Debian. Development and local functional testing a
 
 ## Status
 
-Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, a bulk-state reader, and validated preamp/compressor writes with readback through the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL. Audio streaming and the remaining controls need completion and hardware verification; driver work takes priority over the GUI.
+Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, a bulk-state reader for preamps, four direct mixers, reverb and output routing, and validated preamp/compressor writes with readback through the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL. Audio streaming and the remaining controls need completion and hardware verification; driver work takes priority over the GUI.
 
 The driver will be a [standalone kernel module](kernel/README.md); Debian users will not need to patch or rebuild their kernel.
 
