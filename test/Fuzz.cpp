@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
+#include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -86,6 +88,26 @@ void typed_controls(std::span<const std::uint8_t> bytes) {
   check_dsp_control(octa::RouteChange{.pair = bytes[1], .selection = bytes[2]});
 }
 
+void meter_packets(std::span<const std::uint8_t> bytes) {
+  constexpr std::size_t meter_bytes = 16;
+  std::vector<std::uint8_t> payload(meter_bytes);
+  const auto count = std::min(bytes.size(), payload.size());
+  std::ranges::transform(bytes.first(count), payload.begin(), [](std::uint8_t byte) {
+    constexpr std::uint8_t data_mask = 127;
+    return static_cast<std::uint8_t>(byte & data_mask);
+  });
+  const octa::Message message = {
+      .command = octa::Command::data, .address = {0, 10, 0, 1}, .payload = payload};
+  const auto meters = octa::decode_input_meters(message);
+  require(meters.has_value());
+  if (!meters) { return; }
+  for (const auto value : *meters) {
+    const auto decibels = octa::input_meter_db(value);
+    constexpr double silence = -96.0;
+    require(decibels && std::isfinite(*decibels) && *decibels >= silence && *decibels <= 0.0);
+  }
+}
+
 void frames(std::span<const std::uint8_t> bytes) {
   const auto decoded = octa::decode(bytes);
   if (decoded) {
@@ -157,6 +179,8 @@ void structured(std::span<const std::uint8_t> bytes) {
       require(observed && *observed == change.value);
     }
   }
+  const auto meters = octa::decode_input_meters(message);
+  if (meters) { round_trip(message); }
   const auto dsp = octa::decode_dsp(message);
   if (dsp) { round_trip(message); }
   const auto preamps = octa::decode_preamps(message);
@@ -198,5 +222,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
   frames(bytes);
   structured(bytes);
   typed_controls(bytes);
+  meter_packets(bytes);
   return 0;
 }

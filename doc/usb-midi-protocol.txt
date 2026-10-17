@@ -268,13 +268,44 @@ src/DspControl.cpp validates typed writes against these bounds, uses
 canonical selectors, and encodes the DT1. octa-dsp supports dry runs;
 the MIDI backend verifies each write against a fresh decoded bulk reply.
 Readback from the connected device and synthetic boundary tests validate
-the layout; DSP writes and physical effect still need verification.
+the layout. Under WSL, 361 scalar DSP changes passed write/readback and
+restoration checks: mute, solo, pan and volume on all four buses and both
+source groups; master volumes; reverb sends, return, type and all active
+parameter banks; all five output routes. Expected stereo coupling was
+checked. The complete raw payload matched the snapshot after every
+restoration. Link/mono controls and physical DSP response remain unverified.
 
 TxSaveLoad at 0x10002a946 writes one command byte to 00 00 00 01.
 The confirmed callers at 0x10002a328 (Store Memory) and 0x10002a2ea
 (Load Memory) send 00 and 01 respectively, after a confirmation dialog.
 These persistent device operations are not exposed or hardware-tested yet.
 No initialization, save, or restore operation has been executed.
+
+Input level meters
+------------------
+CCplDeviceIO::TxMtrSwitch at 0x10000b2b6 sends DT1 to 00 0A 00 00,
+one byte: 01 enable, 00 disable. CUiDev::HandleLongData at 0x10000890a
+recognizes level packets at 00 0A 00 01: eight consecutive 14-bit values,
+two MIDI bytes per input, most significant seven bits first (16 payload
+bytes, distinct from DSP nibble coefficients).
+CDevLvMtrMgr::ChkMeter at 0x100025062 displays 20*log10(level/16383);
+zero uses a -96 dB sentinel. These are reference display units; analog
+calibration and channel identity still need signal-based verification.
+The bounded decoder, switch encoder and conversion are in src/Meters.cpp.
+Hardware verification received 39 complete, checksum-valid 29-byte packets
+in two seconds while duplex audio ran. All eight levels were zero. The
+captured silent frame is a regression fixture; nonzero channel identity
+and calibrated levels still need signal-based tests. Meter output was
+explicitly disabled afterward.
+
+Auto-Sens messages (static analysis only)
+---------------------------------------
+TxASensStart at 0x1000288f8 sends 00 02 01 04 with a nonzero eight-input
+selection mask as two nibbles, low nibble first. Its two-byte notification
+uses four channel flags in each byte (CCplDev::SetEach2 at 0x10000a372).
+TxASensStop at 0x10002888a sends one byte to 00 02 01 05: 00 finishes,
+01 cancels (CDlgASens::Stop/Cancel callers). No automatic gain operation
+has been run or exposed yet.
 
 Audio packing and initial hardware tests
 ---------------------------------------
@@ -307,6 +338,10 @@ and playback at all four supported rates passed octa-audio-check with no
 ALSA errors and approximately 1002..1005 ms per second of frames. The
 Windows driver version is 7.2.2.170484. This is a transport timing result;
 signal integrity, channel identity and long-duration stability remain open.
+A simultaneous 30-second 48 kHz test (12-channel capture discarded,
+10-channel zero playback, S24_3LE) completed in 30.04 s with both tools
+returning zero and no underrun/overrun messages. This is a short smoke
+test, not long-duration or signal-quality verification.
 See kernel/README.md for the repeatable host workaround.
 
 Evidence and remaining verification

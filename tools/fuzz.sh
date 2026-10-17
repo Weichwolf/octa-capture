@@ -22,6 +22,8 @@ def frame(command, address, payload):
     return bytes.fromhex('f0 41 10 00 00 4d') + bytes([command]) + body + bytes([-sum(body) % 128, 0xf7])
 
 seeds = {
+    'meters': frame(0x12, [0, 10, 0, 1], [0, 0, 127, 127] * 4),
+    'meters-message': bytes([0x12, 0, 10, 0, 1] + [0, 0, 127, 127] * 4),
     'request': frame(0x11, [1, 0, 0, 0], [0, 0, 8, 0x7a]),
     'bulk': frame(0x12, [1, 0, 0, 0], [0] * 1146),
     'bulk-message': bytes([0x12, 1, 0, 0, 0]) + bytes(1146),
