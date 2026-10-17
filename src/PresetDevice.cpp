@@ -314,9 +314,7 @@ check_auto_sense_result(const Message &current, std::uint8_t selected, const Mes
   auto other_fields = current;
   constexpr std::size_t sensitivity_offset = 0x1d;
   for (std::size_t channel = 0; channel < preamps->channels.size(); ++channel) {
-    const auto pair_mask =
-        preamps->stereo_links[channel / 2] ? (3U << ((channel / 2) * 2)) : (1U << channel);
-    if ((selected & pair_mask) != 0) {
+    if ((selected & (1U << channel)) != 0) {
       other_fields.payload[sensitivity_offset + channel] =
           baseline.payload[sensitivity_offset + channel];
     }

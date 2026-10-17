@@ -55,10 +55,12 @@ make release    # optimized build and tests
 python3 tools/check-meters.py   # hardware checks for meter shutdown and exclusive CTRL access
 ./build/strict/octa-session-check  # share meters, bulk queries and same-value DSP writes
 ./build/strict/octa-control 1 attack 8  # set channel 1 attack index, verify fresh bulk reply
+./build/strict/octa-control --dry-run 3 stereo-link 1  # first channel of compressor pair 3/4
 ./build/strict/octa-dsp --dry-run mixer input A 3 pan 16384  # encode without MIDI access
 python3 tools/check-dsp.py            # read-only check; --write changes/restores DSP controls
 python3 tools/check-mixer-links.py    # read-only; --write checks switches and master coupling
 python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
+python3 tools/check-preamp-links.py   # read-only; --write checks compressor coupling and ADC isolation
 python3 tools/check-auto-sense.py     # read-only; --write checks finish/cancel and signal recovery
 python3 tools/check-routing-presets.py  # read-only; --write checks both presets and restores state
 python3 tools/check-direct-out.py     # read-only; --write checks Direct Out and restores state
@@ -82,13 +84,17 @@ The [Ver100 preset tools](doc/preset-format.txt) support original `.octa` files,
 
 `initialize all|preamps|direct-mix|reverb|patchbay` sends the original initialization sequence after saving a new private raw snapshot. All/Patch Bay also send the original Mixer A selection command; bulk readback does not confirm the LCD selection. The backend checks state bounds, preservation outside the selected group and repeated identical readback; failures/signals attempt complete recovery. Firmware supplies the defaults. This is the control-panel Initialize menu, distinct from the device's power-on Factory Reset procedure.
 
-`octa-auto-sense` requires selected-input activity and completion notifications. Finish permits sensitivity changes on selected inputs and linked stereo peers; cancel restores the full raw snapshot. Errors/signals attempt cancellation and verified recovery on a fresh connection. `octa-preset restore-auto` provides manual cancel/recovery.
+`octa-control` accepts wire indices, with Hi-Z on inputs 1/2 and stereo-link on inputs 1/3/5/7. `--dry-run` encodes without opening MIDI. Stereo linking copies the left compressor settings to the right and couples subsequent compressor changes in both directions; sensitivity, polarity and low-cut remain independent.
 
-Hardware checkers are read-only by default; `--write` changes parameters and restores snapshots. Scalar checks exclude phantom-power/Hi-Z/link/mono changes; the dedicated mixer-link checker and preset operations exercise mixer switches with raw recovery. Check their reported recovery result and retain snapshots: disconnection or forced termination can prevent restoration. Current WSL evidence and remaining signal-quality/native-Debian requirements are in the protocol reference. Audio smoke checks discard input or play zeros and verify gross transfer timing at all four supported rates.
+`octa-auto-sense` requires selected-input activity and completion notifications. Finish permits sensitivity changes only on selected inputs, including when compressors are stereo-linked; cancel restores the full raw snapshot. Errors/signals attempt cancellation and verified recovery on a fresh connection. `octa-preset restore-auto` provides manual cancel/recovery.
 
-Fuzzing uses libFuzzer with ASan/UBSan, including test-only ALSA transport symbols; no malformed traffic reaches hardware. Corpora/artifacts stay in `build/fuzz/`. Kernel robustness still requires separate KASAN/UBSAN, fault-injection and descriptor/URB tests.
+Hardware checkers are read-only by default; `--write` changes parameters and restores snapshots. Scalar checks exclude phantom-power/Hi-Z/link/mono changes; the dedicated preamp/mixer-link checkers exercise coupling with raw recovery. Check their reported recovery result and retain snapshots: disconnection or forced termination can prevent restoration. Current WSL evidence and remaining signal-quality/native-Debian requirements are in the protocol reference. Audio smoke checks discard input or play zeros and verify gross transfer timing at all four supported rates.
+
+Fuzzing uses [LLVM libFuzzer](https://llvm.org/docs/LibFuzzer.html) with ASan/UBSan, including test-only ALSA transport symbols; no malformed traffic reaches hardware. Corpora/artifacts stay in `build/fuzz/`. Kernel robustness still requires separate KASAN/UBSAN, fault-injection and descriptor/URB tests.
 
 ## Documentation
+
+[Function inventory and remaining reference gaps](doc/function-inventory.md) distinguish recovered behavior, implementation and hardware verification.
 
 [Environment findings](doc/environment.txt) are dated snapshots. The [download manifest](doc/drivers-manifest.json) and [checksums](doc/SHA256SUMS) document the official Windows and macOS drivers downloaded locally. Verify the archives with:
 

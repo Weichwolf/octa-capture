@@ -424,6 +424,8 @@ bool auto_sense_rejection() {
 
 enum class AutoSenseScenario : std::uint8_t {
   success,
+  linked_success,
+  unselected_peer,
   malformed,
   missing_start,
   missing_completion,
@@ -433,13 +435,36 @@ enum class AutoSenseScenario : std::uint8_t {
 };
 
 bool auto_sense_should_fail(octa::AutoSenseAction action, AutoSenseScenario scenario) {
-  if (scenario == AutoSenseScenario::success) { return false; }
-  return scenario != AutoSenseScenario::unrelated_result || action == octa::AutoSenseAction::finish;
+  switch (scenario) {
+    case AutoSenseScenario::success:
+    case AutoSenseScenario::linked_success: return false;
+    case AutoSenseScenario::unselected_peer:
+    case AutoSenseScenario::unrelated_result: return action == octa::AutoSenseAction::finish;
+    case AutoSenseScenario::malformed:
+    case AutoSenseScenario::missing_start:
+    case AutoSenseScenario::missing_completion:
+    case AutoSenseScenario::partial_stop:
+    case AutoSenseScenario::interruption:
+    default: return true;
+  }
+}
+
+std::vector<std::uint8_t> auto_sense_baseline(AutoSenseScenario scenario) {
+  auto frame = bulk_frame();
+  auto message = octa::decode(frame);
+  if (message && (scenario == AutoSenseScenario::linked_success ||
+                  scenario == AutoSenseScenario::unselected_peer)) {
+    constexpr std::size_t compressor_link_offset = 0x25;
+    message->payload[compressor_link_offset] = 1;
+    const auto encoded = octa::encode(message->command, message->address, message->payload);
+    if (encoded) { return *encoded; }
+  }
+  return frame;
 }
 
 bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenario) {
   io = {};
-  const auto baseline = bulk_frame();
+  const auto baseline = auto_sense_baseline(scenario);
   auto result = octa::decode(baseline);
   const auto start = octa::encode_auto_sense_start(1);
   const auto stop = octa::encode_auto_sense_stop(action);
@@ -448,12 +473,17 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
   constexpr std::size_t sensitivity_offset = 0x1d;
   constexpr std::size_t low_cut_offset = 0x17;
   result->payload[sensitivity_offset] = 1;
+  if (scenario == AutoSenseScenario::unselected_peer) {
+    result->payload[sensitivity_offset + 1] = 1;
+  }
   if (scenario == AutoSenseScenario::unrelated_result) { result->payload[low_cut_offset] = 1; }
   const auto changed = octa::encode(result->command, result->address, result->payload);
   if (!changed) { return false; }
   const bool changed_reply =
       action == octa::AutoSenseAction::finish &&
-      (scenario == AutoSenseScenario::success || scenario == AutoSenseScenario::unrelated_result);
+      (scenario == AutoSenseScenario::success || scenario == AutoSenseScenario::linked_success ||
+       scenario == AutoSenseScenario::unrelated_result ||
+       scenario == AutoSenseScenario::unselected_peer);
   io.replies = {baseline, changed_reply ? *changed : baseline, baseline};
   if (scenario != AutoSenseScenario::missing_start) { io.auto_start_reply = *start; }
   if (scenario != AutoSenseScenario::missing_completion) { io.auto_stop_reply = *stop; }
@@ -1183,6 +1213,8 @@ int main() {
   bool auto_sense_workflow_passed = true;
   for (const auto action : {octa::AutoSenseAction::finish, octa::AutoSenseAction::cancel}) {
     for (const auto scenario : {AutoSenseScenario::success,
+                                AutoSenseScenario::linked_success,
+                                AutoSenseScenario::unselected_peer,
                                 AutoSenseScenario::malformed,
                                 AutoSenseScenario::missing_start,
                                 AutoSenseScenario::missing_completion,

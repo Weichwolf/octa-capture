@@ -85,6 +85,7 @@ add_test(NAME preamp COMMAND preamp_test)
 add_executable(control_test test/Control.cpp)
 target_link_libraries(control_test PRIVATE octa_protocol)
 add_test(NAME control COMMAND control_test)
+add_test(NAME control-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/ControlCli.py" "$<TARGET_FILE:octa-control>")
 add_executable(dsp_test test/Dsp.cpp)
 target_link_libraries(dsp_test PRIVATE octa_protocol)
 add_test(NAME dsp COMMAND dsp_test)
@@ -119,7 +120,7 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(initialization direct-out device-status status-control protocol preamp control dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 add_custom_target(format-check

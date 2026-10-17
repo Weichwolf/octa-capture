@@ -16,6 +16,10 @@ std::expected<std::vector<std::uint8_t>, PreampError> encode_preamp_change(Pream
   if (change.channel >= PreampBank{}.channels.size()) {
     return std::unexpected(PreampError::channel);
   }
+  if ((change.parameter == PreampParameter::stereo_link && change.channel % 2 != 0) ||
+      (change.parameter == PreampParameter::hi_z && change.channel >= 2)) {
+    return std::unexpected(PreampError::channel);
+  }
   const auto parameter = static_cast<std::size_t>(change.parameter);
   if (parameter >= maxima.size()) { return std::unexpected(PreampError::parameter); }
   if (change.value > maxima[parameter]) { return std::unexpected(PreampError::data); }

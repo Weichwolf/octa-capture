@@ -186,7 +186,7 @@ payload[offset + ch/4], bit ch%4. Numeric columns hold eight channel bytes.
   19      phase/polarity flags
   1B      Hi-Z flags
   1D      sensitivity indices
-  25      stereo-link flags; bit pair, for pairs 0..3
+  25      compressor stereo-link flags; bit pair, for pairs 0..3
   26      compressor enable flags
   28      gate indices
   30      attack indices
@@ -226,16 +226,37 @@ For example, sensitivity channel 0, encoded value 0x14:
 This is an encoding example, not a hardware-verified gain change.
 
 Some display values are table indices rather than their numerical units.
-Recovered GUI tables contain 101 sensitivity entries (0.0..50.0), nine
-compressor ratios, 26 attack entries, and 46 release entries. Knob position,
-display value, encoded state, and physical gain must remain distinct until
-their conversion functions have been checked.
+The macOS GUI tables and CBarComp*::UpdateText functions establish:
+  sensitivity: index / 2 dB, 101 entries (0.0..50.0).
+  gate: index 0 = -INF; indices 1..50 = -69..-20 dB.
+  threshold: index - 50 dB; gain: index - 50 dB (up to +24 dB).
+  ratio indices 0..8: 1:1.0, 1:1.2, 1:1.5, 1:2.0, 1:2.8, 1:4.0,
+    1:8.0, 1:16, 1:INF (original display notation).
+  attack ms (indices 0..25): 0.2, 0.5, 1, 2, 4, 6, 8, 10, 15, 20,
+    25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100.
+  release ms (indices 0..45): 10, 12, 15, 18, 20, 25, 30, 35, 40, 45,
+    50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 110, 120, 130, 140,
+    150, 160, 170, 180, 190, 200, 220, 240, 260, 280, 300, 320, 340,
+    360, 380, 400, 420, 440, 460, 480, 500.
+Attack, release and ratio require fixed lookup tables, not interpolation.
+Gate uses CCmpDbTbl directly; threshold/gain add 20 before the same lookup.
+References: CBarCompGate::UpdateText 0x100015bb6, Thres 0x100016250,
+Ratio 0x10001648e, Atk 0x1000166c4, Rel 0x1000168fa, Gain 0x100016b30.
+The backend still exposes raw indices; display conversion is not yet an
+implemented API. These are reference display values, not calibrated DSP
+measurements; Windows formatting and typed-input behavior need comparison.
 
 Write bounds recovered from the reference GUI ranges/tables:
   Boolean switches: 0..1; sensitivity: 0..100; gate/threshold: 0..50;
   attack: 0..25; release: 0..45; ratio: 0..8; compressor gain: 0..74.
 src/Control.cpp rejects invalid channels, parameters, and out-of-range
 values before MIDI access. Incoming state retains raw 7-bit indices.
+Stereo-link writes use the first channel of each pair (zero-based 0/2/4/6);
+the original TxPreLink argument is a pair index, encoded as pair * 2.
+Hi-Z writes are limited to physical inputs 1/2 (owner's manual p.45).
+octa-control --dry-run prints the frame without opening any MIDI device.
+tools/emulate-preamp-controls.py checks all 188 valid min/max endpoint
+frames against the original TxPre functions and our C++ encoder offline.
 octa-control writes one DT1 and immediately requests bulk state on the same
 open CTRL connection; success requires the requested value in that reply.
 tools/check-preamps.py additionally checks channel isolation and restores
@@ -248,6 +269,19 @@ eight channels. Each was changed by one index, independently read back,
 and restored; other preamp channels were checked for unexpected changes.
 The complete 1146-byte bulk payload matched the initial state afterward.
 This verifies these controls, not audio streaming or physical DSP response.
+
+Compressor stereo linking (owner's manual p.45) copies the left channel's
+compressor enable, gate, attack, release, threshold, ratio and gain to the
+right when enabled. Disabling preserves those values. Subsequent writes
+from either side change both compressors. Sensitivity, polarity and low-cut
+remain independent. This is not ADC gain linking. The attached 48 kHz device
+passed all four link enable/disable cycles and 160 scalar cases covering
+four pairs, two link states, both directions and ten safe parameters.
+tools/check-preamp-links.py --write reproduces these checks and compares
+all 1146 raw bytes after each change, then restores the exact original state.
+Strict and release binaries passed. Phantom/Hi-Z changes are excluded and
+the fixture requires those switches off. Physical compressor response,
+power-switch behavior and native Debian still require hardware checks.
 
 Direct mixer bulk layout and updates
 -----------------------------------
@@ -622,7 +656,8 @@ input, sends finish/cancel and requires a notification clearing activity.
 Completion has a three-second deadline. Missing/malformed notifications,
 unrelated result changes and signals trigger cancellation plus raw recovery
 on a fresh CTRL connection. Finish accepts only bounded sensitivity changes
-on selected inputs and linked stereo peers; cancel restores the complete
+only on selected inputs; compressor stereo linking does not expand this
+selection. Cancel restores the complete
 snapshot. octa-preset restore-auto RECOVERY.syx [hw:CTRL-port] explicitly
 sends cancel before manual raw recovery. Forced termination/disconnection
 can prevent cleanup; retain and check the recovery file.
@@ -630,7 +665,9 @@ can prevent cleanup; retain and check the recovery file.
 On the attached WSL device at 48 kHz, short input-1 finish/cancel runs
 received activity/completion notifications and passed complete result-state
 checks. SIGINT/SIGTERM restored the exact raw snapshot. Strict and release
-binaries passed; a short run also overlapped 12-in/10-out duplex smoke checks
+binaries also passed a finish case with compressor link 1/2 enabled and
+distinct ADC sensitivity indices; input 2 and every other unselected field
+remained unchanged. A short run also overlapped 12-in/10-out duplex smoke checks
 without ALSA errors. An idle cancel emitted no notification and left the
 raw state unchanged; recovery therefore does not require its acknowledgement.
 tools/check-auto-sense.py is read-only unless --write is supplied, which

@@ -77,14 +77,37 @@ def main():
             else:
                 original = bytes.fromhex(before['payload_hex'])
                 other = bytearray.fromhex(current['payload_hex'])
-                for channel in range(8):
-                    if channel == 0 or (channel == 1 and original[0x25] & 1):
-                        other[0x1d + channel] = original[0x1d + channel]
-                require(other == original, 'Finish changed fields outside selected sensitivity/stereo peer')
+                other[0x1d] = original[0x1d]
+                require(other == original, 'Finish changed fields outside selected input sensitivity')
             print(f'PASS {action}: activity/completion and full state bounds checked', flush=True)
         finally:
             run([args.bin_dir / 'octa-preset', 'restore-auto', baseline, args.port])
             require(state() == before, 'Complete raw restoration failed')
+    # Compressor linking must not authorize Auto-Sens changes on an unselected ADC.
+    configured = bytearray.fromhex(before['payload_hex'])
+    configured[0x25] |= 1
+    configured[0x1d:0x1f] = bytes([0, 1])
+    configured[0x26] = (configured[0x26] & ~2) | ((configured[0x26] & 1) << 1)
+    for offset in (0x28, 0x30, 0x38, 0x40, 0x48, 0x50):
+        configured[offset + 1] = configured[offset]
+    fixture = directory / 'linked-preamps.syx'
+    fixture.write_bytes(raw({'payload_hex': configured.hex()}))
+    fixture.chmod(0o600)
+    snapshot = directory / 'linked-finish-recovery.syx'
+    try:
+        run([args.bin_dir / 'octa-preset', 'restore', fixture, args.port])
+        require(bytes.fromhex(state()['payload_hex']) == configured, 'Linked Auto-Sens fixture mismatch')
+        output = json.loads(run([args.bin_dir / 'octa-auto-sense', '1', '500', 'finish', snapshot, args.port]))
+        require(snapshot.read_bytes() == fixture.read_bytes(), 'Linked Auto-Sens saved a different baseline')
+        require(output['action'] == 'finish' and output['notifications'] >= 2,
+                'Missing linked Auto-Sens result/notifications')
+        other = bytearray.fromhex(state()['payload_hex'])
+        other[0x1d] = configured[0x1d]
+        require(other == configured, 'Compressor link allowed a change outside selected input sensitivity')
+        print('PASS linked finish: selected-input bounds, independent peer sensitivity and notifications', flush=True)
+    finally:
+        run([args.bin_dir / 'octa-preset', 'restore-auto', baseline, args.port])
+        require(state() == before, 'Linked Auto-Sens complete raw restoration failed')
     for signum in (signal.SIGINT, signal.SIGTERM):
         snapshot = directory / f'signal-{signum}-recovery.syx'
         process = subprocess.Popen(list(map(str, [args.bin_dir / 'octa-auto-sense', '1', '5000',

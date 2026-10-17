@@ -25,7 +25,7 @@ bool write_limits() {
       const auto kind = static_cast<octa::PreampParameter>(parameter);
       const auto byte = static_cast<std::uint8_t>(value);
       const auto frame =
-          octa::encode_preamp_change({.channel = 7, .parameter = kind, .value = byte});
+          octa::encode_preamp_change({.channel = 0, .parameter = kind, .value = byte});
       const bool valid =
           parameter < reference_maxima.size() && value <= reference_maxima[parameter];
       if (!require(frame.has_value() == valid, "exhaustive parameter/value write bounds")) {
@@ -35,9 +35,32 @@ bool write_limits() {
       const auto message = octa::decode(*frame);
       if (!require(message.has_value(), "write frame is valid SysEx")) { return false; }
       const auto applied = octa::apply_preamp_update(bank, *message);
-      const auto observed = octa::preamp_value(bank, 7, kind);
+      const auto observed = octa::preamp_value(bank, 0, kind);
       if (!require(applied && observed && *observed == value, "notification/write consistency")) {
         return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool selectors() {
+  constexpr unsigned int byte_values = 256;
+  constexpr std::array parameters = {octa::PreampParameter::stereo_link,
+                                     octa::PreampParameter::hi_z};
+  for (unsigned int channel = 0; channel < byte_values; ++channel) {
+    for (const auto parameter : parameters) {
+      const auto selector =
+          parameter == octa::PreampParameter::hi_z ? channel < 2 : channel < 8 && channel % 2 == 0;
+      for (std::uint8_t value = 0; value < 3; ++value) {
+        const auto encoded =
+            octa::encode_preamp_change({.channel = static_cast<std::uint8_t>(channel),
+                                        .parameter = parameter,
+                                        .value = value});
+        if (!require(encoded.has_value() == (selector && value <= 1),
+                     "Hi-Z only inputs 1/2; stereo link only first channel of each pair")) {
+          return false;
+        }
       }
     }
   }
@@ -71,5 +94,5 @@ bool channels() {
 }
 
 int main() {
-  return write_limits() && channels() ? 0 : 1;
+  return write_limits() && channels() && selectors() ? 0 : 1;
 }
