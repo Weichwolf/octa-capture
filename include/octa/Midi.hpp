@@ -3,6 +3,7 @@
 
 #include "octa/AutoSense.hpp"
 #include "octa/DspControl.hpp"
+#include "octa/Initialization.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
@@ -63,6 +64,11 @@ public:
   // persistent storage or completion of a load; callers must verify separately.
   [[nodiscard]] std::expected<Message, MidiError>
   operate_memory(MemoryAction action, const MessageListener &listener = {});
+
+  // Execute the original Initialize menu sequence and request fresh state.
+  // Firmware chooses defaults; a bulk reply alone is not a completion signal.
+  [[nodiscard]] std::expected<Message, MidiError>
+  initialize_settings(InitializationTarget target, const MessageListener &listener = {});
 
   // Validate before MIDI I/O; require an exact fresh bulk readback. Raw writes
   // preserve snapshot fields omitted from .octa files for complete recovery.

@@ -4,6 +4,7 @@
 #include "octa/DirectOut.hpp"
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
+#include "octa/Initialization.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
@@ -222,6 +223,14 @@ void check_direct_out(const octa::Message &message) {
 
 void check_preset_export(const octa::Message &message) {
   check_direct_out(message);
+  for (const auto target : {octa::InitializationTarget::all,
+                            octa::InitializationTarget::preamps,
+                            octa::InitializationTarget::direct_mix,
+                            octa::InitializationTarget::reverb,
+                            octa::InitializationTarget::patchbay}) {
+    const auto matches = octa::initialization_scope_matches(message, message, target);
+    if (matches) { require(*matches); }
+  }
   const auto exported = octa::preset_from_bulk(message);
   const auto writable = octa::validate_bulk_write(message);
   if (!exported) {
@@ -408,6 +417,10 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) {
   const std::span bytes(data, size);
+  if (!bytes.empty()) {
+    const auto target = static_cast<octa::InitializationTarget>(bytes.front());
+    require(octa::encode_initialization(target).has_value() == (bytes.front() <= 4));
+  }
   device_status(bytes);
   frames(bytes);
   structured(bytes);

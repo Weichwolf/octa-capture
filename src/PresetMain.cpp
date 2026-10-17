@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "PresetDevice.hpp"
+#include "octa/Initialization.hpp"
 #include "octa/Midi.hpp"
 #include "octa/Preset.hpp"
 #include "octa/PresetState.hpp"
 #include "octa/Protocol.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -117,6 +119,25 @@ void print_summary(const octa::Preset &preset) {
             << preset.preamps.size() << R"(,"mixer_buses":)" << preset.mixers.size() << "}\n";
 }
 
+int initialization_command(std::span<char *> arguments) {
+  if (arguments.size() < 4 || arguments.size() > 5) {
+    std::cerr << "Usage: octa-preset initialize all|preamps|direct-mix|reverb|patchbay "
+                 "NEW-RECOVERY.syx [hw:CTRL-port]\n";
+    return 2;
+  }
+  constexpr std::array<std::string_view, 5> names = {
+      "all", "preamps", "direct-mix", "reverb", "patchbay"};
+  const auto *found = std::ranges::find(names, std::string_view(arguments[2]));
+  if (found == names.end()) {
+    std::cerr << "Unknown initialization target.\n";
+    return 2;
+  }
+  const auto target = static_cast<octa::InitializationTarget>(found - names.begin());
+  const std::string_view port =
+      arguments.size() == 5 ? arguments[4] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
+  return octa::cli::initialize_settings(target, {.port = port, .snapshot_path = arguments[3]});
+}
+
 int direct_out_command(std::span<char *> arguments) {
   if (arguments.size() < 3 || arguments.size() > 4) {
     std::cerr << "Usage: octa-preset direct-out NEW-RECOVERY.syx [hw:CTRL-port]\n";
@@ -172,6 +193,9 @@ std::optional<int> device_command(std::string_view mode, int argc, char **argv) 
 
 int main(int argc, char **argv) {
   const std::string_view mode = argc >= 2 ? argv[1] : "";
+  if (mode == "initialize") {
+    return initialization_command(std::span(argv, static_cast<std::size_t>(argc)));
+  }
   if (mode == "direct-out") {
     return direct_out_command(std::span(argv, static_cast<std::size_t>(argc)));
   }
@@ -192,6 +216,8 @@ int main(int argc, char **argv) {
            "       octa-preset memory-store|memory-load NEW-RECOVERY.syx [hw:CTRL-port]\n"
            "       octa-preset routing multi-monitor|playback NEW-RECOVERY.syx [hw:CTRL-port]\n"
            "       octa-preset direct-out NEW-RECOVERY.syx [hw:CTRL-port]\n"
+           "       octa-preset initialize all|preamps|direct-mix|reverb|patchbay "
+           "NEW-RECOVERY.syx [hw:CTRL-port]\n"
            "normalize and export write binary Ver100 files to stdout.\n";
     return 2;
   }

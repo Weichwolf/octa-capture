@@ -4,6 +4,7 @@
 #include "octa/AutoSense.hpp"
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
+#include "octa/Initialization.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
@@ -442,6 +443,15 @@ std::expected<Message, MidiError> MidiSession::operate_memory(MemoryAction actio
   const std::array payload = {static_cast<std::uint8_t>(action)};
   const auto frame = encode(Command::data, address, payload);
   if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "memory frame"}); }
+  return query(*frame, listener);
+}
+
+std::expected<Message, MidiError>
+MidiSession::initialize_settings(InitializationTarget target, const MessageListener &listener) {
+  const auto frame = encode_initialization(target);
+  if (!frame) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "initialization target"});
+  }
   return query(*frame, listener);
 }
 

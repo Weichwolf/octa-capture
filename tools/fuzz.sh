@@ -22,6 +22,8 @@ def frame(command, address, payload):
     return bytes.fromhex('f0 41 10 00 00 4d') + bytes([command]) + body + bytes([-sum(body) % 128, 0xf7])
 
 seeds = {
+    'initialize-all': frame(0x12, [0, 0, 0, 2], [0]),
+    'initialize-patchbay': frame(0x12, [0, 0, 0, 2], [4]),
     'direct-out-bulk': Path('test/data/preset-import-reference.syx').read_bytes(),
     'device-status': bytes([1, 0, 0, 0x80, 0xbb, 0, 0, 1]),
     'device-status-reserved': bytes([1, 255, 255, 255, 255, 255, 255, 2]),

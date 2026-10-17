@@ -4,6 +4,7 @@
 #include "octa/AutoSense.hpp"
 #include "octa/DirectOut.hpp"
 #include "octa/DspControl.hpp"
+#include "octa/Initialization.hpp"
 #include "octa/Midi.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
@@ -128,6 +129,27 @@ std::expected<Message, MidiError> attempt_memory(MemoryAction action, ApplyState
   if (!before) { return before; }
   state.write_attempted = true;
   return session->operate_memory(action);
+}
+
+std::expected<Message, MidiError> attempt_initialization(InitializationTarget target,
+                                                         ApplyState &state) {
+  auto session = MidiSession::open(state.options.port);
+  if (!session) { return std::unexpected(session.error()); }
+  const auto before = capture_snapshot(*session, state);
+  if (!before) { return before; }
+  state.write_attempted = true;
+  const auto result = session->initialize_settings(target);
+  if (!result) { return result; }
+  const auto matches = initialization_scope_matches(*before, *result, target);
+  if (!matches || !*matches) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "initialization state scope"});
+  }
+  const auto repeated = session->read_bulk_state();
+  if (!repeated) { return repeated; }
+  if (*repeated != *result) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "initialization unstable state"});
+  }
+  return result;
 }
 
 std::expected<Message, MidiError>
@@ -377,6 +399,26 @@ int operate_memory(MemoryAction action, ApplyOptions options) {
             << " command sent; current bulk state read. Recovery snapshot: "
             << options.snapshot_path
             << "\nPersistent storage/load completion is not verified by the bulk reply.\n"
+            << std::flush;
+  return std::cout.good() ? 0 : 1;
+}
+
+int initialize_settings(InitializationTarget target, ApplyOptions options) {
+  if (!encode_initialization(target)) {
+    return failure({.code = -EINVAL, .operation = "initialization target"});
+  }
+  if (!install_handlers()) {
+    return failure({.code = -errno, .operation = "initialization signal handlers"});
+  }
+  ApplyState state{.options = options, .snapshot = std::nullopt, .write_attempted = false};
+  auto result = attempt_initialization(target, state);
+  if (result && interrupted != 0) {
+    result = std::unexpected(MidiError{.code = -EINTR, .operation = "initialization interrupted"});
+  }
+  if (!result) { return failed_change(result.error(), state, true); }
+  std::cout << "Initialization command sent; state scope and repeated raw readback verified. "
+               "Recovery snapshot: "
+            << options.snapshot_path << '\n'
             << std::flush;
   return std::cout.good() ? 0 : 1;
 }

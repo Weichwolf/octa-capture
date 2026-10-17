@@ -3,6 +3,7 @@
 #include "octa/AutoSense.hpp"
 #include "octa/DirectOut.hpp"
 #include "octa/DspControl.hpp"
+#include "octa/Initialization.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
 #include "octa/Preamp.hpp"
@@ -63,6 +64,8 @@ struct FakeIo {
   unsigned int interrupt_route = 0;
   int memory_signal = 0;
   bool fail_after_memory = false;
+  int initialization_signal = 0;
+  bool fail_after_initialization = false;
   unsigned int read_failures = 0;
   bool oversized_read = false;
   bool oversized_write = false;
@@ -630,6 +633,122 @@ bool direct_out_workflow(RoutingScenario scenario) {
       "Direct Out sequence/readbacks, full-state mismatch, partial I/O, signal and rate guard");
 }
 
+bool initialization_operations() {
+  constexpr unsigned int byte_values = 256;
+  for (unsigned int index = 0; index < byte_values; ++index) {
+    io = {};
+    auto reply = level_frame();
+    append_bytes(reply, bulk_frame());
+    io.replies = {reply};
+    auto session = octa::MidiSession::open("hw:fake");
+    if (!session) { return false; }
+    const auto target = static_cast<octa::InitializationTarget>(index);
+    bool busy = false;
+    const auto result = session->initialize_settings(target, [&session, &busy](const auto &) {
+      const auto reentrant = session->read_bulk_state();
+      busy = !reentrant && reentrant.error().code == -EBUSY;
+    });
+    if (index >= 5) {
+      if (!require(!result && result.error().code == -EINVAL && io.writes == 0,
+                   "invalid initialization target performs no I/O")) {
+        return false;
+      }
+      continue;
+    }
+    const auto frame = octa::encode_initialization(target);
+    const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+    if (!frame || !query) { return false; }
+    auto expected = *frame;
+    append_bytes(expected, *query);
+    if (!require(result && io.outgoing == expected && busy,
+                 "all initialization sequences with fragmented transfers and fresh bulk query")) {
+      return false;
+    }
+  }
+  io = {};
+  io.fail_write = 2;
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  const auto failed = session->initialize_settings(octa::InitializationTarget::reverb);
+  const auto retry = session->read_bulk_state();
+  return require(!failed && failed.error().code == -EIO && !retry &&
+                     retry.error().code == -EPROTO && io.writes == 2,
+                 "partial initialization requires reopening; no blind retransmission");
+}
+
+enum class InitializationScenario : std::uint8_t {
+  success,
+  unrelated,
+  unstable,
+  transfer_failure,
+  sigint,
+  sigterm,
+  rate
+};
+
+bool initialization_workflow(octa::InitializationTarget target, InitializationScenario scenario) {
+  io = {};
+  const auto initial = octa::decode(bulk_frame());
+  if (!initial) { return false; }
+  auto original = *initial;
+  if (scenario == InitializationScenario::rate) { original.payload[2] = 3; }
+  auto after = original;
+  constexpr std::array<std::size_t, 5> example = {6, 0x1d, 0x83, 0x0a, 6};
+  ++after.payload[example[static_cast<std::size_t>(target)]];
+  if (scenario == InitializationScenario::unrelated) { after.payload[0] = 1; }
+  const auto baseline = octa::encode(original.command, original.address, original.payload);
+  const auto changed = octa::encode(after.command, after.address, after.payload);
+  if (!baseline || !changed) { return false; }
+  io.replies = {*baseline, *changed};
+  if (scenario == InitializationScenario::unstable) {
+    io.replies.push_back(*baseline);
+  } else if (scenario != InitializationScenario::unrelated &&
+             scenario != InitializationScenario::transfer_failure) {
+    io.replies.push_back(*changed);
+  }
+  io.replies.push_back(*baseline);
+  io.fail_after_initialization = scenario == InitializationScenario::transfer_failure;
+  if (scenario == InitializationScenario::sigint) { io.initialization_signal = SIGINT; }
+  if (scenario == InitializationScenario::sigterm) { io.initialization_signal = SIGTERM; }
+  auto directory = std::to_array("/tmp/octa-initialization-test-XXXXXX");
+  if (mkdtemp(directory.data()) == nullptr) { return false; }
+  const auto path = std::string(directory.data()) + "/recovery.syx";
+  std::stringbuf errors;
+  auto *previous_errors = std::cerr.rdbuf(&errors);
+  const int status =
+      octa::cli::initialize_settings(target, {.port = "hw:fake", .snapshot_path = path.c_str()});
+  std::cerr.rdbuf(previous_errors);
+  std::ifstream file(path, std::ios::binary);
+  std::array<std::uint8_t, octa::bulk_size + 14> bytes{};
+  file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  const bool saved = file.gcount() == static_cast<std::streamsize>(baseline->size()) &&
+                     std::ranges::equal(std::span(bytes).first(baseline->size()), *baseline);
+  const bool success =
+      scenario == InitializationScenario::success || scenario == InitializationScenario::rate;
+  const bool signal =
+      scenario == InitializationScenario::sigint || scenario == InitializationScenario::sigterm;
+  constexpr int interrupted_status = 130;
+  const int normal_status = success ? 0 : 1;
+  const int expected_status = signal ? interrupted_status : normal_status;
+  const unsigned int connections = success ? 1U : 2U;
+  const bool recovery_verified =
+      success || errors.str().contains("Original raw state restored and verified.");
+  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+  const auto command = octa::encode_initialization(target);
+  if (!query || !command) { return false; }
+  auto expected_wire = *query;
+  append_bytes(expected_wire, *command);
+  append_bytes(expected_wire, *query);
+  append_bytes(expected_wire, *query);
+  const bool wire = !success || io.outgoing == expected_wire;
+  const bool removed_file = unlink(path.c_str()) == 0;
+  const bool removed_directory = rmdir(directory.data()) == 0;
+  return require(status == expected_status && saved && io.opens == connections &&
+                     io.closes == connections * 2 && recovery_verified && wire && removed_file &&
+                     removed_directory,
+                 "initialization backup, scope, stability, signals, recovery and 192 kHz support");
+}
+
 bool memory_operations() {
   io = {};
   auto reply = level_frame();
@@ -952,6 +1071,12 @@ int handle_fake_data(const octa::Message &message) {
     if (io.fail_after_memory) { ++io.read_failures; }
     if (io.memory_signal != 0 && kill(getpid(), io.memory_signal) != 0) { return -errno; }
   }
+  if (message.address == octa::Address{0, 0, 0, 2}) {
+    if (io.fail_after_initialization) { ++io.read_failures; }
+    if (io.initialization_signal != 0 && kill(getpid(), io.initialization_signal) != 0) {
+      return -errno;
+    }
+  }
   if (message.address == octa::Address{0, 2, 1, 4}) {
     append_bytes(io.incoming, io.auto_start_reply);
     if (io.auto_fail_stop) { io.fail_write = io.writes + 2; }
@@ -1087,15 +1212,32 @@ int main() {
                               RoutingScenario::unsupported_rate}) {
     direct_out_passed = direct_out_workflow(scenario) && direct_out_passed;
   }
+  bool initialization_passed = initialization_operations();
+  for (const auto target : {octa::InitializationTarget::all,
+                            octa::InitializationTarget::preamps,
+                            octa::InitializationTarget::direct_mix,
+                            octa::InitializationTarget::reverb,
+                            octa::InitializationTarget::patchbay}) {
+    for (const auto scenario : {InitializationScenario::success,
+                                InitializationScenario::unrelated,
+                                InitializationScenario::unstable,
+                                InitializationScenario::transfer_failure,
+                                InitializationScenario::sigint,
+                                InitializationScenario::sigterm,
+                                InitializationScenario::rate}) {
+      initialization_passed = initialization_workflow(target, scenario) && initialization_passed;
+    }
+  }
   const bool passed =
-      direct_out_passed && routing_passed && memory_cli_passed && auto_sense_workflow_passed &&
-      successful_stream() && input_failure(false) && input_failure(true) && write_failures() &&
-      deadlines() && open_failure() && auto_sense_session() && auto_sense_cleanup() &&
-      auto_sense_failures(true) && auto_sense_failures(false) && auto_sense_rejection() &&
-      session_buffering() && session_queries() && session_stale_fragment() && session_writes() &&
-      memory_operations() && memory_rejection() && memory_partial_failure() && preset_transfer() &&
-      preset_rejection() && preset_readback_failure() && preset_partial_failure() &&
-      session_uncertain() && session_receive_bounds() && impossible_transfers();
+      initialization_passed && direct_out_passed && routing_passed && memory_cli_passed &&
+      auto_sense_workflow_passed && successful_stream() && input_failure(false) &&
+      input_failure(true) && write_failures() && deadlines() && open_failure() &&
+      auto_sense_session() && auto_sense_cleanup() && auto_sense_failures(true) &&
+      auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&
+      session_queries() && session_stale_fragment() && session_writes() && memory_operations() &&
+      memory_rejection() && memory_partial_failure() && preset_transfer() && preset_rejection() &&
+      preset_readback_failure() && preset_partial_failure() && session_uncertain() &&
+      session_receive_bounds() && impossible_transfers();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;

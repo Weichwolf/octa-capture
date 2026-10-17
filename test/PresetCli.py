@@ -99,6 +99,14 @@ def main():
         result = run(binary, ['direct-out', snapshot, 'invalid'], expected=1)
         require(b'hardware MIDI port' in result.stderr and not snapshot.exists(),
                 'Invalid Direct Out port accessed the backup path')
+    with tempfile.TemporaryDirectory(prefix='octa-initialization-cli-test-') as directory:
+        snapshot = Path(directory) / 'recovery.syx'
+        run(binary, ['initialize'], expected=2)
+        run(binary, ['initialize', 'unknown', snapshot], expected=2)
+        for name in ('all', 'preamps', 'direct-mix', 'reverb', 'patchbay'):
+            result = run(binary, ['initialize', name, snapshot, 'invalid'], expected=1)
+            require(b'hardware MIDI port' in result.stderr and not snapshot.exists(),
+                    'Invalid initialization port accessed the recovery path')
     for mode in ('normalize', 'inspect'):
         with open('/dev/full', 'wb') as full:
             result = run(binary, [mode, fixtures / 'preset-ver100-windows-0.octa'], expected=1, stdout=full)

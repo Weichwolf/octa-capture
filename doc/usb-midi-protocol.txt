@@ -330,7 +330,8 @@ restoration checks: mute, solo, pan and volume on all four buses and both
 source groups; master volumes; reverb sends, return, type and all active
 parameter banks; all five output routes. Expected stereo coupling was
 checked. The complete raw payload matched the snapshot after every
-restoration. Link/mono controls and physical DSP response remain unverified.
+restoration. Standalone link/mono checks and physical DSP response remain
+outstanding; the preset operations below exercise some mixer link writes.
 
 Routing presets
 ---------------
@@ -402,6 +403,63 @@ complete restoration passed on WSL hardware at 48 kHz with strict and
 release binaries. This tests control state, not physical analog routing or
 signal quality. Active input/output master-link coupling on hardware and
 native Debian remain unverified.
+
+Initialization
+--------------
+CCplDeviceIO::TxInit (macOS 1.5.9, 0x100026c28) writes one byte to
+00 00 00 02. Confirmed CCplPnl callers select:
+  0 All        OnResetAll   0x10002a252
+  1 Preamps    OnResetPre   0x10002a0ae
+  2 Direct Mix OnResetDMix  0x10002a106
+  3 Reverb     OnResetRev   0x10002a15e
+  4 Patch Bay  OnResetSel   0x10002a1b6
+All/Patch Bay additionally call TxDMix(0), the original Mixer A selection
+command: DT1 00 02 00 03, payload 00. This also occurs at 192 kHz
+in OnResetAll, even though its local display cache update is skipped there.
+Each original caller asks for confirmation and invalidates its state cache;
+defaults are supplied by firmware, not written by host-side default tables.
+ValidateMenuItem (0x10000fa7c) enables all five Initialize entries at all
+four rates, including 192 kHz. Its Patch Bay window restriction applies to
+other menu IDs. The optional emulator verifies this distinction directly.
+All covers preamps/compressors, direct mixers, reverb and patchbay (manual,
+p. 54). It is distinct from the power-on Factory Reset procedure (p. 71).
+
+The six individual frames match isolated execution of original TxInit and
+TxDMix, using Python Unicorn and the hash-pinned macOS executable:
+  python3 tools/emulate-initialization.py gui-x86_64
+encode_initialization returns these Initialize-menu sequences in order.
+MidiSession::initialize_settings sends the sequence and queries fresh bulk
+state. A reply proves communication, not an explicit reset acknowledgement.
+Invalid selectors are rejected before MIDI I/O; a partial transmission
+leaves the session uncertain and requires reopening.
+
+octa-preset initialize all|preamps|direct-mix|reverb|patchbay NEW-RECOVERY.syx
+[hw:CTRL-port] saves a new private raw snapshot before initialization.
+It checks writable bounds, preservation outside the selected settings
+region and two identical raw replies. After TxDMix(0), bulk byte 4 may
+remain unchanged or become zero; another new value is rejected. The device
+retained byte 4 during hardware tests, including standalone transmission
+of the original frames. Bulk readback therefore does not prove LCD selection.
+Clock/system prefix bytes 0..3 must remain unchanged. Errors and
+SIGINT/SIGTERM attempt exact raw restoration on a fresh connection;
+disconnection or forced
+termination can prevent recovery. Retain the raw backup.
+Offline tests cover all selectors, command order, fragmented I/O, callback
+reentrancy, partial transmission, state-scope/stability failures, both
+signals, recovery and all five targets at 192 kHz. Fuzzing stays offline.
+tools/check-initialization.py is read-only by default; --write checks Reverb,
+Patch Bay and Direct Mix from changed states and restores the complete raw
+snapshot. It does not automatically initialize preamps or All.
+Reverb, Patch Bay and Direct Mix passed WSL hardware checks at 48 kHz with
+strict and release binaries. Bounded parameter changes were reset to the
+same complete defaults on a
+second initialization; unrelated fields, private snapshots, backup-file
+collisions and exact restoration were checked. The release checks also
+passed during 16 seconds of concurrent 48 kHz S24_3LE PCM (12 capture and
+10 zero-playback channels, 480-frame periods, 1920-frame buffers), without
+XRUN/errors and with exact final state restoration. Preamps/All initialization,
+192 kHz initialization, physical response and native Debian remain
+hardware-unverified.
 
 TxSaveLoad at 0x10002a946 writes one command byte to 00 00 00 01.
 The confirmed callers at 0x10002a328 (Store Memory) and 0x10002a2ea
