@@ -582,6 +582,33 @@ a fresh CTRL connection. Raw restoration preserves fields absent from the
 file format. Current-preset, pan and attack imports and full restoration
 passed on WSL hardware. See preset-format.txt for commands and limits.
 
+PCM driver meters
+-----------------
+Compressor OUT and WAVE OUT meters use host PCM peaks, separately from the
+SysEx input meters below. Windows RDDP1110.EXE reads IOCTL 0x22225c with
+opcode 0x2e; opcode 0x2d registers/unregisters the meter event and activates
+an audio engine when necessary. Its returned capture/playback peak arrays
+are cleared after readout. The GUI shows ten channels per direction, or
+four at 192 kHz; preamp OUT uses the first eight capture peaks and is gated
+by compressor enable/driver activity in both GUI implementations
+(Windows 0x14001a5b0, macOS 0x1000199dc).
+
+RDWM1110.SYS 0x140022c80 scans capture; 0x14001fce0 scans mixed/clamped
+playback. Both keep max(positive S24_3LE sample << 8), ignoring negative
+samples. The display uses peak >> 17, then 20*log10(value/16383), with -96 dB
+for zero. macOS CPeakLevels::SetLevels at 0xac24 differs: it XORs the shifted
+sample with its sign mask, also rectifying negative samples. In particular,
+negative full scale contributes 0x7fffffff on macOS and zero on Windows.
+The Linux scanner follows the Windows behavior requested for GUI parity.
+
+kernel/pcm-peaks.h validates complete interleaved packets before accumulating
+peaks. tools/verify-pcm-peaks.py executes both original Windows routines and
+the macOS routine on synthetic vectors and compares the compiled scanner;
+tools/fuzz-pcm-peaks.sh fuzzes its bounds with sanitizers, without USB I/O.
+This establishes the calculation, not calibrated signal response. Kernel
+stream hooks, idle monitoring and the GUI PCM-meter connection are still
+integration work; the loaded module currently exposes only device status.
+
 Input level meters
 ------------------
 CCplDeviceIO::TxMtrSwitch at 0x10000b2b6 sends DT1 to 00 0A 00 00,

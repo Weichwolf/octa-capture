@@ -57,7 +57,11 @@ add_executable(octa-control src/ControlMain.cpp)
 target_link_libraries(octa-control PRIVATE octa_midi)
 
 if(OCTA_FUZZING)
-  set(octa_fuzz_sources "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp" "${CMAKE_SOURCE_DIR}/test/MidiFuzz.cpp" "${CMAKE_SOURCE_DIR}/test/BridgeFuzz.cpp")
+  set(octa_fuzz_sources "${CMAKE_SOURCE_DIR}/test/PcmPeakFuzz.cpp" "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp" "${CMAKE_SOURCE_DIR}/test/MidiFuzz.cpp" "${CMAKE_SOURCE_DIR}/test/BridgeFuzz.cpp")
+  add_executable(pcm_peak_fuzz test/PcmPeakFuzz.cpp)
+  target_include_directories(pcm_peak_fuzz PRIVATE kernel)
+  target_link_libraries(pcm_peak_fuzz PRIVATE octa_quality)
+  target_link_options(pcm_peak_fuzz PRIVATE -fsanitize=fuzzer)
   add_executable(bridge_fuzz test/BridgeFuzz.cpp)
   target_link_libraries(bridge_fuzz PRIVATE octa_protocol)
   target_link_options(bridge_fuzz PRIVATE -fsanitize=fuzzer)
@@ -136,6 +140,10 @@ add_test(NAME auto-sense-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR
 add_executable(auto_sense_test test/AutoSense.cpp)
 target_link_libraries(auto_sense_test PRIVATE octa_protocol)
 add_test(NAME auto-sense COMMAND auto_sense_test)
+add_executable(pcm_peaks_test test/PcmPeaks.cpp)
+target_include_directories(pcm_peaks_test PRIVATE kernel)
+target_link_libraries(pcm_peaks_test PRIVATE octa_quality)
+add_test(NAME pcm-peaks COMMAND pcm_peaks_test)
 add_executable(meters_test test/Meters.cpp)
 target_link_libraries(meters_test PRIVATE octa_protocol)
 add_test(NAME meters COMMAND meters_test)
@@ -145,8 +153,10 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-parameters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-parameters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli pcm-peaks meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
+
+set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp")
 
 set(octa_bridge_sources
   "${CMAKE_SOURCE_DIR}/include/octa/Bridge.hpp"
@@ -160,6 +170,7 @@ set(octa_bridge_sources
 add_custom_target(format-check
   COMMAND "${OCTA_CLANG_FORMAT}" --dry-run --Werror
     ${octa_bridge_sources}
+    ${octa_peak_sources}
     ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/DeviceStatus.hpp"
@@ -228,6 +239,7 @@ add_custom_target(format-check
 add_custom_target(format
   COMMAND "${OCTA_CLANG_FORMAT}" -i
     ${octa_bridge_sources}
+    ${octa_peak_sources}
     ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/DeviceStatus.hpp"
@@ -296,6 +308,7 @@ add_custom_target(format
 add_custom_target(lint
   COMMAND "${OCTA_CLANG_TIDY}" -p "${CMAKE_BINARY_DIR}" --warnings-as-errors=*
     ${octa_bridge_sources}
+    ${octa_peak_sources}
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/DeviceStatus.cpp"
     "${CMAKE_SOURCE_DIR}/src/DirectOut.cpp"

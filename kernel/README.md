@@ -59,6 +59,12 @@ make -C "$KDIR" M="$PWD/build/module-build" CC="$KERNEL_CC" \
 This static check passes for 6.12 and 6.18. Native hardware, suspend/unplug,
 KASAN/UBSAN and malformed USB/fault-injection tests remain required.
 
+The portable `kernel/pcm-peaks.h` scanner is also compiled as kernel C with
+W=1/-Werror and Sparse, and exercised offline by strict userspace tests,
+original-driver CPU comparisons and `tools/fuzz-pcm-peaks.sh`. It is not yet
+connected to the loaded module's streaming callbacks. Host fuzzing does not
+replace kernel sanitizer/URB fault testing.
+
 ## WSL USB/IP timing investigation
 
 An independent libusb test with this module unloaded reproduces the 1/8
