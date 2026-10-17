@@ -57,6 +57,7 @@ python3 tools/check-meters.py   # hardware checks for meter shutdown and exclusi
 ./build/strict/octa-control 1 attack 8  # set channel 1 attack index, verify fresh bulk reply
 ./build/strict/octa-dsp --dry-run mixer input A 3 pan 16384  # encode without MIDI access
 python3 tools/check-dsp.py            # read-only check; --write changes/restores DSP controls
+python3 tools/check-mixer-links.py    # read-only; --write checks switches and master coupling
 python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
 python3 tools/check-auto-sense.py     # read-only; --write checks finish/cancel and signal recovery
 python3 tools/check-routing-presets.py  # read-only; --write checks both presets and restores state
@@ -77,13 +78,13 @@ Device controls use the exclusive CTRL MIDI port. `MidiSession` shares it betwee
 
 The [Ver100 preset tools](doc/preset-format.txt) support original `.octa` files, current-state export, offline preparation, live application and raw recovery. Live changes require a new private recovery file. `routing multi-monitor|playback` applies the original five-route presets, checks the entire state after every route and attempts recovery on failure/interruption. Patchbay presets are unavailable at 192 kHz. `memory-store/load` send persistent-memory commands, but persistence remains hardware-unverified; a runtime snapshot cannot undo overwritten device memory.
 
-`direct-out` reproduces the original 206-command sequence, verifies each control and the complete final state, and attempts raw recovery on error/interruption. It assigns the four analog output pairs to their respective direct mixes and preserves the coaxial route, preamps and playback controls. It requires 44.1, 48 or 96 kHz and a new private recovery file.
+`direct-out` reproduces the original 206-command sequence, verifies each control and the complete final state, and attempts raw recovery on error/interruption. It assigns the four analog output pairs to their respective direct mixes and preserves the coaxial route, preamps and playback strips. Active input/output master links also propagate unity master levels to playback. It requires 44.1, 48 or 96 kHz and a new private recovery file.
 
 `initialize all|preamps|direct-mix|reverb|patchbay` sends the original initialization sequence after saving a new private raw snapshot. All/Patch Bay also send the original Mixer A selection command; bulk readback does not confirm the LCD selection. The backend checks state bounds, preservation outside the selected group and repeated identical readback; failures/signals attempt complete recovery. Firmware supplies the defaults. This is the control-panel Initialize menu, distinct from the device's power-on Factory Reset procedure.
 
 `octa-auto-sense` requires selected-input activity and completion notifications. Finish permits sensitivity changes on selected inputs and linked stereo peers; cancel restores the full raw snapshot. Errors/signals attempt cancellation and verified recovery on a fresh connection. `octa-preset restore-auto` provides manual cancel/recovery.
 
-Hardware checkers are read-only by default; `--write` changes parameters and restores snapshots. Scalar checks exclude automatic phantom-power/Hi-Z/link/mono changes; Direct Out and Direct Mix initialization change mixer links. Check their reported recovery result and retain snapshots: disconnection or forced termination can prevent restoration. Current WSL evidence and remaining signal-quality/native-Debian requirements are in the protocol reference. Audio smoke checks discard input or play zeros and verify gross transfer timing at all four supported rates.
+Hardware checkers are read-only by default; `--write` changes parameters and restores snapshots. Scalar checks exclude phantom-power/Hi-Z/link/mono changes; the dedicated mixer-link checker and preset operations exercise mixer switches with raw recovery. Check their reported recovery result and retain snapshots: disconnection or forced termination can prevent restoration. Current WSL evidence and remaining signal-quality/native-Debian requirements are in the protocol reference. Audio smoke checks discard input or play zeros and verify gross transfer timing at all four supported rates.
 
 Fuzzing uses libFuzzer with ASan/UBSan, including test-only ALSA transport symbols; no malformed traffic reaches hardware. Corpora/artifacts stay in `build/fuzz/`. Kernel robustness still requires separate KASAN/UBSAN, fault-injection and descriptor/URB tests.
 

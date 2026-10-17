@@ -6,6 +6,7 @@
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -32,6 +33,26 @@ std::vector<std::uint8_t> read(const std::filesystem::path &path, std::size_t ex
   return bytes;
 }
 
+std::vector<std::uint8_t> device_reference(const std::vector<std::uint8_t> &cached_frame) {
+  auto cached = octa::decode(cached_frame);
+  if (!cached) { return {}; }
+  constexpr std::size_t io_link = 0x43e;
+  constexpr std::size_t playback_volume = 0x44a;
+  constexpr std::size_t digits = 6;
+  constexpr std::array<std::uint8_t, digits> unity = {2, 0, 0, 0, 0, 0};
+  for (std::size_t bus = 0; bus < 4; ++bus) {
+    if ((cached->payload[io_link + bus] & 1U) == 0) { continue; }
+    for (std::size_t side = 0; side < 2; ++side) {
+      const auto destination =
+          std::span(cached->payload)
+              .subspan(playback_volume + (((bus * 2) + side) * digits), digits);
+      std::ranges::copy(unity, destination.begin());
+    }
+  }
+  const auto wire = octa::encode(cached->command, cached->address, cached->payload);
+  return wire ? *wire : std::vector<std::uint8_t>{};
+}
+
 bool reference(const std::filesystem::path &directory) {
   constexpr std::size_t bulk_frame_size = octa::bulk_size + 13;
   constexpr std::size_t trace_size = 3294;
@@ -41,9 +62,11 @@ bool reference(const std::filesystem::path &directory) {
   const auto target = octa::direct_out_target(*current);
   if (!require(target.has_value(), "valid Direct Out current state")) { return false; }
   const auto wire = octa::encode(target->command, target->address, target->payload);
-  const auto expected = read(directory / "direct-out-state-reference.syx", bulk_frame_size);
-  if (!require(wire && !expected.empty() && *wire == expected,
-               "complete Direct Out target matches original DirectOut then TxBlk")) {
+  const auto expected =
+      device_reference(read(directory / "direct-out-state-reference.syx", bulk_frame_size));
+  if (!require(
+          wire && !expected.empty() && *wire == expected,
+          "original DirectOut/TxBlk cache with independently observed firmware master coupling")) {
     return false;
   }
   const auto changes = octa::direct_out_changes();
@@ -85,6 +108,38 @@ bool preservation() {
       "Direct Out is idempotent and preserves mono, opaque bits, preamps and coaxial route");
 }
 
+bool master_coupling() {
+  octa::Message current{.command = octa::Command::data,
+                        .address = octa::bulk_address,
+                        .payload = std::vector<std::uint8_t>(octa::bulk_size)};
+  constexpr std::size_t io_link = 0x43e;
+  constexpr std::size_t playback_volume = 0x44a;
+  constexpr std::size_t digits = 6;
+  constexpr std::array<std::uint8_t, digits> unity = {2, 0, 0, 0, 0, 0};
+  for (std::size_t bus = 0; bus < 4; ++bus) {
+    current.payload[io_link + bus] = static_cast<std::uint8_t>(bus % 2);
+    current.payload[playback_volume + (bus * 12) + 5] = 1;
+    current.payload[playback_volume + (bus * 12) + 11] = 2;
+  }
+  const auto target = octa::direct_out_target(current);
+  if (!target) { return false; }
+  for (std::size_t bus = 0; bus < 4; ++bus) {
+    for (std::size_t side = 0; side < 2; ++side) {
+      const auto offset = playback_volume + (((bus * 2) + side) * digits);
+      const auto actual = std::span(target->payload).subspan(offset, digits);
+      const auto expected =
+          bus % 2 == 1 ? std::span<const std::uint8_t>(unity)
+                       : std::span<const std::uint8_t>(current.payload).subspan(offset, digits);
+      if (!require(
+              std::ranges::equal(actual, expected),
+              "active I/O master links propagate unity; unlinked playback masters preserved")) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 bool rejection() {
   octa::Message current{.command = octa::Command::data,
                         .address = octa::bulk_address,
@@ -105,5 +160,5 @@ bool rejection() {
 
 int main(int argc, char **argv) {
   if (argc != 2) { return 2; }
-  return reference(argv[1]) && preservation() && rejection() ? 0 : 1;
+  return reference(argv[1]) && preservation() && master_coupling() && rejection() ? 0 : 1;
 }

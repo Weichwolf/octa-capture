@@ -60,6 +60,8 @@ def target(before):
         payload[0x404 + bus] |= 1
         for channel in range(2):
             number(0x408 + (bus * 2 + channel) * 6, 6, 0x200000)
+            if payload[0x43e + bus] & 1:
+                number(0x44a + (bus * 2 + channel) * 6, 6, 0x200000)
     payload[0x210:0x24c] = bytes(60)
     return payload
 
@@ -74,12 +76,16 @@ def main():
     parser.add_argument('--bin-dir', type=Path, default=root / 'build/strict')
     parser.add_argument('--port', default='hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1')
     parser.add_argument('--write', action='store_true', help='apply Direct Out and restore the complete original state')
+    parser.add_argument('--linked-masters', action='store_true', help='test active I/O links with reduced master levels')
     args = parser.parse_args()
+    if args.linked_masters and not args.write:
+        parser.error('--linked-masters requires --write')
 
     def state():
         return json.loads(run([args.bin_dir / 'octa-state', args.port]))
 
     before = state()
+    original = before
     if not args.write:
         print('Complete bulk state read. Use --write for Direct Out/readback/recovery checks.')
         return
@@ -94,6 +100,20 @@ def main():
     protected = directory / 'existing.syx'
     protected.write_bytes(b'preserve existing recovery file')
     try:
+        if args.linked_masters:
+            prepared = bytearray.fromhex(before['payload_hex'])
+            for bus in range(4):
+                prepared[0x43e + bus] |= 1
+                for source in range(2):
+                    for side in range(2):
+                        offset = 0x408 + source * 0x42 + (bus * 2 + side) * 6
+                        prepared[offset:offset + 6] = bytes([1, 0, 0, 0, 0, 0])
+            fixture = directory / 'linked-master-state.syx'
+            fixture.write_bytes(raw({'payload_hex': prepared.hex()}))
+            fixture.chmod(0o600)
+            run([args.bin_dir / 'octa-preset', 'restore', fixture, args.port])
+            before = state()
+            require(bytes.fromhex(before['payload_hex']) == prepared, 'Linked-master setup differs')
         error = run([args.bin_dir / 'octa-preset', 'direct-out', protected, args.port], expected=1)
         require(b'create recovery snapshot' in error
                 and protected.read_bytes() == b'preserve existing recovery file'
@@ -101,7 +121,7 @@ def main():
         print('PASS backup collision: existing file and complete device state unchanged', flush=True)
         recovery = directory / 'recovery.syx'
         output = run([args.bin_dir / 'octa-preset', 'direct-out', recovery, args.port])
-        require(recovery.read_bytes() == baseline.read_bytes(), 'Raw recovery file differs from baseline')
+        require(recovery.read_bytes() == raw(before), 'Raw recovery file differs from baseline')
         require(recovery.stat().st_mode & 0o077 == 0, 'Recovery file is not private')
         observed = bytes.fromhex(state()['payload_hex'])
         expected = target(before)
@@ -112,7 +132,7 @@ def main():
         print('PASS Direct Out: complete raw state matches; coaxial route and unrelated bits preserved', flush=True)
     finally:
         run([args.bin_dir / 'octa-preset', 'restore', baseline, args.port])
-        require(state() == before, f'Complete raw restoration failed; recovery: {baseline}')
+        require(state() == original, f'Complete raw restoration failed; recovery: {baseline}')
         print('PASS exact restoration: original raw state unchanged', flush=True)
 
 

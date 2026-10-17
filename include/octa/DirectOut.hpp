@@ -16,7 +16,8 @@ enum class DirectOutError : std::uint8_t { message, range, rate };
 
 // Original Directly Output the Inputs sequence. No device access.
 [[nodiscard]] std::vector<DspChange> direct_out_changes();
-// Complete target with preamps/playback/coaxial route/opaque fields retained.
+// Complete device target with unrelated fields retained. Active input/output
+// master links also propagate unity levels to playback masters in firmware.
 // Direct Out needs all four mixers; reject 192 kHz and unknown rate indices.
 [[nodiscard]] std::expected<Message, DirectOutError> direct_out_target(const Message &current);
 

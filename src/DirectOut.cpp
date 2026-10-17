@@ -24,6 +24,8 @@ constexpr std::size_t pan_offset = 0x80;
 constexpr std::size_t volume_offset = 0x120;
 constexpr std::size_t send_offset = 0x210;
 constexpr std::size_t master_offset = 0x404;
+constexpr std::size_t io_link_offset = 0x43e;
+constexpr std::size_t playback_master_volume_offset = 0x44a;
 constexpr unsigned int nibble_bits = 4;
 constexpr std::uint32_t nibble_mask = 15;
 
@@ -80,6 +82,12 @@ void prepare_bus(std::span<std::uint8_t> payload, std::size_t bus) {
     number(
         payload.subspan(master_offset + 4 + (((bus * 2) + channel) * volume_digits), volume_digits),
         unity);
+    if ((payload[io_link_offset + bus] & 1U) != 0) {
+      number(
+          payload.subspan(playback_master_volume_offset + (((bus * 2) + channel) * volume_digits),
+                          volume_digits),
+          unity);
+    }
   }
 }
 

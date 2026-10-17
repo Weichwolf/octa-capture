@@ -302,6 +302,41 @@ Reverb return: 00 08 00 07, six nibbles.
 Reference: CCplDevDMix::SetBlk at 0x1000095d4 and
 CCplDevDMixMaster2::Set at 0x100009a28.
 
+Mixer switches and master coupling
+----------------------------------
+Original TxLink (0x10001cb8c), TxMstLink (0x1000236da) and TxMstIOLink
+(0x100022f8c) match all 104 C++ on/off frames for both source groups,
+all buses/pairs and master switches. Optional offline check:
+  python3 tools/emulate-mixer-links.py gui-x86_64 [--binary build/release/octa-dsp]
+
+Hardware readback of asymmetric channel pairs shows that enabling stereo
+link copies left volume, mute and solo to the right channel; input bus A
+also copies the reverb send. Pan and mono are retained. Disabling link
+retains the synchronized values. Mono itself changes only its pair flag.
+Master stereo linking copies the selected group's left volume to right.
+With both master stereo links off, enabling input/output linking copies
+input master L/R volumes to playback L/R; their stereo flags remain separate.
+Disabling a master link retains the resulting volumes.
+
+While input/output linking is active, a volume write affects the addressed
+channel and its stereo peer when the addressed group is linked. These
+changes also reach the other master group, whose own stereo link can expand
+the affected channels there. That expansion does not feed back into an
+unlinked addressed group. Notifications alone describe the selected field;
+fresh bulk readback is needed to observe all firmware coupling.
+tools/check-mixer-links.py is read-only by default. --write uses bounded,
+very low asymmetric levels to check 92 switch cycles and 128 master-volume
+combinations, comparing every raw byte. --section switches|masters runs one
+part. It saves a private raw snapshot before changes and attempts complete
+restoration on completion, error or SIGINT/SIGTERM. Physical DSP behavior
+and native Debian still require verification.
+All 92 switch cycles and 128 master-volume combinations passed full raw
+readback/isolation checks on WSL hardware at 48 kHz, followed by exact
+restoration of the original state. Input and playback links/mono were
+checked on all five pairs of all four buses, and all eight stereo masters
+and four input/output master links were exercised. This is control-state
+evidence; no inference about analog downmixing or signal quality is made.
+
 Reverb, routing and persistence
 ------------------------------
 Bulk payload: output routes at 05..09; reverb type at 0A; five pre-delay
@@ -330,8 +365,8 @@ restoration checks: mute, solo, pan and volume on all four buses and both
 source groups; master volumes; reverb sends, return, type and all active
 parameter banks; all five output routes. Expected stereo coupling was
 checked. The complete raw payload matched the snapshot after every
-restoration. Standalone link/mono checks and physical DSP response remain
-outstanding; the preset operations below exercise some mixer link writes.
+restoration. Additional switch/coupling checks are described below; physical
+DSP response remains unverified.
 
 Routing presets
 ---------------
@@ -369,13 +404,20 @@ CUiDev::DirectOut (macOS 1.5.9, 0x10002a640) sends 206 DT1 frames:
   stereo links and enable only the digital 9/10 link. Then clear mute/solo;
   on bus A also clear each reverb send.
 - After each bus, set both input-master volumes to unity and link them.
-Playback strips/masters, mono flags, preamps, reverb type/parameters/return,
-input/output master links and opaque state are not targeted.
+Playback strips, playback master stereo flags, mono flags, preamps, reverb
+type/parameters/return, input/output master link flags and opaque state are
+not targeted. Active input/output master links propagate the input-master
+unity writes to playback master volumes in firmware.
 Selected analog pairs remain UNLINKED, despite their hard-left/right pans.
 
-The command order and complete resulting cached state match execution of
-the original DirectOut followed by TxBlk, including four additional input,
-input-master, playback-master and input/output master-link patterns.
+The command order and cached state fixture come from executing original
+DirectOut followed by TxBlk, including four additional input, input-master,
+playback-master and input/output master-link patterns. The original cache
+does not receive simulated hardware feedback in this reference execution:
+its playback-master volumes remain stale when I/O linking is active. The
+device target accounts separately for the observed firmware coupling;
+tests compare the full reference state with only those coupled volumes
+adjusted to unity. The original fixture and 206-frame trace remain intact.
 Reproduce the synthetic fixtures
 without a device using Python Unicorn and the hash-pinned Mac executable:
   python3 tools/emulate-direct-out.py gui-x86_64 \
@@ -401,8 +443,12 @@ initial state, including after a failed test.
 All 206 writes, exact final state, private backup/collision behavior and
 complete restoration passed on WSL hardware at 48 kHz with strict and
 release binaries. This tests control state, not physical analog routing or
-signal quality. Active input/output master-link coupling on hardware and
-native Debian remain unverified.
+signal quality. The linked-master variant also passed at 48 kHz: all four
+input/output links were enabled with reduced master levels, and Direct Out
+set both input and playback master levels to unity. The checker restores
+the original state even when using this variant:
+  python3 tools/check-direct-out.py --write --linked-masters
+Native Debian and physical signal response remain unverified.
 
 Initialization
 --------------

@@ -12,6 +12,7 @@
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -219,6 +220,19 @@ void check_direct_out(const octa::Message &message) {
   constexpr std::size_t preamp_size = 0x43;
   require(std::ranges::equal(std::span(target->payload).subspan(preamp_offset, preamp_size),
                              std::span(message.payload).subspan(preamp_offset, preamp_size)));
+  constexpr std::size_t io_link = 0x43e;
+  constexpr std::size_t playback_volume = 0x44a;
+  constexpr std::size_t digits = 6;
+  constexpr std::array<std::uint8_t, digits> unity = {2, 0, 0, 0, 0, 0};
+  for (std::size_t bus = 0; bus < 4; ++bus) {
+    for (std::size_t side = 0; side < 2; ++side) {
+      const auto offset = playback_volume + (((bus * 2) + side) * digits);
+      const auto expected = (message.payload[io_link + bus] & 1U) != 0
+                                ? std::span<const std::uint8_t>(unity)
+                                : std::span(message.payload).subspan(offset, digits);
+      require(std::ranges::equal(std::span(target->payload).subspan(offset, digits), expected));
+    }
+  }
 }
 
 void check_preset_export(const octa::Message &message) {

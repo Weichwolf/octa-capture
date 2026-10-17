@@ -47,9 +47,13 @@ def verify(executable, cases):
         write_pointer(cpu, stack, stop)
         cpu.reg_write(registers.UC_X86_REG_RSP, stack)
         cpu.reg_write(registers.UC_X86_REG_RDI, context)
-        arguments = argument if isinstance(argument, tuple) else (argument, 0)
-        cpu.reg_write(registers.UC_X86_REG_RSI, arguments[0])
-        cpu.reg_write(registers.UC_X86_REG_RDX, arguments[1])
+        arguments = argument if isinstance(argument, tuple) else (argument,)
+        parameter_registers = (registers.UC_X86_REG_RSI, registers.UC_X86_REG_RDX,
+                               registers.UC_X86_REG_RCX, registers.UC_X86_REG_R8)
+        if len(arguments) > len(parameter_registers):
+            raise ValueError('At most four reference arguments are supported')
+        for register, value in zip(parameter_registers, arguments + (0,) * (4 - len(arguments)), strict=True):
+            cpu.reg_write(register, value)
         cpu.emu_start(address, stop, timeout=5_000_000, count=10000)
         if cpu.reg_read(registers.UC_X86_REG_RIP) != stop or frames != [expected]:
             raise RuntimeError(f'{address:#x}, arguments {argument}: reference MIDI frame mismatch')
