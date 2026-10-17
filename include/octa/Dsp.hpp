@@ -66,4 +66,9 @@ enum class DspError : std::uint8_t { message, size, data };
 // Retains wire values. Numeric DSP coefficients use big-endian nibbles.
 [[nodiscard]] std::expected<DspState, DspError> decode_dsp(const Message &message);
 
+// Applies known individual DT1 updates atomically; malformed/unknown messages
+// leave the complete state untouched. Returns whether the selected value changed.
+[[nodiscard]] std::expected<bool, DspError> apply_dsp_update(DspState &state,
+                                                             const Message &message);
+
 }

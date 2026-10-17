@@ -244,12 +244,19 @@ CCplDeviceIO::TxRevType at 0x1000271ca writes one byte to 00 04 00 00.
 TxRevPreDly at 0x1000273fa uses 00 04 type 01; TxRevTime at
 0x1000274dc uses 00 04 type 02. Both send one table-index byte.
 The DSP bulk decoder is in src/Dsp.cpp; octa-state exposes these fields.
+src/DspUpdate.cpp applies individual notifications for the mapped channels,
+masters, effects and routes. Unknown selectors and malformed values leave
+state unchanged. Stereo-pair notifications accept either channel of the
+pair; the transmitter uses its first channel. Only input bus A sends and
+the global reverb return are represented. Unmapped master flags are rejected.
 Readback from the connected device and synthetic boundary tests validate
 the layout; DSP writes and physical effect still need verification.
 
 TxSaveLoad at 0x10002a946 writes one command byte to 00 00 00 01.
-Command meanings must be recovered from callers before using persistence
-operations. No initialization, save, or restore operation has been executed.
+The confirmed callers at 0x10002a328 (Store Memory) and 0x10002a2ea
+(Load Memory) send 00 and 01 respectively, after a confirmation dialog.
+These persistent device operations are not exposed or hardware-tested yet.
+No initialization, save, or restore operation has been executed.
 
 Audio packing and initial hardware tests
 ---------------------------------------

@@ -35,6 +35,18 @@ void check_preamp(octa::PreampBank &bank, const octa::Message &message) {
   require(repeated && !*repeated);
 }
 
+void check_dsp(octa::DspState &state, const octa::Message &message) {
+  const auto previous = state;
+  const auto changed = octa::apply_dsp_update(state, message);
+  if (!changed) {
+    require(state == previous);
+    return;
+  }
+  require(*changed == (state != previous));
+  const auto repeated = octa::apply_dsp_update(state, message);
+  require(repeated && !*repeated);
+}
+
 void frames(std::span<const std::uint8_t> bytes) {
   const auto decoded = octa::decode(bytes);
   if (decoded) {
@@ -44,6 +56,7 @@ void frames(std::span<const std::uint8_t> bytes) {
   }
   octa::SysExReceiver receiver;
   octa::PreampBank bank{};
+  octa::DspState dsp_state{};
   for (const auto byte : bytes) {
     const auto result = receiver.feed(byte);
     if (!result) { continue; }
@@ -53,6 +66,7 @@ void frames(std::span<const std::uint8_t> bytes) {
       const auto preamps = octa::decode_preamps(*message);
       if (preamps) { bank = *preamps; }
       check_preamp(bank, *message);
+      check_dsp(dsp_state, *message);
     }
   }
   // Every malformed or unfinished stream must recover at the next SysEx start.
@@ -88,7 +102,9 @@ void structured(std::span<const std::uint8_t> bytes) {
     require(decoded && *decoded == message);
   }
   octa::PreampBank bank{};
+  octa::DspState dsp_state{};
   check_preamp(bank, message);
+  check_dsp(dsp_state, message);
   const octa::PreampChange change = {.channel = address[2],
                                      .parameter = static_cast<octa::PreampParameter>(address[3]),
                                      .value = bytes.front()};
@@ -126,7 +142,12 @@ void structured(std::span<const std::uint8_t> bytes) {
     constexpr std::uint8_t nibble_mask = 15;
     byte &= nibble_mask;
   }
-  require(octa::decode_dsp(synthetic).has_value());
+  const auto synthetic_dsp = octa::decode_dsp(synthetic);
+  require(synthetic_dsp.has_value());
+  if (synthetic_dsp) {
+    dsp_state = *synthetic_dsp;
+    check_dsp(dsp_state, message);
+  }
 }
 
 }

@@ -15,7 +15,7 @@ find_program(OCTA_CLANG_FORMAT NAMES clang-format-19 clang-format
   PATHS "$ENV{HOME}/.local/opt/octa-llvm19/usr/lib/llvm-19/bin" REQUIRED)
 set(CMAKE_CXX_CLANG_TIDY "${OCTA_CLANG_TIDY};--warnings-as-errors=*")
 
-add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp)
+add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp)
 target_include_directories(octa_protocol PUBLIC include)
 target_link_libraries(octa_protocol PUBLIC octa_quality)
 
@@ -57,7 +57,10 @@ add_test(NAME control COMMAND control_test)
 add_executable(dsp_test test/Dsp.cpp)
 target_link_libraries(dsp_test PRIVATE octa_protocol)
 add_test(NAME dsp COMMAND dsp_test)
-set_tests_properties(protocol preamp control dsp PROPERTIES TIMEOUT 20
+add_executable(dsp_update_test test/DspUpdate.cpp)
+target_link_libraries(dsp_update_test PRIVATE octa_protocol)
+add_test(NAME dsp-update COMMAND dsp_update_test)
+set_tests_properties(protocol preamp control dsp dsp-update PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 add_custom_target(format-check
@@ -74,6 +77,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Dsp.cpp"
+    "${CMAKE_SOURCE_DIR}/src/DspUpdate.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
@@ -81,6 +85,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/test/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/test/Control.cpp"
     "${CMAKE_SOURCE_DIR}/test/Dsp.cpp"
+    "${CMAKE_SOURCE_DIR}/test/DspUpdate.cpp"
     "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
   VERBATIM)
 
@@ -98,6 +103,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Dsp.cpp"
+    "${CMAKE_SOURCE_DIR}/src/DspUpdate.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
@@ -105,6 +111,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/test/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/test/Control.cpp"
     "${CMAKE_SOURCE_DIR}/test/Dsp.cpp"
+    "${CMAKE_SOURCE_DIR}/test/DspUpdate.cpp"
     "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
   VERBATIM)
 
@@ -117,6 +124,7 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Dsp.cpp"
+    "${CMAKE_SOURCE_DIR}/src/DspUpdate.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
@@ -124,6 +132,7 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/test/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/test/Control.cpp"
     "${CMAKE_SOURCE_DIR}/test/Dsp.cpp"
+    "${CMAKE_SOURCE_DIR}/test/DspUpdate.cpp"
     ${octa_fuzz_sources}
   DEPENDS format-check
   VERBATIM)

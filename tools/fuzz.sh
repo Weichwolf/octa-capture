@@ -34,6 +34,20 @@ for parameter in range(13):
     seeds[f'write-{parameter}'] = frame(0x12, [0, 5, 0, parameter], [1])
     seeds[f'parameter-{parameter}'] = bytes([0x12, 0, 5, 7, parameter, 1])
     seeds[f'write-limit-{parameter}'] = bytes([0, 0, 5, 7, parameter, 0])
+dsp = [
+    ([0, 6, 0x39, 4], [8, 0, 0, 0]),
+    ([0, 7, 0x28, 8], [2, 0, 0, 0, 0, 0]),
+    ([0, 8, 0x31, 1], [2, 0, 0, 0, 0, 0]),
+    ([0, 9, 0x20, 0], [1]),
+    ([0, 8, 0x30, 0x0d], [1]),
+    ([0, 6, 9, 0x0e], [0, 0, 0, 0, 0, 0]),
+    ([0, 8, 0, 7], [2, 0, 0, 0, 0, 0]),
+    ([0, 4, 4, 2], [44]),
+    ([0, 3, 0, 4], [8]),
+]
+for index, (address, payload) in enumerate(dsp):
+    seeds[f'dsp-frame-{index}'] = frame(0x12, address, payload)
+    seeds[f'dsp-message-{index}'] = bytes([0x12] + address + payload)
 for name, content in seeds.items():
     (corpus / name).write_bytes(content)
 PY
