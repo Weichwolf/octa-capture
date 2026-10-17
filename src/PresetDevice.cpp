@@ -2,6 +2,7 @@
 #include "PresetDevice.hpp"
 
 #include "octa/AutoSense.hpp"
+#include "octa/DirectOut.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Midi.hpp"
 #include "octa/Preamp.hpp"
@@ -198,6 +199,36 @@ std::expected<Message, MidiError> attempt_routing(RoutingPreset preset, ApplySta
 
 using Clock = std::chrono::steady_clock;
 
+std::expected<Message, MidiError> attempt_direct_out(ApplyState &state) {
+  auto session = MidiSession::open(state.options.port);
+  if (!session) { return std::unexpected(session.error()); }
+  auto current = capture_snapshot(*session, state);
+  if (!current) { return current; }
+  const auto target = direct_out_target(*current);
+  if (!target) {
+    return std::unexpected(
+        MidiError{.code = target.error() == DirectOutError::rate ? -ENOTSUP : -EINVAL,
+                  .operation = "Direct Out state/rate bounds"});
+  }
+  constexpr auto maximum_duration = std::chrono::minutes(1);
+  const auto deadline = Clock::now() + maximum_duration;
+  for (const auto &change : direct_out_changes()) {
+    if (interrupted != 0) {
+      return std::unexpected(MidiError{.code = -EINTR, .operation = "Direct Out interrupted"});
+    }
+    if (Clock::now() >= deadline) {
+      return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "Direct Out deadline"});
+    }
+    state.write_attempted = true;
+    current = session->write_dsp(change);
+    if (!current) { return current; }
+  }
+  if (*current != *target) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "Direct Out complete readback"});
+  }
+  return current;
+}
+
 struct AutoSenseProgress {
   AutoSenseChannels active{};
   std::uint8_t selected = 0;
@@ -346,6 +377,23 @@ int operate_memory(MemoryAction action, ApplyOptions options) {
             << " command sent; current bulk state read. Recovery snapshot: "
             << options.snapshot_path
             << "\nPersistent storage/load completion is not verified by the bulk reply.\n"
+            << std::flush;
+  return std::cout.good() ? 0 : 1;
+}
+
+int apply_direct_out(ApplyOptions options) {
+  if (!install_handlers()) {
+    return failure({.code = -errno, .operation = "Direct Out signal handlers"});
+  }
+  ApplyState state{.options = options, .snapshot = std::nullopt, .write_attempted = false};
+  auto result = attempt_direct_out(state);
+  if (result && interrupted != 0) {
+    result = std::unexpected(MidiError{.code = -EINTR, .operation = "Direct Out interrupted"});
+  }
+  if (!result) { return failed_change(result.error(), state, true); }
+  std::cout << "Direct Out applied; " << direct_out_change_count
+            << " writes and complete raw readback verified. Recovery snapshot: "
+            << options.snapshot_path << '\n'
             << std::flush;
   return std::cout.good() ? 0 : 1;
 }

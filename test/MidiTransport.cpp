@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "../src/PresetDevice.hpp"
 #include "octa/AutoSense.hpp"
+#include "octa/DirectOut.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
@@ -562,6 +563,73 @@ bool routing_workflow(octa::cli::RoutingPreset preset, RoutingScenario scenario)
                  "routing preset verified full state and recovery; 192 kHz writes refused");
 }
 
+bool direct_out_workflow(RoutingScenario scenario) {
+  io = {};
+  const auto initial = octa::decode(bulk_frame());
+  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+  if (!initial || !query) { return false; }
+  auto original = octa::direct_out_target(*initial);
+  if (!original) { return false; }
+  constexpr std::size_t mono_offset = 0x60;
+  constexpr std::size_t opaque_offset = 0x442;
+  constexpr std::uint8_t all_bits = 127;
+  original->payload[mono_offset] = all_bits;
+  original->payload[opaque_offset] = all_bits;
+  original->payload[9] = 8;
+  if (scenario == RoutingScenario::unsupported_rate) { original->payload[2] = 3; }
+  const auto baseline = octa::encode(original->command, original->address, original->payload);
+  if (!baseline) { return false; }
+  io.replies.assign(octa::direct_out_change_count + 1, *baseline);
+  if (scenario == RoutingScenario::mismatch) {
+    auto wrong = *original;
+    constexpr std::size_t phantom_offset = 0x15;
+    wrong.payload[phantom_offset] = 1;
+    const auto reply = octa::encode(wrong.command, wrong.address, wrong.payload);
+    if (!reply) { return false; }
+    io.replies.back() = *reply;
+  }
+  io.replies.push_back(*baseline);
+  if (scenario == RoutingScenario::transfer_failure) { io.fail_route = 3; }
+  if (scenario == RoutingScenario::interruption) { io.interrupt_route = 2; }
+  auto expected_wire = *query;
+  for (const auto &change : octa::direct_out_changes()) {
+    const auto frame = octa::encode_dsp_change(change);
+    if (!frame) { return false; }
+    append_bytes(expected_wire, *frame);
+    append_bytes(expected_wire, *query);
+  }
+  auto directory = std::to_array("/tmp/octa-direct-out-test-XXXXXX");
+  if (mkdtemp(directory.data()) == nullptr) { return false; }
+  const auto path = std::string(directory.data()) + "/recovery.syx";
+  std::stringbuf errors;
+  auto *previous_errors = std::cerr.rdbuf(&errors);
+  const int status =
+      octa::cli::apply_direct_out({.port = "hw:fake", .snapshot_path = path.c_str()});
+  std::cerr.rdbuf(previous_errors);
+  std::ifstream file(path, std::ios::binary);
+  std::array<std::uint8_t, octa::bulk_size + 14> bytes{};
+  file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  const bool saved = file.gcount() == static_cast<std::streamsize>(baseline->size()) &&
+                     std::ranges::equal(std::span(bytes).first(baseline->size()), *baseline);
+  const bool success = scenario == RoutingScenario::success;
+  const bool recovered = !success && scenario != RoutingScenario::unsupported_rate;
+  const unsigned int connections = recovered ? 2U : 1U;
+  const bool recovery_verified =
+      !recovered || errors.str().contains("Original raw state restored and verified.");
+  int expected_status = success ? 0 : 1;
+  constexpr int interrupted_status = 130;
+  if (scenario == RoutingScenario::interruption) { expected_status = interrupted_status; }
+  const bool exact_wire = !success || io.outgoing == expected_wire;
+  const bool rate_guard = scenario != RoutingScenario::unsupported_rate || io.outgoing == *query;
+  const bool removed_file = unlink(path.c_str()) == 0;
+  const bool removed_directory = rmdir(directory.data()) == 0;
+  return require(
+      status == expected_status && saved && io.opens == connections &&
+          io.closes == connections * 2 && exact_wire && rate_guard && recovery_verified &&
+          removed_file && removed_directory,
+      "Direct Out sequence/readbacks, full-state mismatch, partial I/O, signal and rate guard");
+}
+
 bool memory_operations() {
   io = {};
   auto reply = level_frame();
@@ -1011,15 +1079,23 @@ int main() {
       routing_passed = routing_workflow(preset, scenario) && routing_passed;
     }
   }
+  bool direct_out_passed = true;
+  for (const auto scenario : {RoutingScenario::success,
+                              RoutingScenario::mismatch,
+                              RoutingScenario::transfer_failure,
+                              RoutingScenario::interruption,
+                              RoutingScenario::unsupported_rate}) {
+    direct_out_passed = direct_out_workflow(scenario) && direct_out_passed;
+  }
   const bool passed =
-      routing_passed && memory_cli_passed && auto_sense_workflow_passed && successful_stream() &&
-      input_failure(false) && input_failure(true) && write_failures() && deadlines() &&
-      open_failure() && auto_sense_session() && auto_sense_cleanup() && auto_sense_failures(true) &&
-      auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&
-      session_queries() && session_stale_fragment() && session_writes() && memory_operations() &&
-      memory_rejection() && memory_partial_failure() && preset_transfer() && preset_rejection() &&
-      preset_readback_failure() && preset_partial_failure() && session_uncertain() &&
-      session_receive_bounds() && impossible_transfers();
+      direct_out_passed && routing_passed && memory_cli_passed && auto_sense_workflow_passed &&
+      successful_stream() && input_failure(false) && input_failure(true) && write_failures() &&
+      deadlines() && open_failure() && auto_sense_session() && auto_sense_cleanup() &&
+      auto_sense_failures(true) && auto_sense_failures(false) && auto_sense_rejection() &&
+      session_buffering() && session_queries() && session_stale_fragment() && session_writes() &&
+      memory_operations() && memory_rejection() && memory_partial_failure() && preset_transfer() &&
+      preset_rejection() && preset_readback_failure() && preset_partial_failure() &&
+      session_uncertain() && session_receive_bounds() && impossible_transfers();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;

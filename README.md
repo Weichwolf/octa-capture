@@ -47,6 +47,7 @@ make release    # optimized build and tests
 ./build/strict/octa-preset restore-auto auto-recovery.syx  # cancel Auto-Sens before recovery
 ./build/strict/octa-preset routing multi-monitor routing-recovery.syx  # four monitor mixes
 ./build/strict/octa-preset routing playback playback-recovery.syx  # standard playback routes
+./build/strict/octa-preset direct-out direct-recovery.syx  # original Directly Output the Inputs
 ./build/strict/octa-preset memory-store before-store.syx  # overwrite device memory
 ./build/strict/octa-preset memory-load before-load.syx  # load device memory
 ./build/strict/octa-meters 2000  # observe eight input levels for 2000 ms as JSON lines
@@ -58,6 +59,7 @@ python3 tools/check-dsp.py            # read-only check; --write changes/restore
 python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
 python3 tools/check-auto-sense.py     # read-only; --write checks finish/cancel and signal recovery
 python3 tools/check-routing-presets.py  # read-only; --write checks both presets and restores state
+python3 tools/check-direct-out.py     # read-only; --write checks Direct Out and restores state
 python3 tools/check-status.py --stress --binary build/strict/octa-status  # kernel/C++ status
 ./build/strict/octa-audio-check 48000 prepare-capture  # configure/prepare without streaming
 ./build/strict/octa-audio-check 48000 capture          # transfer one second and check timing
@@ -73,9 +75,11 @@ Device controls use the exclusive CTRL MIDI port. `MidiSession` shares it betwee
 
 The [Ver100 preset tools](doc/preset-format.txt) support original `.octa` files, current-state export, offline preparation, live application and raw recovery. Live changes require a new private recovery file. `routing multi-monitor|playback` applies the original five-route presets, checks the entire state after every route and attempts recovery on failure/interruption. Patchbay presets are unavailable at 192 kHz. `memory-store/load` send persistent-memory commands, but persistence remains hardware-unverified; a runtime snapshot cannot undo overwritten device memory.
 
+`direct-out` reproduces the original 206-command sequence, verifies each control and the complete final state, and attempts raw recovery on error/interruption. It assigns the four analog output pairs to their respective direct mixes and preserves the coaxial route, preamps and playback controls. It requires 44.1, 48 or 96 kHz and a new private recovery file.
+
 `octa-auto-sense` requires selected-input activity and completion notifications. Finish permits sensitivity changes on selected inputs and linked stereo peers; cancel restores the full raw snapshot. Errors/signals attempt cancellation and verified recovery on a fresh connection. `octa-preset restore-auto` provides manual cancel/recovery.
 
-Hardware checkers are read-only by default; `--write` changes parameters and restores snapshots. They exclude automatic phantom-power/Hi-Z/link/mono changes. Check their reported recovery result and retain snapshots: disconnection or forced termination can prevent restoration. Current WSL evidence and remaining signal-quality/native-Debian requirements are in the protocol reference. Audio smoke checks discard input or play zeros and verify gross transfer timing at all four supported rates.
+Hardware checkers are read-only by default; `--write` changes parameters and restores snapshots. Scalar checks exclude automatic phantom-power/Hi-Z/link/mono changes; Direct Out changes mixer stereo links as specified by the original command. Check their reported recovery result and retain snapshots: disconnection or forced termination can prevent restoration. Current WSL evidence and remaining signal-quality/native-Debian requirements are in the protocol reference. Audio smoke checks discard input or play zeros and verify gross transfer timing at all four supported rates.
 
 Fuzzing uses libFuzzer with ASan/UBSan, including test-only ALSA transport symbols; no malformed traffic reaches hardware. Corpora/artifacts stay in `build/fuzz/`. Kernel robustness still requires separate KASAN/UBSAN, fault-injection and descriptor/URB tests.
 

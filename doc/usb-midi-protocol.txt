@@ -357,6 +357,52 @@ parameter changes. tools/check-routing-presets.py is read-only by default;
 Offline fault tests cover partial transfer, unrelated state changes,
 interruption and the 192 kHz write guard. Native Debian remains unverified.
 
+Directly Output the Inputs
+-------------------------
+CUiDev::DirectOut (macOS 1.5.9, 0x10002a640) sends 206 DT1 frames:
+- Set analog output pairs 0..3 to mixers A..D. Preserve coaxial pair 4.
+- For each bus A..D, iterate input channels 0..9 in order. Set volume to
+  unity (0x200000) for the corresponding analog pair, zero otherwise;
+  pan the corresponding pair and digital pair hard left/right (0/0x8000),
+  center other channels (0x4000). At each even channel, disable analog
+  stereo links and enable only the digital 9/10 link. Then clear mute/solo;
+  on bus A also clear each reverb send.
+- After each bus, set both input-master volumes to unity and link them.
+Playback strips/masters, mono flags, preamps, reverb type/parameters/return,
+input/output master links and opaque state are not targeted.
+Selected analog pairs remain UNLINKED, despite their hard-left/right pans.
+
+The command order and complete resulting cached state match execution of
+the original DirectOut followed by TxBlk, including four additional input,
+input-master, playback-master and input/output master-link patterns.
+Reproduce the synthetic fixtures
+without a device using Python Unicorn and the hash-pinned Mac executable:
+  python3 tools/emulate-direct-out.py gui-x86_64 \
+    test/data/preset-import-reference.syx trace.syx target.syx
+The checked-in direct-out-reference.syx and direct-out-state-reference.syx
+contain synthetic parameters and protocol messages, not manufacturer code.
+TxBlk normalizes uncached/reserved bits; our scalar implementation preserves
+those bits from the current raw snapshot instead of retransmitting TxBlk.
+
+octa-preset direct-out NEW-RECOVERY.syx [hw:CTRL-port] saves a private,
+exclusive raw snapshot before writing, validates every scalar readback and
+requires an exact full-state match at completion. Errors and SIGINT/SIGTERM
+attempt raw restoration on a fresh connection. A one-minute deadline is
+checked between writes; individual I/O and close/recovery add their own
+timeouts. Disconnection or forced termination can prevent recovery.
+Direct Out requires all four mixers/analog routes and rejects 192 kHz or
+unknown rate indices before writing. Offline tests cover exact command
+order, reserved-bit preservation, idempotence, unrelated-state mismatch,
+partial transfer, signal recovery and the rate guard; fuzzing is offline.
+tools/check-direct-out.py is read-only by default. --write applies the
+command, independently compares all raw bytes and restores/checks the exact
+initial state, including after a failed test.
+All 206 writes, exact final state, private backup/collision behavior and
+complete restoration passed on WSL hardware at 48 kHz with strict and
+release binaries. This tests control state, not physical analog routing or
+signal quality. Active input/output master-link coupling on hardware and
+native Debian remain unverified.
+
 TxSaveLoad at 0x10002a946 writes one command byte to 00 00 00 01.
 The confirmed callers at 0x10002a328 (Store Memory) and 0x10002a2ea
 (Load Memory) send 00 and 01 respectively, after a confirmation dialog.

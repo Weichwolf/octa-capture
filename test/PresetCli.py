@@ -93,6 +93,12 @@ def main():
             result = run(binary, ['routing', name, snapshot, 'invalid'], expected=1)
             require(b'hardware MIDI port' in result.stderr and not snapshot.exists(),
                     'Invalid routing port accessed the recovery path')
+    with tempfile.TemporaryDirectory(prefix='octa-direct-out-cli-test-') as directory:
+        snapshot = Path(directory) / 'recovery.syx'
+        run(binary, ['direct-out'], expected=2)
+        result = run(binary, ['direct-out', snapshot, 'invalid'], expected=1)
+        require(b'hardware MIDI port' in result.stderr and not snapshot.exists(),
+                'Invalid Direct Out port accessed the backup path')
     for mode in ('normalize', 'inspect'):
         with open('/dev/full', 'wb') as full:
             result = run(binary, [mode, fixtures / 'preset-ver100-windows-0.octa'], expected=1, stdout=full)

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/AutoSense.hpp"
 #include "octa/DeviceStatus.hpp"
+#include "octa/DirectOut.hpp"
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
@@ -206,7 +207,21 @@ void preset_files(std::span<const std::uint8_t> bytes) {
   require(repeated && *repeated == *state && encoded.size() == octa::preset_size);
 }
 
+void check_direct_out(const octa::Message &message) {
+  const auto target = octa::direct_out_target(message);
+  if (!target) { return; }
+  require(octa::validate_bulk_write(*target).has_value());
+  const auto repeated = octa::direct_out_target(*target);
+  require(repeated && *repeated == *target);
+  require(target->payload[9] == message.payload[9]);
+  constexpr std::size_t preamp_offset = 0x15;
+  constexpr std::size_t preamp_size = 0x43;
+  require(std::ranges::equal(std::span(target->payload).subspan(preamp_offset, preamp_size),
+                             std::span(message.payload).subspan(preamp_offset, preamp_size)));
+}
+
 void check_preset_export(const octa::Message &message) {
+  check_direct_out(message);
   const auto exported = octa::preset_from_bulk(message);
   const auto writable = octa::validate_bulk_write(message);
   if (!exported) {

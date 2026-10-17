@@ -117,6 +117,16 @@ void print_summary(const octa::Preset &preset) {
             << preset.preamps.size() << R"(,"mixer_buses":)" << preset.mixers.size() << "}\n";
 }
 
+int direct_out_command(std::span<char *> arguments) {
+  if (arguments.size() < 3 || arguments.size() > 4) {
+    std::cerr << "Usage: octa-preset direct-out NEW-RECOVERY.syx [hw:CTRL-port]\n";
+    return 2;
+  }
+  const std::string_view port =
+      arguments.size() == 4 ? arguments[3] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
+  return octa::cli::apply_direct_out({.port = port, .snapshot_path = arguments[2]});
+}
+
 int routing_command(std::span<char *> arguments) {
   if (arguments.size() < 4 || arguments.size() > 5) {
     std::cerr
@@ -162,6 +172,9 @@ std::optional<int> device_command(std::string_view mode, int argc, char **argv) 
 
 int main(int argc, char **argv) {
   const std::string_view mode = argc >= 2 ? argv[1] : "";
+  if (mode == "direct-out") {
+    return direct_out_command(std::span(argv, static_cast<std::size_t>(argc)));
+  }
   if (mode == "routing") {
     return routing_command(std::span(argv, static_cast<std::size_t>(argc)));
   }
@@ -178,6 +191,7 @@ int main(int argc, char **argv) {
            "       octa-preset restore|restore-auto RECOVERY.syx [hw:CTRL-port]\n"
            "       octa-preset memory-store|memory-load NEW-RECOVERY.syx [hw:CTRL-port]\n"
            "       octa-preset routing multi-monitor|playback NEW-RECOVERY.syx [hw:CTRL-port]\n"
+           "       octa-preset direct-out NEW-RECOVERY.syx [hw:CTRL-port]\n"
            "normalize and export write binary Ver100 files to stdout.\n";
     return 2;
   }
