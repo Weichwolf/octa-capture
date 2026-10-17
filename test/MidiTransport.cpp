@@ -274,6 +274,61 @@ bool session_writes() {
                  "typed writes validate before transmission and verify readback on one connection");
 }
 
+bool memory_operations() {
+  io = {};
+  auto reply = level_frame();
+  append_bytes(reply, bulk_frame());
+  io.replies = {reply, bulk_frame(1)};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  unsigned int notifications = 0;
+  const auto stored = session->operate_memory(
+      octa::MemoryAction::store, [&notifications](const octa::Message &) { ++notifications; });
+  const auto loaded = session->operate_memory(octa::MemoryAction::load);
+  constexpr std::array<std::uint8_t, 14> store = {
+      0xf0, 0x41, 0x10, 0, 0, 0x4d, 0x12, 0, 0, 0, 1, 0, 0x7f, 0xf7};
+  constexpr std::array<std::uint8_t, 14> load = {
+      0xf0, 0x41, 0x10, 0, 0, 0x4d, 0x12, 0, 0, 0, 1, 1, 0x7e, 0xf7};
+  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+  if (!query) { return false; }
+  std::vector<std::uint8_t> expected;
+  append_bytes(expected, store);
+  append_bytes(expected, *query);
+  append_bytes(expected, load);
+  append_bytes(expected, *query);
+  return require(stored && loaded && stored->payload.front() == 0 && loaded->payload.front() == 1 &&
+                     notifications == 1 && io.outgoing == expected,
+                 "reference memory frames, fragmented transfer, notifications and fresh queries");
+}
+
+bool memory_rejection() {
+  io = {};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  constexpr unsigned int byte_values = 256;
+  for (unsigned int value = 2; value < byte_values; ++value) {
+    const auto result = session->operate_memory(static_cast<octa::MemoryAction>(value));
+    if (!require(!result && result.error().code == -EINVAL && io.writes == 0 && io.position == 0,
+                 "invalid memory action rejected before MIDI I/O")) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool memory_partial_failure() {
+  io = {};
+  io.fail_write = 2;
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  const auto failed = session->operate_memory(octa::MemoryAction::store);
+  const auto writes = io.writes;
+  const auto retry = session->operate_memory(octa::MemoryAction::load);
+  return require(!failed && failed.error().code == -EIO && !retry &&
+                     retry.error().code == -EPROTO && writes == 2 && io.writes == writes,
+                 "partial memory transfer requires reopening rather than an unsafe retry");
+}
+
 bool preset_transfer() {
   io = {};
   constexpr std::size_t whole_chunk = 512;
@@ -518,6 +573,7 @@ int main() {
   const bool passed = successful_stream() && input_failure(false) && input_failure(true) &&
                       write_failures() && deadlines() && open_failure() && session_buffering() &&
                       session_queries() && session_stale_fragment() && session_writes() &&
+                      memory_operations() && memory_rejection() && memory_partial_failure() &&
                       preset_transfer() && preset_rejection() && preset_readback_failure() &&
                       preset_partial_failure() && session_uncertain() && session_receive_bounds() &&
                       impossible_transfers();

@@ -154,5 +154,20 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
   io.write_size = size == 0 ? 1 : static_cast<std::size_t>(data[size - 1] & chunk_mask) + 1;
   exercise_session();
   require(io.closes == 2);
+  {
+    auto session = octa::MidiSession::open("hw:fake");
+    require(session.has_value());
+    if (!session) { return 0; }
+    const auto action = static_cast<octa::MemoryAction>(size == 0 ? 0 : data[0]);
+    const auto writes = io.writes;
+    const auto result = session->operate_memory(action, &check_message);
+    if (action != octa::MemoryAction::store && action != octa::MemoryAction::load) {
+      require(!result && result.error().code == -EINVAL && io.writes == writes);
+    } else if (result) {
+      require(result->command == octa::Command::data && result->address == octa::bulk_address &&
+              result->payload.size() == octa::bulk_size);
+    }
+  }
+  require(io.closes == 4);
   return 0;
 }

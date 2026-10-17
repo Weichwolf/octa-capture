@@ -18,6 +18,8 @@
 
 namespace octa {
 
+enum class MemoryAction : std::uint8_t { store, load };
+
 struct MidiError {
   int code;
   std::string_view operation;
@@ -50,6 +52,11 @@ public:
   write_preamp(PreampChange change, const MessageListener &listener = {});
   [[nodiscard]] std::expected<Message, MidiError> write_dsp(const DspChange &change,
                                                             const MessageListener &listener = {});
+
+  // Sends Store/Load Memory and queries current state. The reply does not prove
+  // persistent storage or completion of a load; callers must verify separately.
+  [[nodiscard]] std::expected<Message, MidiError>
+  operate_memory(MemoryAction action, const MessageListener &listener = {});
 
   // Validate before MIDI I/O; require an exact fresh bulk readback. Raw writes
   // preserve snapshot fields omitted from .octa files for complete recovery.

@@ -148,4 +148,5 @@ full target and restores the original raw state independently. These
 checks pass on the attached WSL device with strict and release binaries.
 SIGINT and SIGTERM after transmission also restored the full raw state
 in a separate WSL hardware check. Native Debian remains unverified.
-Device Store/Load Memory is separate and remains unimplemented.
+Device Store/Load Memory is separate: the session API sends its reference
+commands, but those operations have no CLI or hardware verification yet.

@@ -383,6 +383,18 @@ std::expected<Message, MidiError> MidiSession::write_dsp(const DspChange &change
   return reply;
 }
 
+std::expected<Message, MidiError> MidiSession::operate_memory(MemoryAction action,
+                                                              const MessageListener &listener) {
+  if (action != MemoryAction::store && action != MemoryAction::load) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "memory action"});
+  }
+  constexpr Address address = {0, 0, 0, 1};
+  const std::array payload = {static_cast<std::uint8_t>(action)};
+  const auto frame = encode(Command::data, address, payload);
+  if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "memory frame"}); }
+  return query(*frame, listener);
+}
+
 std::expected<Message, MidiError> MidiSession::write_bulk_state(const Message &target,
                                                                 const MessageListener &listener) {
   const auto validated = validate_bulk_write(target);
