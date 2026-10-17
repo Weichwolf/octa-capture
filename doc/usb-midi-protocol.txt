@@ -41,7 +41,8 @@ and output cable mapping tables are identity maps 0..15. createDev at
 at 0xd8cc apply those identity maps. This establishes cable 0 for MIDI and
 cable 1 for CTRL in the reference implementation. The existing Linux
 quirk's cable mask 0x0001 exposes cable 0 only; cable 1 is missing.
-This cable assignment is statically established, not yet hardware-verified.
+Cable 1 is hardware-verified: the standalone module exposes ALSA subdevice 1
+as Control, and the bulk request returns a valid 1146-byte state payload.
 
 USB clock requests
 ------------------
@@ -59,8 +60,7 @@ Verified response at the device's current 48 kHz setting:
   response: 80 bb 00 00
   decoded: 48000 Hz, flags=00
 Implemented in src/Usb.cpp (octa-probe), without claiming interfaces or
-changing settings. Repeated communication is not yet reliable: subsequent
-queries timed out, with the cause unresolved.
+changing settings. Repeated reads at 48 kHz work after USB/IP reconnection.
 
 Fsc_GetStatChk2 at 0x1757e reads c0/03/0002/0000, length 1, and compares
 the result with 01. The hardware returned 01. Fsc_GetDIN at 0x17606 reads
@@ -102,6 +102,32 @@ CCplDev::SetBlk at 0x100009434 validates a DT1 response with 1146 payload
 bytes, checksum at offset 0x485, and F7 at offset 0x486 (1159 total bytes).
 Its decoder includes four direct-mixer buses, eight preamp/compressor
 channels, reverb, and output routing. Complete field mapping is pending.
+
+Preamp/compressor bulk layout
+----------------------------
+Offsets are relative to the payload, excluding the 11-byte SysEx header.
+Boolean channel flags use four low bits per byte: channel ch uses
+payload[offset + ch/4], bit ch%4. Numeric columns hold eight channel bytes.
+
+  Offset  Field
+  15      phantom flags
+  17      low-cut flags
+  19      phase/polarity flags
+  1B      Hi-Z flags
+  1D      sensitivity indices
+  25      stereo-link flags; bit pair, for pairs 0..3
+  26      compressor enable flags
+  28      gate indices
+  30      attack indices
+  38      release indices
+  40      threshold indices
+  48      ratio indices
+  50      gain indices
+
+Reference decoders: CCplDevPreAmp::SetBlk at 0x100009910,
+CCplDevPreCmp::SetBlk at 0x1000097ee, and CCplDevPre2::SetBlk at
+0x100009724. SetEach1 at 0x10000a8e0 establishes the same field mapping
+for individual notifications. Independent implementation: src/Preamp.cpp.
 
 Preamp/compressor individual updates
 ------------------------------------
@@ -178,8 +204,7 @@ decompilations and binary resources are ignored under doc/local/.
 tools/ghidra/ExportSelectedFunctions.java exports selected functions from
 a Ghidra project using an address<TAB>label input file.
 
-Next requirements: verify the CTRL USB cable mapping on hardware; capture a bulk read
-and reconcile it with the decoded GUI state; map all parameter bounds,
+Next requirements: reconcile bulk fields with the original GUI state; map all parameter bounds,
 sample-rate/clock behavior, messages, and file formats; verify independent
 encoders/decoders against original frames and real device responses.
 
