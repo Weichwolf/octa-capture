@@ -1,4 +1,4 @@
-# Persistent GUI device bridge
+# GUI transport and device bridge
 
 `octa-bridge [hw:CTRL-port]` owns one C++ `MidiSession` on the exclusive CTRL
 port. Meter reception, bulk queries and verified scalar writes share that
@@ -49,9 +49,49 @@ document. Typed write success includes a fresh full bulk reply, not an optimisti
 local update. Notifications may precede a reply and never split its JSON document.
 Serial zero denotes invalid protocol/device events rather than a successful reply.
 
-This is a local stdin/stdout interface, not a network listener. HTTP authentication,
-Host/Origin checks, file operations, interactive Auto-Sens and GTK embedding are
-separate integration work; the bridge does not claim to implement them yet.
+This is a local stdin/stdout interface, not a network listener. The HTTP layer
+below owns authentication and file operations. Interactive Auto-Sens and GTK
+embedding remain separate integration work.
+
+## Local HTTP panel
+
+```bash
+python3 tools/serve-gui.py --bin-dir build/release --open
+# Optional: --port 0 --data-dir /private/recovery/directory --midi-port hw:...
+```
+
+`gui/server.py` binds only to IPv4 loopback. A random per-process bearer token is
+passed in the launch URL fragment, removed from the visible address and retained
+in that tab's session storage. Do not share the private link or server log.
+Exact Host/Origin checks, no CORS, a local-only CSP and fixed asset paths restrict
+browser access. Requests have bounded headers, bodies, connection lifetimes and
+concurrency; duplicate JSON fields, non-finite numbers and unknown controls fail
+before device writes. A regular browser keeps its normal sandbox enabled.
+
+| Endpoint | Operation |
+| --- | --- |
+| `GET /api/state` | Full state, clock status, connection/busy/capability flags |
+| `GET /api/meters` | Latest actual input frame, including staleness |
+| `POST /api/control` | Validated scalar control and fresh device readback |
+| `POST /api/action` | Validated initialization, routing, memory or rate action |
+| `GET /api/preset` | Current Ver100 `.octa` download |
+| `POST /api/preset` | Exact-size validated upload, snapshot, apply and readback |
+| `POST /api/disconnect` | Release the panel's CTRL session |
+
+API requests require the bearer token; mutations also require the exact local
+Origin. Actions are serialized. Concurrent short polls do not falsely mark the
+panel busy; bulk operations expose a transaction flag and retain the last state.
+No client-supplied path or shell command is accepted. Export/import temporarily
+release the bridge so the existing recovery-aware CLI owns CTRL exclusively.
+
+Recovery files are created privately under `$XDG_STATE_HOME/octa-capture`
+(default `~/.local/state/octa-capture`), or `--data-dir`. Keep them after an
+interrupted operation. The bridge releases CTRL after an explicit disconnect,
+server shutdown or 15 seconds without panel activity. Audio continues separately.
+
+The independently authored web assets use the original parameter values and
+reference-derived behavior, not extracted manufacturer images. Unimplemented
+capabilities stay disabled; absent output meter data is not synthesized.
 
 ## Checks
 
@@ -70,3 +110,22 @@ The hardware checker excludes phantom power/Hi-Z mutations, saves a new private
 raw recovery snapshot before changing audio parameters and verifies complete
 restoration plus release of exclusive CTRL access. As with the other checkers,
 forced termination or device disconnection can prevent recovery.
+
+The CTest suites also check HTTP security/concurrent-state behavior, JavaScript
+lint and nonlinear parameter math. To check the running server in an isolated
+Chromium profile (Debian packages `chromium` and `node-undici`):
+
+```bash
+umask 077
+python3 tools/serve-gui.py --bin-dir build/strict > build/gui/server.log 2>&1
+# In another terminal with ALSA access:
+tools/check-gui.sh
+tools/check-gui.sh --write
+```
+
+`--write` uses actual browser keyboard/pointer/file events, verifies hardware
+readback and restores a fresh raw snapshot, then checks release of CTRL. The
+checker saves private screenshots and recovery files under `build/gui/`.
+`tools/verify-gui-parameters.py MAC-GUI WINDOWS-GUI [--cpu]` compares all fader
+and compressor tables; `--cpu` additionally executes original macOS inverse-fader
+and compressor-graph functions with Unicorn. Manufacturer inputs remain local.

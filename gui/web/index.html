@@ -1,0 +1,81 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-2.0-only -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OCTA-CAPTURE Control Panel</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="panel" id="panel">
+    <nav class="menubar" aria-label="Control panel menus">
+      <button data-menu="driver">Driver</button>
+      <button data-menu="device">Device</button>
+      <span id="device-status" title="Current device and clock status">OCTA-CAPTURE</span>
+    </nav>
+    <header class="panel-header">
+      <button id="header-action" class="header-action"><span class="lamp"></span><span>AUTO-SENS</span></button>
+      <span class="brand">OCTA-CAPTURE</span>
+      <button id="view-switch">DIRECT MIXER <span aria-hidden="true">▾</span></button>
+    </header>
+    <main>
+      <section id="preamp-view" class="preamp-view" aria-label="Eight channel preamp and compressor"></section>
+      <section id="mixer-view" class="mixer-view" aria-label="Direct mixer" hidden>
+        <div class="mixer-tabs" id="mixer-tabs" role="tablist" aria-label="Mixer bus"></div>
+        <div class="mixer-groups" id="mixer-groups"></div>
+      </section>
+      <div id="connection-message" class="connection-message" role="status">Connecting to OCTA-CAPTURE…</div>
+      <div id="busy-message" class="busy-message" role="status" hidden>Applying settings…</div>
+    </main>
+  </div>
+  <div id="menus"></div>
+  <div id="toast" role="alert" hidden></div>
+  <input id="load-file" type="file" accept=".octa" hidden>
+  <dialog id="patchbay" aria-labelledby="patchbay-title">
+    <h2 id="patchbay-title">PATCH BAY</h2>
+    <div class="dialog-content" id="patchbay-content"></div>
+    <footer><button data-action="routing-default">Initial Setting</button><button data-action="multi-monitor">Multi-Monitor</button><button data-close>Close</button></footer>
+  </dialog>
+  <dialog id="reverb" aria-labelledby="reverb-title">
+    <h2 id="reverb-title">REVERB</h2>
+    <div class="dialog-content reverb-fields">
+      <label>TYPE: <select id="reverb-type"></select></label>
+      <label>PRE DELAY [ms]: <select id="reverb-delay"></select></label>
+      <label>TIME [sec]: <input id="reverb-time" type="number" min="0.1" max="5" step="0.1"></label>
+    </div>
+    <footer><button data-action="reverb-default">Initial Setting</button><button data-close>Close</button></footer>
+  </dialog>
+  <dialog id="settings" aria-labelledby="settings-title">
+    <h2 id="settings-title">OCTA-CAPTURE Driver Settings</h2>
+    <div class="dialog-content settings-fields">
+      <fieldset><label>SAMPLE RATE: <select id="sample-rate"><option value="44100">44100 Hz</option><option value="48000">48000 Hz</option><option value="96000">96000 Hz</option><option value="192000">192000 Hz</option></select></label><label>CLOCK: <output id="settings-clock">--</output></label></fieldset>
+      <fieldset><legend>Audio Buffer Size</legend><p>Buffer size and latency are controlled by your Linux audio application.</p></fieldset>
+      <fieldset><legend>ASIO Setting</legend><label><input type="checkbox" disabled> Use ASIO Direct Monitor</label><label><input type="checkbox" disabled> Low Latency mode</label><p>ASIO settings apply to Windows applications.</p><label title="Two-unit operation is not implemented yet."><input type="checkbox" disabled> VS EXPAND</label></fieldset>
+    </div>
+    <footer><button data-close>Cancel</button><button id="apply-rate">Apply</button><button data-close>Close</button></footer>
+  </dialog>
+  <dialog id="auto-sens" aria-labelledby="auto-sens-title">
+    <h2 id="auto-sens-title">AUTO-SENS</h2>
+    <div class="dialog-content"><p>Channel</p><div id="auto-channels" class="auto-channels"></div><p id="auto-status">Select the input channels.</p></div>
+    <footer><button id="auto-all">Select All</button><button id="auto-none">Clear All</button><button id="auto-start" disabled title="Auto-Sens is currently unavailable.">Start</button><button data-close>Cancel</button></footer>
+  </dialog>
+  <dialog id="diagram" aria-labelledby="diagram-title">
+    <h2 id="diagram-title">OCTA-CAPTURE Signal Flow</h2>
+    <div class="dialog-content signal-flow"><div>INPUT 1–8 → PREAMP → COMPRESSOR<br>COAXIAL IN → INPUT 9–10</div><div>↓<br>INPUT MIXER A–D + WAVE OUT MIXER A–D<br>↓<br>MASTER A–D → PATCH BAY → OUTPUT 1–10</div><div>INPUT MIXER A → REVERB → MASTER A</div><p>At 192 kHz: inputs/outputs 1–4 and Mixer A; reverb and patchbay unavailable.</p></div>
+    <footer><button data-close>Close</button></footer>
+  </dialog>
+  <dialog id="about" aria-labelledby="about-title">
+    <h2 id="about-title">About Driver &amp; Control Panel</h2>
+    <div class="dialog-content"><strong>OCTA-CAPTURE Linux Control Panel</strong><p>Independent Linux implementation · GPL-2.0-only</p><p>Roland OCTA-CAPTURE / UA-1010</p></div>
+    <footer><button data-close>OK</button></footer>
+  </dialog>
+  <dialog id="confirm" aria-labelledby="confirm-title">
+    <h2 id="confirm-title">OCTA-CAPTURE</h2>
+    <div class="dialog-content"><p id="confirm-text"></p></div>
+    <footer><button id="confirm-no">Cancel</button><button id="confirm-yes">OK</button></footer>
+  </dialog>
+</body>
+</html>

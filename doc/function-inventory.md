@@ -35,7 +35,7 @@ it does not imply calibrated audio response or native Debian validation.
 | MIDI DIN, CTRL isolation and endpoint routing | macOS MIDI plugin; Windows package/INF | ALSA MIDI endpoints and exclusive CTRL sessions. Physical DIN loopback, scheduling and transport fault coverage remain. |
 | Preamp sensitivity, phase, low-cut | macOS setters/tables; Windows controls | Scalar writes/readback WSL tested on all eight channels. Typed sensitivity input and physical gain need comparison. |
 | Phantom power and Hi-Z | macOS setters; Windows controls; manual | Encoders and selector bounds implemented; power switching not hardware-tested. |
-| Compressor enable and six parameters | macOS transmitters/table lookups; Windows eight-channel view | Raw-index writes/readback tested; nonlinear display API, graph and physical dynamics response remain. |
+| Compressor enable and six parameters | macOS transmitters/table lookups; Windows eight-channel view | Raw-index writes/readback tested. Nonlinear tables, inverse faders and graph math match reference binaries/original CPU execution; GUI controls tested in Chromium. Physical dynamics response remains. |
 | Compressor stereo link | macOS `TxPreLink`, manual | All four link cycles and 160 scalar coupling cases per build WSL tested; ADC controls stay independent. |
 | Compressor presets and knee | Windows menu 132 has five preset labels; macOS has preset/knee data | Reachable handlers and applicability unresolved. Do not infer support from these shared resources alone. |
 | Auto-Sens | macOS start/stop and dialog selection code; Windows dialog 289/handlers | Selection, notification flow, finish/cancel, bounds and signal recovery implemented/tested. Calibrated sensitivity and every dialog state remain. |
@@ -44,17 +44,17 @@ it does not imply calibrated audio response or native Debian validation.
 | Reverb, sends and return | Both dialog resources; macOS DSP code | Scalar controls/readback implemented/tested. Original dialog defaults, formatting and effect response still need comparison. |
 | Patchbay, Multi-Monitor, Direct Out | Both menus/dialogs; macOS sequences | Original routing/206-command Direct Out sequences implemented and WSL tested with full recovery. |
 | Initialize All/MIC PRE/DIRECT MIX/REVERB/PATCHBAY | Both menus; macOS dispatch/`TxInit` | All sequences implemented; three DSP groups WSL tested. All/preamp power changes and 192 kHz behavior remain hardware-unverified. |
-| Runtime snapshots and `.octa` files | Both original preset writers/loaders | Ver100 reference goldens, import/export and raw recovery implemented. File-dialog/unit-selection behavior remains. |
+| Runtime snapshots and `.octa` files | Both original preset writers/loaders | Ver100 reference goldens, import/export and raw recovery implemented. Browser download/upload and confirmed hardware application tested with complete recovery. Native file dialogs and unit-selection behavior remain. |
 | Store/load internal device memory | macOS `TxSaveLoad`; Windows dispatch/confirmation strings | Commands and recovery implemented/fault-tested; persistent device memory not hardware-tested. |
 | Input/driver meters, clip and peak hold | Both panel classes; macOS meter managers | Eight input meter decoding/stream lifetime tested. Other meter sources, hold/decay/reset and graph behavior incomplete. |
 | Device selection and identification blink | macOS device manager/`TxBlink`; Windows unit handling | Explicit ALSA port selection exists. Enumeration, reconnect state, identify command and multi-unit GUI remain. |
-| Context menus and bulk actions | Both menu resources/builders | Scalar primitives exist. Original bulk ordering, context scope, volume/pan shortcuts and keyboard/mouse behavior require complete tracing. |
+| Context menus and bulk actions | Both menu resources/builders | Panel context actions, reference volume/pan mapping and keyboard/pointer controls implemented; selected controls browser/hardware tested. Complete bulk-ordering/scope and interaction parity still require tracing. |
 | Windows driver settings | Dialog 187 and `CDrvPropDlg` handlers | Rate/status partly covered. Buffer slider, performance indications, Apply/Cancel/Default and persistence need Linux equivalents and validation. |
 | ASIO direct monitoring and low latency | Windows settings handlers/readme; `RDAS1110.DLL` | Driver-side behavior and interactions with mixer state not fully traced. Linux integration remains. |
 | Windows sound/ASIO rate matching | Windows checkbox 1147 and handler | Host policy, not established as a device command. Trace and define the corresponding Linux behavior. |
 | VS EXPAND/two-unit synchronization | Windows checkbox 1173/handler and readme | Detection, validation, stream synchronization and routing incomplete; second-unit hardware validation unavailable here. |
 | Disconnect, suspend/resume and errors | Both native driver lifecycles | Some session/rollback fault tests exist. Complete hotplug, USB/URB faults, power management and kernel sanitizer tests remain. |
-| Signal-flow/About/warnings/preferences | Both menus, dialogs and local resources | Original resources partly recovered; complete GUI behavior and independently authored assets remain. |
+| Signal-flow/About/warnings/preferences | Both menus, dialogs and local resources | Local HTTP panel and independently authored assets implemented with secondary dialogs. Complete visual/behavior parity, preferences and GTK embedding remain. |
 
 ## Specific unresolved distinctions
 

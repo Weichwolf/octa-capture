@@ -1,0 +1,15 @@
+{
+  "root": true,
+  "env": {"browser": true, "es6": true},
+  "parserOptions": {"ecmaVersion": 2022, "sourceType": "module"},
+  "extends": "eslint:recommended",
+  "rules": {
+    "eqeqeq": "error",
+    "curly": ["error", "multi-line"],
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-var": "error",
+    "prefer-const": "error"
+  }
+}

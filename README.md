@@ -10,9 +10,19 @@ Protocol analysis and implementation are in progress. Available: a SysEx codec, 
 
 The [standalone kernel module](kernel/README.md) also exposes a read-only ALSA device-status control. Debian users do not need to patch or rebuild their kernel.
 
-## Planned interface
+## Local control panel
 
-Reproduce the Windows GUI as closely as possible using HTML/CSS/JavaScript. Test it through a local HTTP server first, then embed it in GTK4/WebKitGTK. A separate backend controls the device; audio streaming remains in the driver, independent of the GUI.
+The HTML/CSS/JavaScript panel runs against the real C++ device backend. It includes eight preamp/compressor strips, four direct mixers, reverb, patchbay, settings import/export and driver status. Nonlinear compressor displays and all 1025 fader coefficients match both reference binaries. Controls use fresh hardware readback; input meters show actual device data.
+
+```bash
+make release
+python3 tools/serve-gui.py --open
+# Development build: add --bin-dir build/strict
+```
+
+Open the private launch link printed by the server. It listens only on `127.0.0.1`; its token, Host/Origin checks and local-only content policy protect device operations. Use an account with ALSA device access. The backend and audio streaming remain independent; closing the panel releases its exclusive CTRL connection.
+
+This is an initial working panel, not complete GUI parity. Interactive Auto-Sens, additional meter sources, multi-unit behavior and GTK4/WebKitGTK embedding remain in progress. Physical audio response and native Debian validation are also outstanding. See the [function inventory](doc/function-inventory.md) and [backend documentation](doc/gui-backend.md).
 
 ## Development
 
@@ -26,7 +36,7 @@ source /etc/octa-capture-dev.env
 
 The script currently exists only in `/tmp` and is not part of the repository. The WSL kernel build takes time and several GB of disk space. Modules must match the kernel version of each test system.
 
-The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, `alsa-utils`, `shellcheck`, and `python3`.
+The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, `alsa-utils`, `shellcheck`, `python3`, `nodejs`, `node-undici`, and `eslint`. Browser integration checks additionally use `chromium`.
 
 ```bash
 make test       # strict warnings, clang-tidy, ASan/UBSan, and protocol tests
@@ -76,7 +86,7 @@ Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. 
 
 Device controls use the exclusive CTRL MIDI port. `MidiSession` shares it between meters, bulk queries, typed writes and Auto-Sens; it is confined to one thread and requires reopening after an unresolved query. `octa-meters` emits raw levels and reference dB values as JSON lines. `octa-session-check` checks shared meter/query traffic without changing the final bulk state.
 
-The [persistent GUI bridge](doc/gui-backend.md) shares one C++ device session between meter events and serialized control requests. `tools/check-bridge.py --write` checks its live control/readback and recovery path. HTTP and GUI integration are in progress.
+The [persistent GUI bridge](doc/gui-backend.md) shares one C++ device session between meter events and serialized control requests. `tools/check-bridge.py --write` checks its live control/readback and recovery path. The local HTTP panel uses this bridge for live controls and meters. `tools/check-gui.sh` checks the running panel in disposable headless Chromium; `--write` additionally exercises hardware changes, settings download/upload and complete raw recovery.
 
 `octa-dsp` controls mixer buses A–D, masters, reverb and individual output routes. Channels and output pairs start at 1; values are decimal wire indices/coefficients. `--dry-run` opens no device. Writes validate control bounds and verify readback; see the [protocol reference](doc/usb-midi-protocol.txt).
 
