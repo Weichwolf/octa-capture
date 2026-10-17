@@ -28,6 +28,8 @@ add_executable(octa-probe src/Probe.cpp)
 target_link_libraries(octa-probe PRIVATE octa_usb)
 
 pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
+add_executable(octa-audio-check src/AudioCheck.cpp)
+target_link_libraries(octa-audio-check PRIVATE octa_quality PkgConfig::ALSA)
 add_library(octa_midi STATIC src/Midi.cpp)
 target_link_libraries(octa_midi PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
 add_executable(octa-state src/State.cpp)
@@ -67,6 +69,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
+    "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
     "${CMAKE_SOURCE_DIR}/test/Protocol.cpp"
@@ -87,6 +90,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
+    "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
     "${CMAKE_SOURCE_DIR}/test/Protocol.cpp"
@@ -103,6 +107,7 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
+    "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
     "${CMAKE_SOURCE_DIR}/test/Protocol.cpp"

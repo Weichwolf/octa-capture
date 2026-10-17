@@ -37,6 +37,8 @@ make release    # optimized build and tests
 ./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
 ./build/strict/octa-control 1 attack 8  # set channel 1 attack index, verify fresh bulk reply
 python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
+./build/strict/octa-audio-check 48000 prepare-capture  # configure/prepare without streaming
+./build/strict/octa-audio-check 48000 capture          # transfer one second and check timing
 ```
 
 Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. The separate `thread` preset is available for concurrent code. Userspace flags are not applied to kernel builds.
@@ -44,6 +46,8 @@ Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. 
 The `fuzz` preset instruments the protocol library with libFuzzer and ASan/UBSan. Synthetic seeds cover framing, stream recovery, size limits, bulk state, and parameter notifications; invariants check round trips and rejection without state changes. The corpus and crash artifacts remain in `build/fuzz/`. No fuzz input is sent to hardware. These campaigns do not establish kernel robustness; KASAN/UBSAN, fault injection, and malformed USB descriptor/URB tests on a test kernel remain required.
 
 The Python 3 hardware checker tests ten parameters on all eight unlinked channels, changes each by one index, independently checks the complete preamp bank, and restores each value even if readback fails. Phantom power, Hi-Z, and stereo links are excluded from automated changes. A recovery snapshot is saved in `build/hardware/preamp-before.json`; interruption or device disconnection can prevent restoration, so check the reported result. All CLI values are wire indices; see the [protocol bounds](doc/usb-midi-protocol.txt).
+
+`octa-audio-check` accepts 44100/48000/96000/192000 Hz, `capture`, `playback`, `prepare-capture`, or `prepare-playback`, and an optional `hw:` PCM device. It uses packed 24-bit samples and descriptor channel counts. Streaming checks discard input or play zeros, reject ALSA errors, and require one second of frames to complete in 800..2000 ms, with a four-second transfer deadline. Preparation success is reported separately. This smoke test checks gross timing and transfer completion; channel identity, signal integrity, latency, and long-duration stability need separate tests. The current WSL audio checks fail; native Debian hardware checks are still required.
 
 ## Documentation
 

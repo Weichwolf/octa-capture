@@ -26,8 +26,10 @@ packet byte 0 (00/01). Other status fields still need mapping. Interface 4's
 meaning is not yet established.
 Audio alternate settings 1,2,3,4 advertise 44100,48000,96000,192000 Hz.
 Descriptors advertise 10 output/12 input channels at the first three rates
-and four channels in each direction at 192000 Hz. These descriptor channel
-counts include any transport channels; not all are proven user audio channels.
+and four channels in each direction at 192000 Hz. This matches the record/
+playback specification in the English v1.6 owner's manual, p. 95:
+https://static.roland.com/assets/media/pdf/OCTA-CAPTURE_v1.6_OM.pdf
+Signal/channel mapping still needs hardware verification.
 The existing snd-usb-audio quirk only exposes 44100 Hz, S32_LE, 10 output
 and 12 input channels. MIDI currently exposes one ALSA raw-MIDI subdevice.
 
@@ -226,6 +228,14 @@ Initial tests on the existing unmodified WSL driver:
 Both terminated with Input/output error. The capture was discarded; playback
 contained only zero samples. USB/IP completion messages were present in the
 kernel log. No native-Debian streaming result is available yet.
+
+With the standalone module, octa-audio-check distinguishes preparation from
+streaming and verifies wall time. At 48 kHz under WSL, eight-packet input
+URBs complete about every 8 ms; packet lengths are normally 216 bytes
+(six 12-channel frames). The aggregate input rate is approximately 6000
+frames/s rather than 48000, and both capture and playback fail the timed
+check. The USB/IP scheduling path needs further investigation; successful
+URB status alone must not be treated as valid audio.
 
 Evidence and remaining verification
 ----------------------------------
