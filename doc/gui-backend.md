@@ -118,6 +118,11 @@ compressor enable gating described in [PCM meters](pcm-meters.md), and blanks
 stale or rate-mismatched data. Older modules without these controls retain MIDI
 operation; their PCM meters remain unavailable.
 
+The meter response also contains up to 64 validated notifications with monotonic
+IDs and individual ages. Pages consume each notification once; latest-value
+replacement cannot discard a short peak. The local display advances reference
+fall, peak-hold and clip-hold at 30 ms, independently of state queries.
+
 ## Checks
 
 The strict/release CTest suites include parser bounds, invalid JSON-state output,

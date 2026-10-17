@@ -19,8 +19,11 @@ leave the idle streams running indefinitely. Reads alone do not enable meters.
 The bridge disables its subscription on EOF/signals/destruction. One control
 panel owns the subscription; the switch is device-wide.
 
-All integers below are little-endian. Reads are non-destructive; each direction
-publishes a roughly 20 ms peak window with a sequence and last-data age.
+All integers below are little-endian. A read atomically takes and clears both
+directions' accumulated maxima, matching the original driver. Peaks survive
+arbitrary gaps between reads; a fixed publication window must not discard them.
+The bridge retains a bounded notification history so a short peak also survives
+replacement of its latest HTTP snapshot. Use one meter reader per device.
 
 | Offset | Type | Meaning |
 | --- | --- | --- |
@@ -32,7 +35,7 @@ publishes a roughly 20 ms peak window with a sequence and last-data age.
 | 16, 20 | u32 each | Capture/playback rate in Hz |
 | 24, 28 | u32 each | Capture/playback transport channels |
 | 32, 36 | u32 each | Capture/playback last-data age in ms; `UINT32_MAX` if unseen |
-| 40, 44 | u32 each | Capture/playback publication sequence, wrapping at u32 |
+| 40, 44 | u32 each | Capture/playback progress sequence (about 20 ms), wrapping at u32 |
 | 48 | 12 × u32 | Capture peaks, positive S24 shifted left eight bits |
 | 96 | 10 × u32 | Playback peaks, same representation |
 
@@ -49,12 +52,24 @@ is visible when that channel's compressor is enabled.
 ./build/strict/octa-pcm-meters --read  # passive snapshot
 ./build/strict/octa-pcm-meters 2       # enable, observe, disable after two seconds
 python3 tools/check-pcm-meters.py --rates
+python3 tools/check-pcm-meters.py --rates --peaks
 ```
 
 The hardware checker requires exclusive control-panel access, records no audio
-and plays only zeros. It checks both directions at all rates, different period
+and plays zeros by default. `--peaks` additionally uses isolated channel tags of
+one to ten S24 LSBs (at most -118 dBFS). It verifies exact playback peaks after
+over 200 ms of subsequent zeros, read-clear behavior and negative rejection.
+It checks both directions at all rates, different period
 sizes, idle/normal PCM handover, close while capture continues, client death,
 and restoration of the original rate and complete raw state. These checks pass
 on the connected WSL device with strict and release builds. Active idle-stream
 module unload/reload also passes. Native Debian, physical signal calibration,
 system suspend/unplug and kernel sanitizer/fault-injection coverage remain.
+
+The panel uses the original 290 nonlinear meter thresholds, a 30 ms tick,
+0.72 dB fall per tick, 50-tick peak hold and 133-tick clip hold. Preamp input
+warnings start at -2 dB; capture/playback clipping starts at 0 dB. Stale,
+bypassed and rate-disabled views clear their held state. These numerical tables
+match both reference panels; `tools/verify-gui-meters.py MAC-GUI WINDOWS-GUI`
+also executes the original Windows scale/level/hold/clip routines on synthetic
+inputs (Python Unicorn and Node required). This does not measure physical audio.

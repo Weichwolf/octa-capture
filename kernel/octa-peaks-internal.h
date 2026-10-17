@@ -17,7 +17,6 @@ struct snd_usb_endpoint;
 
 struct octa_pcm_direction {
 	struct octa_pcm_peak_values accumulated;
-	struct octa_pcm_peak_values published;
 	unsigned long window_start;
 	unsigned long last_data;
 	unsigned int rate;

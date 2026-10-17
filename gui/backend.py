@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 import json
 import math
 from pathlib import Path
@@ -116,6 +117,8 @@ class Bridge:
         self._meter_time = None
         self._pcm = None
         self._pcm_time = None
+        self._meter_history = deque(maxlen=64)
+        self._meter_serial = 0
 
     def _read(self, process):
         try:
@@ -157,6 +160,14 @@ class Bridge:
         with self._data_lock:
             self._meter = {'input_levels': levels, 'input_db': decibels}
             self._meter_time = time.monotonic()
+            self._record_meter('input', levels, 0, self._meter_time)
+
+    def _record_meter(self, source, levels, rate, received):
+        # Caller holds _data_lock. IDs survive backend restarts so an open page
+        # can discard repeated history without losing a short peak notification.
+        self._meter_serial += 1
+        self._meter_history.append({'id': self._meter_serial, 'source': source,
+                                    'levels': levels, 'rate': rate, 'received': received})
 
     def _start(self):
         if self._process is not None and self._process.poll() is None and self._failure is None:
@@ -204,10 +215,17 @@ class Bridge:
         with self._data_lock:
             self._pcm = pcm
             self._pcm_time = time.monotonic()
+            if pcm['enabled']:
+                for source in ('capture', 'playback'):
+                    direction = pcm[source]
+                    if direction['fresh']:
+                        self._record_meter(source, [peak >> 17 for peak in direction['peaks']],
+                                           direction['rate'], self._pcm_time)
 
     def _stop(self):
         process = self._process
         if process is None:
+            self._clear_meters()
             return
         try:
             if process.stdin:
@@ -227,11 +245,15 @@ class Bridge:
                 process.stdout.close()
             self._process = None
             self._reader = None
-            with self._data_lock:
-                self._meter = None
-                self._meter_time = None
-                self._pcm = None
-                self._pcm_time = None
+            self._clear_meters()
+
+    def _clear_meters(self):
+        with self._data_lock:
+            self._meter = None
+            self._meter_time = None
+            self._pcm = None
+            self._pcm_time = None
+            self._meter_history.clear()
 
     def _exchange(self, operation, arguments):
         self._serial = self._serial % 0xffffffff + 1
@@ -265,12 +287,17 @@ class Bridge:
         with self._data_lock:
             if self._meter is None and self._pcm is None:
                 return None
-            result = ({**self._meter, 'age_ms': int((time.monotonic() - self._meter_time) * 1000)}
+            now = time.monotonic()
+            result = ({**self._meter, 'age_ms': int((now - self._meter_time) * 1000)}
                       if self._meter else {'input_levels': [0] * 8, 'input_db': [-96] * 8,
                                           'age_ms': 0xffffffff})
             if self._pcm is not None:
                 result['pcm'] = {**self._pcm,
-                                 'received_age_ms': int((time.monotonic() - self._pcm_time) * 1000)}
+                                 'received_age_ms': int((now - self._pcm_time) * 1000)}
+            result['history'] = [{'id': frame['id'], 'source': frame['source'],
+                                  'levels': frame['levels'], 'rate': frame['rate'],
+                                  'age_ms': int((now - frame['received']) * 1000)}
+                                 for frame in self._meter_history]
             return result
 
     def close(self):

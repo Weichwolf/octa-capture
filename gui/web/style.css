@@ -63,10 +63,15 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .meter-fill { position: absolute; inset: auto 0 0; height: var(--level,0%); background: repeating-linear-gradient(to top,#adba45 0 5px,#485526 5px 6px); }
 .meter-clip { position: absolute; top: -6px; left: 0; width: 6px; height: 4px; background: #7a7a72; }
 .meter.clipped .meter-clip { background: #f4442d; box-shadow: 0 0 3px #ff3b16; }
+.meter-peak { display: none; position: absolute; left: 0; right: 0; bottom: var(--peak,0px); height: 2px; background: #e4d77f; }
+.has-peak .meter-peak { display: block; }
+.level-lane .meter-clip { width: 3px; left: 0; top: -5px; height: 3px; }
+.level-lane.clipped .meter-clip { background: #f4442d; }
 .meter.unavailable { opacity: .35; }
-.meter-scale { position: absolute; top: 13px; bottom: 5px; display: flex; flex-direction: column; justify-content: space-between; font-size: 8px; }
+.meter-scale { position: absolute; top: 0; bottom: 0; width: 18px; font-size: 8px; }
+.meter-scale > span { position: absolute; left: 0; right: 0; }
 .meter.in .meter-scale { left: 9px; }
-.meter.out .meter-scale { right: 9px; }
+.meter.out .meter-scale { right: 9px; text-align: right; }
 .meter-name { position: absolute; bottom: -12px; left: -1px; font-size: 8px; }
 .parameters { display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: 43px 43px; gap: 1px 0; padding-top: 2px; }
 .strip-footer { height: 40px; }

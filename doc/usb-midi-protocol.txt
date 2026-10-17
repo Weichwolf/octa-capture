@@ -606,12 +606,20 @@ peaks. tools/verify-pcm-peaks.py executes both original Windows routines and
 the macOS routine on synthetic vectors and compares the compiled scanner;
 tools/fuzz-pcm-peaks.sh fuzzes its bounds with sanitizers, without USB I/O.
 The standalone module now observes actual input/output URBs and supplies these
-peaks through validated ALSA CARD controls. A leased idle engine captures and
+peaks through validated ALSA CARD controls, accumulating until read-clear so
+short peaks cannot fall between readout windows. A leased idle engine captures and
 plays zeros at the current rate, yielding before normal PCM constraints are
 computed. The GUI uses capture peaks for compressor OUT and mixer INPUT, and
 playback peaks for WAVE OUT; stale/rate-mismatched data is not displayed.
 See doc/pcm-meters.md for the ABI and quiet hardware handover checks. Calculation
 and transport checks do not establish calibrated physical signal response.
+
+Both panels use identical nonlinear display thresholds (257 main/33 headroom),
+with -48/-24/-12/-6/-2 dB at main indices 0/64/128/192/256. The original timer
+is 30 ms; level and held-peak fall are 0.72 dB/tick. Peak hold is 50 ticks and
+the separate clip lamp holds 133 ticks. Input warning is >=-2 dB; USB driver
+clip is >=0 dB. The Linux display math matches original Windows CPU execution;
+bounded bridge history preserves notifications across HTTP redraw intervals.
 
 Input level meters
 ------------------

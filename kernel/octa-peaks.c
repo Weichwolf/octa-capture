@@ -55,8 +55,6 @@ static void octa_pcm_accumulate(struct octa_pcm_meter *meter,
 	if (!direction->seen ||
 	    time_after_eq(jiffies, direction->window_start +
 			  msecs_to_jiffies(OCTA_PCM_METER_PERIOD_MS))) {
-		direction->published = direction->accumulated;
-		memset(&direction->accumulated, 0, sizeof(direction->accumulated));
 		direction->window_start = jiffies;
 		direction->sequence = direction->sequence == U32_MAX ?
 			0 : direction->sequence + 1;
@@ -163,7 +161,7 @@ static void octa_pcm_write_direction(u8 *data,
 	offset = stream ? OCTA_PCM_METER_CAPTURE_OFFSET :
 		OCTA_PCM_METER_PLAYBACK_OFFSET;
 	for (channel = 0; channel < maximum; channel++)
-		put_unaligned_le32(direction->published.values[channel],
+		put_unaligned_le32(direction->accumulated.values[channel],
 				   data + offset + channel * sizeof(u32));
 }
 
@@ -195,6 +193,13 @@ static int octa_pcm_peaks_get(struct snd_kcontrol *control,
 		state |= OCTA_PCM_METER_CAPTURE_FRESH;
 	octa_pcm_write_direction(data, &meter->direction[0], age[0], 0);
 	octa_pcm_write_direction(data, &meter->direction[1], age[1], 1);
+	/* Match the original driver: retain every peak until its consumer reads.
+	 * A fixed publication window could lose short peaks between two reads.
+	 */
+	memset(&meter->direction[0].accumulated, 0,
+	       sizeof(meter->direction[0].accumulated));
+	memset(&meter->direction[1].accumulated, 0,
+	       sizeof(meter->direction[1].accumulated));
 	spin_unlock_irqrestore(&meter->lock, flags);
 	if (READ_ONCE(meter->started[0]) && READ_ONCE(meter->started[1]))
 		state |= OCTA_PCM_METER_IDLE_STREAM;

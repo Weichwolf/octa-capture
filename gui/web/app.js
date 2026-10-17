@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import {PRE_DELAY, PREAMP_MAX, VOLUME, GRAPH_MIN_DB, volumeIndex,
   volumeText, parameterText, panToWire, wireToPan, panText, compressorOutput, sensitivityIndex} from './parameters.js';
+import {MeterBallistics, METER_TICK_MS, meterDb, meterY} from './meters.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -23,6 +24,9 @@ let revision = 0, writing = false, toastTimer;
 let stopped = false, pendingRate = null;
 let localBusy = false;
 const knobs = [], switches = [], plots = [], faders = [];
+const meterViews = [];
+let meterSnapshot = null, meterReceived = 0, meterLastID = 0, meterLastRate = null;
+let meterTick = performance.now();
 const pending = new Map(), queued = new Map();
 const REVERB_TYPES = ['OFF', 'ECHO', 'ROOM', 'SMALL HALL', 'LARGE HALL'];
 const ROUTES = ['Direct Mix A', 'Direct Mix B', 'Direct Mix C', 'Direct Mix D',
@@ -264,11 +268,14 @@ function toggle(label, control, read, className = '') {
 function meter(kind, channel) {
   const node = el('div', `meter ${kind}`);
   node.dataset.channel = channel;
-  node.append(el('span', 'meter-clip'), el('span', 'meter-fill'), el('span', 'meter-name', kind.toUpperCase()));
+  node.append(el('span', 'meter-clip'), el('span', 'meter-fill'), el('span', 'meter-peak'),
+    el('span', 'meter-name', kind.toUpperCase()));
   const scale = el('span', 'meter-scale');
   for (const text of ['-2', '-6', '-12', '-24', '-48']) scale.append(el('span', '', text));
   node.append(scale);
   if (kind === 'out') node.title = 'USB capture peak after the compressor.';
+  meterViews.push({node, source: kind === 'in' ? 'input' : 'capture', channel,
+    model: new MeterBallistics(kind === 'in' ? -2 : 0)});
   return node;
 }
 
@@ -339,7 +346,7 @@ function mixerValue(state, source, channel, parameter) {
   return Number(group.channels[channel][parameter]);
 }
 
-function fader(control, read, label, channel = null) {
+function fader(control, read, label, channel = null, source = null) {
   const wrapper = el('div', 'fader');
   const input = el('input');
   input.type = 'range'; input.min = '0'; input.max = '1024'; input.step = '1';
@@ -351,7 +358,9 @@ function fader(control, read, label, channel = null) {
   if (channel !== null) {
     const lane = el('span', 'level-lane');
     lane.dataset.channel = channel;
-    lane.append(el('span', 'level-fill'));
+    lane.append(el('span', 'level-fill'), el('span', 'meter-peak'), el('span', 'meter-clip'));
+    meterViews.push({node: lane, source: source === 'input' ? 'capture' : 'playback', channel,
+      model: new MeterBallistics()});
     wrapper.append(lane);
   }
   faders.push({input, control, read});
@@ -399,7 +408,7 @@ function makeMixers() {
       strip.append(pan.node, el('p', 'channel-label', String(channel + 1)),
         fader(value => mixerControl(source, channel, 'volume', value),
           state => mixerValue(state, source, channel, 'volume'), `${source} ${channel + 1} volume`,
-          channel));
+          channel, source));
       channels.append(strip);
     }
     group.append(channels);
@@ -514,24 +523,55 @@ function update(result) {
 }
 
 function updateMeters(meters) {
-  const midiFresh = meters && meters.age_ms < 1000;
-  const pcm = meters?.pcm;
+  meterSnapshot = meters;
+  meterReceived = performance.now();
   const rateIndex = parseInt(documentState?.state.payload_hex.slice(4, 6), 16);
   const rate = [44100, 48000, 96000, 192000][rateIndex];
-  for (const node of all('.meter, .level-lane')) {
-    const channel = Number(node.dataset.channel);
-    const isInput = node.classList.contains('in');
-    const isOutput = node.classList.contains('out');
-    const direction = node.closest('.mixer-strip')?.dataset.source === 'playback' ? pcm?.playback : pcm?.capture;
-    const compressor = documentState?.state.preamps[channel]?.compressor.enabled;
-    const available = !isOutput || Boolean(compressor);
-    const fresh = isInput ? midiFresh : Boolean(pcm?.enabled && pcm.received_age_ms < 500 &&
-      direction?.fresh && direction.rate === rate && channel < direction.channels);
-    const raw = fresh && !isInput ? Math.floor(direction.peaks[channel] / 131072) : 0;
-    const value = fresh && available ? (isInput ? meters.input_db[channel] :
-      (raw === 0 ? -96 : 20 * Math.log10(raw / 16383))) : -96;
-    node.style.setProperty('--level', `${Math.max(0, Math.min(100, (value + 48) / 48 * 100))}%`);
-    node.classList.toggle('clipped', fresh && value >= -0.1);
+  if (!meters || rate !== meterLastRate) {
+    for (const view of meterViews) view.model.reset();
+    meterLastRate = rate;
+  }
+  for (const frame of meters?.history || []) {
+    if (frame.id <= meterLastID) continue;
+    meterLastID = frame.id;
+    if (frame.age_ms >= (frame.source === 'input' ? 1000 : 500) || (frame.rate !== 0 && frame.rate !== rate)) continue;
+    for (const view of meterViews) {
+      if (view.source === frame.source && view.channel < frame.levels.length) {
+        view.model.feed(meterDb(frame.levels[view.channel]));
+      }
+    }
+  }
+}
+
+function renderMeters() {
+  const now = performance.now();
+  const elapsed = Math.floor((now - meterTick) / METER_TICK_MS);
+  if (elapsed === 0) return;
+  meterTick += elapsed * METER_TICK_MS;
+  const ticks = Math.min(elapsed, 250);
+  const receivedAge = now - meterReceived;
+  const rateIndex = parseInt(documentState?.state.payload_hex.slice(4, 6), 16);
+  const rate = [44100, 48000, 96000, 192000][rateIndex];
+  const pcm = meterSnapshot?.pcm;
+  for (const {node, source, channel, model} of meterViews) {
+    const direction = pcm?.[source];
+    const available = !node.classList.contains('out') || Boolean(documentState?.state.preamps[channel]?.compressor.enabled);
+    const fresh = connected && (source === 'input' ?
+      Boolean(meterSnapshot && meterSnapshot.age_ms + receivedAge < 1000) :
+      Boolean(pcm?.enabled && direction?.fresh && direction.rate === rate && channel < direction.channels &&
+        direction.age_ms + pcm.received_age_ms + receivedAge <= 500));
+    if (!available || !fresh || (rateIndex === 3 && channel >= 4)) model.reset();
+    else for (let tick = 0; tick < ticks; tick++) model.step();
+    const height = node.clientHeight;
+    const level = Math.max(0, height - meterY(model.level, height));
+    const peak = Math.max(0, height - meterY(model.peak, height));
+    node.style.setProperty('--level', `${level}px`);
+    node.style.setProperty('--peak', `${Math.max(0, peak - 2)}px`);
+    for (const label of node.querySelectorAll('.meter-scale > span')) {
+      label.style.top = `${meterY(Number(label.textContent), height) - 4}px`;
+    }
+    node.classList.toggle('clipped', model.clipHold > 0);
+    node.classList.toggle('has-peak', peak > 0);
     node.classList.toggle('stale', !fresh);
     node.classList.toggle('unavailable', !available);
   }
@@ -821,4 +861,5 @@ addEventListener('pagehide', () => {
 });
 void refresh();
 setInterval(() => { void refresh(); }, 1000);
-setInterval(() => { void readMeters(); }, 50);
+setInterval(() => { void readMeters(); }, METER_TICK_MS);
+setInterval(renderMeters, METER_TICK_MS);

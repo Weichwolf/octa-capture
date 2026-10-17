@@ -38,6 +38,8 @@ add_library(octa_pcm_meters STATIC src/PcmMeterControl.cpp)
 target_link_libraries(octa_pcm_meters PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
 add_executable(octa-pcm-meters src/PcmMeterMain.cpp)
 target_link_libraries(octa-pcm-meters PRIVATE octa_pcm_meters)
+add_executable(octa-pcm-peak-check src/PcmPeakCheck.cpp)
+target_link_libraries(octa-pcm-peak-check PRIVATE octa_pcm_meters octa_status PkgConfig::ALSA)
 add_executable(octa-status src/StatusMain.cpp)
 target_link_libraries(octa-status PRIVATE octa_status)
 
@@ -116,11 +118,13 @@ add_test(NAME gui-backend COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/t
 add_test(NAME gui-http COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiHttp.py")
 add_test(NAME gui-auto-sense COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiAutoSense.py")
 add_test(NAME gui-navigation COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiNavigation.py")
+add_test(NAME gui-meters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs")
 add_test(NAME gui-parameters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiParameters.mjs")
 add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   --config "${CMAKE_SOURCE_DIR}/gui/web/.eslintrc.json"
   "${CMAKE_SOURCE_DIR}/gui/web/app.js" "${CMAKE_SOURCE_DIR}/gui/web/parameters.js"
-  "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs")
+  "${CMAKE_SOURCE_DIR}/gui/web/meters.js"
+  "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs")
 set_tests_properties(gui-javascript PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 add_executable(dsp_test test/Dsp.cpp)
 target_link_libraries(dsp_test PRIVATE octa_protocol)
@@ -166,7 +170,7 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-parameters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-parameters gui-meters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp"
@@ -177,7 +181,8 @@ set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp"
   "${CMAKE_SOURCE_DIR}/include/octa/PcmMeterControl.hpp"
   "${CMAKE_SOURCE_DIR}/src/PcmMeters.cpp"
   "${CMAKE_SOURCE_DIR}/src/PcmMeterControl.cpp"
-  "${CMAKE_SOURCE_DIR}/src/PcmMeterMain.cpp")
+  "${CMAKE_SOURCE_DIR}/src/PcmMeterMain.cpp"
+  "${CMAKE_SOURCE_DIR}/src/PcmPeakCheck.cpp")
 
 set(octa_bridge_sources
   "${CMAKE_SOURCE_DIR}/include/octa/Bridge.hpp"

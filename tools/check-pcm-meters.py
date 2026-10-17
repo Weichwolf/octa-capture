@@ -87,11 +87,15 @@ class Check:
             self.wait(lambda frame: frame['idle_stream'] and frame['capture']['fresh'] and
                       frame['playback']['fresh'], 'idle engine resumes after PCM close')
 
-    def rates(self, rates):
+    def rates(self, rates, peaks=False):
         for rate in rates:
             for direction in ('capture', 'playback'):
                 result = json.loads(self.run('octa-audio-check', rate, direction))
                 assert result['error'] == 0 and result['timing_ok'], result
+            if peaks:
+                self.stop()
+                print(self.run('octa-pcm-peak-check'), end='', flush=True)
+                self.start()
             frame = self.wait(lambda frame: frame['idle_stream'] and frame['error'] == 0 and
                               all(frame[name]['rate'] == rate and frame[name]['fresh']
                                   for name in ('capture', 'playback')), f'fresh {rate} Hz PCM')
@@ -107,6 +111,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bin-dir', default='build/strict')
     parser.add_argument('--rates', action='store_true', help='change through all four rates and restore')
+    parser.add_argument('--peaks', action='store_true',
+                        help='verify exact channel peaks with tags no larger than -118 dBFS')
     arguments = parser.parse_args()
     check = Check(arguments.bin_dir)
     before = json.loads(check.run('octa-state'))
@@ -119,7 +125,8 @@ def main():
         check.capture(close_meter=True)
         print('PASS closing meters preserves an already running PCM capture', flush=True)
         check.start()
-        check.rates((44100, 48000, 96000, 192000) if arguments.rates else (original_rate,))
+        check.rates((44100, 48000, 96000, 192000) if arguments.rates else (original_rate,),
+                    peaks=arguments.peaks)
         check.stop(kill=True)
         # No read renews the dead client's lease during this interval.
         time.sleep(2.3)
@@ -131,7 +138,8 @@ def main():
         check.run('octa-audio-check', original_rate, 'capture')
         check.output.close()
     assert json.loads(check.run('octa-state')) == before, 'complete raw device state changed'
-    print('PASS original rate and complete raw state restored; no generated audio', flush=True)
+    signal = 'only very quiet channel tags' if arguments.peaks else 'no generated audio'
+    print(f'PASS original rate and complete raw state restored; {signal}', flush=True)
 
 
 if __name__ == '__main__':

@@ -119,6 +119,25 @@ class Transport(unittest.TestCase):
         peer._update_pcm(stale)
         self.assertFalse(peer.meters()['pcm']['capture']['fresh'])
 
+    def test_short_peaks_survive_latest_frame_replacement(self):
+        peer = Bridge(Path('/nonexistent/backend'))
+        peer._update_meter({'input_levels': [16383] * 8, 'input_db': [0] * 8})
+        peer._update_meter({'input_levels': [0] * 8, 'input_db': [-96] * 8})
+        result = peer.meters()
+        self.assertEqual(result['input_levels'], [0] * 8)
+        self.assertEqual(result['history'][0]['levels'], [16383] * 8)
+        self.assertEqual(result['history'][1]['levels'], [0] * 8)
+        self.assertLess(result['history'][0]['id'], result['history'][1]['id'])
+        for _ in range(100):
+            peer._update_meter({'input_levels': [0] * 8, 'input_db': [-96] * 8})
+        result = peer.meters()
+        self.assertEqual(len(result['history']), 64)
+        last_id = result['history'][-1]['id']
+        peer.close()
+        self.assertIsNone(peer.meters())
+        peer._update_meter({'input_levels': [0] * 8, 'input_db': [-96] * 8})
+        self.assertGreater(peer.meters()['history'][0]['id'], last_id)
+
 
 if __name__ == '__main__':
     unittest.main()
