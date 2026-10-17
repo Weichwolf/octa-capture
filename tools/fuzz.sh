@@ -22,6 +22,10 @@ def frame(command, address, payload):
     return bytes.fromhex('f0 41 10 00 00 4d') + bytes([command]) + body + bytes([-sum(body) % 128, 0xf7])
 
 seeds = {
+    'auto-sense-start': frame(0x12, [0, 2, 1, 4], [1, 9]),
+    'auto-sense-active': bytes([0x12, 0, 2, 1, 4, 1, 9]),
+    'auto-sense-finish': frame(0x12, [0, 2, 1, 5], [0]),
+    'auto-sense-cancel': bytes([0x12, 0, 2, 1, 5, 1]),
     'meters': frame(0x12, [0, 10, 0, 1], [0, 0, 127, 127] * 4),
     'meters-message': bytes([0x12, 0, 10, 0, 1] + [0, 0, 127, 127] * 4),
     'request': frame(0x11, [1, 0, 0, 0], [0, 0, 8, 0x7a]),

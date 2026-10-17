@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "octa/AutoSense.hpp"
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
@@ -48,6 +49,44 @@ void check_dsp(octa::DspState &state, const octa::Message &message) {
   require(*changed == (state != previous));
   const auto repeated = octa::apply_dsp_update(state, message);
   require(repeated && !*repeated);
+}
+
+void check_auto_sense(octa::AutoSenseChannels &channels, const octa::Message &message) {
+  const auto previous = channels;
+  const auto changed = octa::apply_auto_sense_update(channels, message);
+  if (!changed) {
+    require(channels == previous);
+    return;
+  }
+  require(*changed == (channels != previous));
+  const auto repeated = octa::apply_auto_sense_update(channels, message);
+  require(repeated && !*repeated);
+}
+
+void auto_sense_controls(std::span<const std::uint8_t> bytes) {
+  if (bytes.empty()) { return; }
+  octa::AutoSenseChannels channels{};
+  const auto start = octa::encode_auto_sense_start(bytes.front());
+  require(start.has_value() == (bytes.front() != 0));
+  if (start) {
+    const auto message = octa::decode(*start);
+    require(message.has_value());
+    if (!message) { return; }
+    check_auto_sense(channels, *message);
+    for (unsigned int channel = 0; channel < channels.size(); ++channel) {
+      require(channels[channel] == ((bytes.front() & (1U << channel)) != 0));
+    }
+  }
+  const auto action = static_cast<octa::AutoSenseAction>(bytes.back());
+  const auto stop = octa::encode_auto_sense_stop(action);
+  require(stop.has_value() == (bytes.back() <= 1));
+  if (stop) {
+    const auto message = octa::decode(*stop);
+    require(message.has_value());
+    if (!message) { return; }
+    check_auto_sense(channels, *message);
+    require(channels == octa::AutoSenseChannels{});
+  }
 }
 
 void check_dsp_control(const octa::DspChange &change) {
@@ -142,6 +181,7 @@ void frames(std::span<const std::uint8_t> bytes) {
   octa::SysExReceiver receiver;
   octa::PreampBank bank{};
   octa::DspState dsp_state{};
+  octa::AutoSenseChannels auto_sense{};
   for (const auto byte : bytes) {
     const auto result = receiver.feed(byte);
     if (!result) { continue; }
@@ -152,6 +192,7 @@ void frames(std::span<const std::uint8_t> bytes) {
       if (preamps) { bank = *preamps; }
       check_preamp(bank, *message);
       check_dsp(dsp_state, *message);
+      check_auto_sense(auto_sense, *message);
     }
   }
   // Every malformed or unfinished stream must recover at the next SysEx start.
@@ -188,8 +229,10 @@ void structured(std::span<const std::uint8_t> bytes) {
   }
   octa::PreampBank bank{};
   octa::DspState dsp_state{};
+  octa::AutoSenseChannels auto_sense{};
   check_preamp(bank, message);
   check_dsp(dsp_state, message);
+  check_auto_sense(auto_sense, message);
   const octa::PreampChange change = {.channel = address[2],
                                      .parameter = static_cast<octa::PreampParameter>(address[3]),
                                      .value = bytes.front()};
@@ -247,5 +290,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
   structured(bytes);
   typed_controls(bytes);
   meter_packets(bytes);
+  auto_sense_controls(bytes);
   return 0;
 }

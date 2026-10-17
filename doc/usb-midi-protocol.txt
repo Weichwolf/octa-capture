@@ -312,8 +312,13 @@ TxASensStart at 0x1000288f8 sends 00 02 01 04 with a nonzero eight-input
 selection mask as two nibbles, low nibble first. Its two-byte notification
 uses four channel flags in each byte (CCplDev::SetEach2 at 0x10000a372).
 TxASensStop at 0x10002888a sends one byte to 00 02 01 05: 00 finishes,
-01 cancels (CDlgASens::Stop/Cancel callers). No automatic gain operation
-has been run or exposed yet.
+01 cancels (CDlgASens::Stop/Cancel callers). A completion notification at
+00 02 01 05 clears all eight activity flags regardless of its data byte
+(CCplDev::SetEach1 at 0x10000a8e0). Activity is not part of the bulk bank.
+src/AutoSense.cpp implements these bounded codecs and atomic activity
+updates. Offline fixtures check the wire bytes, all 255 nonempty channel
+masks, reserved flag bits, repeated updates and rejection without mutation.
+No automatic gain operation has been run or exposed through live I/O yet.
 
 Audio packing and initial hardware tests
 ---------------------------------------
