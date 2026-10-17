@@ -13,6 +13,7 @@ import threading
 import time
 
 from .backend import Bridge, DeviceError, InvalidControl, integer, validate_control
+from .auto_sense import AutoSenseJob
 
 
 class Application:
@@ -24,6 +25,7 @@ class Application:
         self.bridge = Bridge(self.bin_dir / 'octa-bridge', port)
         self._operation = threading.RLock()
         self._cache_lock = threading.Lock()
+        self._lifecycle = threading.Lock()
         self._cached = None
         self._updated = 0
         self._status = None
@@ -32,6 +34,8 @@ class Application:
         self._closed = False
         self._last_client = time.monotonic()
         self._transaction = False
+        self._auto_job = None
+        self._auto_thread = None
 
     def _open(self):
         if self._closed:
@@ -64,10 +68,15 @@ class Application:
             raise DeviceError('The OCTA-CAPTURE device is not available.')
         return {'connected': True, 'busy': transaction if busy is None else busy, 'state': state,
                 'status': self._status, 'meters': self.bridge.meters(),
-                'capabilities': {'auto_sense': False}}
+                'capabilities': {'auto_sense': True},
+                'auto_sense': self._auto_job.document() if self._auto_job else None}
 
     def snapshot(self):
         self._touch()
+        with self._cache_lock:
+            transaction = self._transaction
+        if transaction:
+            return self._document()
         if not self._operation.acquire(blocking=False):
             return self._document()
         try:
@@ -89,6 +98,7 @@ class Application:
 
     def change(self, body):
         operation, arguments = validate_control(body)
+        self._require_no_auto_sense()
         self._touch()
         with self._operation:
             self._open()
@@ -104,6 +114,8 @@ class Application:
             self._last_client = time.monotonic()
 
     def disconnect(self):
+        if self._auto_job:
+            self._auto_job.request('cancel')
         with self._operation:
             self._open()
             self.bridge.close()
@@ -113,6 +125,8 @@ class Application:
     def expire_idle(self):
         with self._cache_lock:
             idle = time.monotonic() - self._last_client > 15
+        if idle and self._auto_job:
+            self._auto_job.request('cancel')
         if idle and self._operation.acquire(blocking=False):
             try:
                 if not self._closed:
@@ -143,6 +157,7 @@ class Application:
         return Path(tempfile.mkdtemp(prefix='operation-', dir=self.data_dir))
 
     def export_preset(self):
+        self._require_no_auto_sense()
         with self._operation:
             self._open()
             self.bridge.close()
@@ -154,6 +169,7 @@ class Application:
     def import_preset(self, data):
         if len(data) != 1639:
             raise InvalidControl('An OCTA-CAPTURE settings file must contain exactly 1639 bytes.')
+        self._require_no_auto_sense()
         with self._operation:
             self._open()
             directory = self._directory()
@@ -194,6 +210,7 @@ class Application:
 
     def action(self, body):
         arguments = self._action_arguments(body)
+        self._require_no_auto_sense()
         with self._operation:
             self._open()
             directory = self._directory()
@@ -231,7 +248,59 @@ class Application:
             return [self.bin_dir / 'octa-audio-check', rate, 'prepare-capture', pcm]
         raise InvalidControl('Unknown device operation or fields.')
 
-    def close(self):
+    def _require_no_auto_sense(self):
+        if self._auto_job:
+            self._auto_job.require_available()
+
+    def start_auto_sense(self, body):
+        if type(body) is not dict or set(body) != {'channels'}:
+            raise InvalidControl('Expected the selected Auto-Sens channels.')
+        channels = integer(body['channels'], 1, 255)
+        self._touch()
+        self._require_no_auto_sense()
         with self._operation:
+            self._open()
+            self._require_no_auto_sense()
+            state = self.snapshot()['state']
+            if bytes.fromhex(state['payload_hex'])[2] == 3 and channels & 0xf0:
+                raise InvalidControl('Only inputs 1–4 are available at 192 kHz.')
+            directory = self._directory()
+            self.bridge.close()
+            with self._lifecycle:
+                self._open()
+                job = AutoSenseJob([self.bin_dir / 'octa-auto-sense', '--interactive', channels,
+                                    60000, 'finish', directory / 'recovery.syx', self.port], directory, channels)
+                self._auto_job = job
+                self._set_transaction(True)
+                self._auto_thread = threading.Thread(target=self._run_auto_sense, args=(job,),
+                                                     name='auto-sens-operation', daemon=True)
+                self._auto_thread.start()
+            return self._document()
+
+    def _run_auto_sense(self, job):
+        with self._operation:
+            try:
+                job.run()
+            finally:
+                self._invalidate(preserve=True)
+                self._set_transaction(False)
+
+    def stop_auto_sense(self, body):
+        if type(body) is not dict or set(body) != {'action'} or body['action'] not in ('finish', 'cancel'):
+            raise InvalidControl('Expected Auto-Sens finish or cancel.')
+        self._touch()
+        if self._auto_job is None:
+            raise InvalidControl('Auto-Sens is not running.')
+        self._auto_job.request(body['action'])
+        return self._document()
+
+    def close(self):
+        with self._lifecycle:
             self._closed = True
+            job, thread = self._auto_job, self._auto_thread
+        if job:
+            job.request('cancel')
+        if thread:
+            thread.join()
+        with self._operation:
             self.bridge.close()

@@ -12,7 +12,7 @@ The [standalone kernel module](kernel/README.md) also exposes a read-only ALSA d
 
 ## Local control panel
 
-The HTML/CSS/JavaScript panel runs against the real C++ device backend. It includes eight preamp/compressor strips, four direct mixers, reverb, patchbay, settings import/export and driver status. Nonlinear compressor displays and all 1025 fader coefficients match both reference binaries. Controls use fresh hardware readback; input meters show actual device data.
+The HTML/CSS/JavaScript panel runs against the real C++ device backend. It includes eight preamp/compressor strips, interactive Auto-Sens, four direct mixers, reverb, patchbay, settings import/export and driver status. Nonlinear compressor displays and all 1025 fader coefficients match both reference binaries. Controls use fresh hardware readback; input meters show actual device data.
 
 ```bash
 make release
@@ -22,7 +22,7 @@ python3 tools/serve-gui.py --open
 
 Open the private launch link printed by the server. It listens only on `127.0.0.1`; its token, Host/Origin checks and local-only content policy protect device operations. Use an account with ALSA device access. The backend and audio streaming remain independent; closing the panel releases its exclusive CTRL connection.
 
-This is an initial working panel, not complete GUI parity. Interactive Auto-Sens, additional meter sources, multi-unit behavior and GTK4/WebKitGTK embedding remain in progress. Physical audio response and native Debian validation are also outstanding. See the [function inventory](doc/function-inventory.md) and [backend documentation](doc/gui-backend.md).
+This is an initial working panel, not complete GUI parity. Additional meter sources, multi-unit behavior and GTK4/WebKitGTK embedding remain in progress. Physical audio response and native Debian validation are also outstanding. See the [function inventory](doc/function-inventory.md) and [backend documentation](doc/gui-backend.md).
 
 ## Development
 

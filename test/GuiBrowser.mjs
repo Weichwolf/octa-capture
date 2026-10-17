@@ -104,6 +104,30 @@ try {
     await until(() => browser.evaluate('!document.querySelector("#load-file").disabled && !document.querySelector("#confirm").open'), 'settings load completion');
     assert.equal(await browser.evaluate('document.querySelector("#toast").hidden'), true, 'No settings load error');
     console.log('PASS browser settings download/upload, confirmation and verified device application');
+    await browser.click('#view-switch');
+    for (const action of ['cancel', 'finish']) {
+      await browser.click('#header-action');
+      await browser.click('#auto-none');
+      await browser.click('#auto-channels input[value="0"]');
+      await browser.click('#auto-start');
+      await until(async () => (await api('/api/state')).auto_sense?.state === 'running', 'Auto-Sens device activity');
+      assert.equal((await api('/api/state')).busy, true);
+      await browser.screenshot(path.join(directory, `auto-sens-${action}.png`));
+      await browser.click(action === 'cancel' ? '#auto-cancel' : '#auto-start');
+      const result = action === 'cancel' ? 'cancelled' : 'completed';
+      await until(async () => (await api('/api/state')).auto_sense?.state === result, `Auto-Sens ${result}`);
+      await until(async () => !(await api('/api/state')).busy, 'Auto-Sens released CTRL');
+      const current = (await api('/api/state')).state;
+      if (action === 'cancel') assert.deepEqual(current, before, 'Auto-Sens cancel restores full state');
+      else {
+        const actual = Buffer.from(current.payload_hex, 'hex');
+        actual[0x1d] = payload[0x1d];
+        assert.deepEqual(actual, payload, 'Auto-Sens finish changes only selected sensitivity');
+        await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'sensitivity', value: before.preamps[0].sensitivity_index});
+      }
+      await browser.click('#auto-cancel');
+    }
+    console.log('PASS browser Auto-Sens start/finish/cancel, verified notifications and recovery');
   }
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');
   assert.deepEqual(browser.securityErrors, [], 'Content Security Policy violations');

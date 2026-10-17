@@ -501,8 +501,8 @@ function confirmation(message) {
 function canOperate() { return connected && !busy && !writing; }
 function setOperationBusy(value) {
   localBusy = value;
-  busy = value;
-  $('#busy-message').hidden = !value;
+  busy = value || Boolean(documentState?.busy);
+  $('#busy-message').hidden = !busy;
 }
 
 async function operation(body, message) {
@@ -522,8 +522,37 @@ function syncDialogs(state, rateIndex) {
   if (document.activeElement !== $('#reverb-time')) $('#reverb-time').value = ((state.reverb.time_indices[type] + 1) / 10).toFixed(1);
   for (const node of all('#reverb select, #reverb input')) node.disabled = rateIndex === 3 || (node.id !== 'reverb-type' && type === 0);
   for (const select of all('#patchbay select')) { select.value = state.output_routes[Number(select.dataset.pair)]; select.disabled = rateIndex === 3; }
-  $('#auto-start').disabled = busy || !documentState.capabilities?.auto_sense;
-  for (const check of all('#auto-channels input')) check.disabled = rateIndex === 3 && Number(check.value) >= 4;
+  syncAutoSense(rateIndex);
+}
+
+function syncAutoSense(rateIndex) {
+  const job = documentState.auto_sense, active = Boolean(job?.active);
+  const messages = {starting: 'Starting Auto-Sens…', running: 'Input the loudest expected signal, then click Finish.',
+    finishing: 'Finishing Auto-Sens…', cancelling: 'Cancelling and restoring settings…',
+    completed: 'Auto-Sens complete.', cancelled: 'Auto-Sens cancelled. Settings restored.', failed: job?.error};
+  $('#auto-status').textContent = messages[job?.state] || 'Select the input channels.';
+  $('#auto-start').textContent = active ? 'Finish' : 'Start';
+  $('#auto-start').disabled = inFlight.has('auto-sense') || !documentState.capabilities?.auto_sense || writing || localBusy ||
+    (active ? job.state !== 'running' : busy);
+  $('#auto-cancel').disabled = inFlight.has('auto-sense') || job?.state === 'cancelling';
+  for (const check of all('#auto-channels input')) check.disabled = active || (rateIndex === 3 && Number(check.value) >= 4);
+  $('#auto-all').disabled = active; $('#auto-none').disabled = active;
+}
+
+async function autoSenseRequest(path, body) {
+  if (!enter('auto-sense')) return;
+  setOperationBusy(true); revision++;
+  syncAutoSense(parseInt(documentState.state.payload_hex.slice(4, 6), 16));
+  try { update(await api(path, body)); }
+  catch (error) { notify(error.message); }
+  finally { leave('auto-sense'); setOperationBusy(false); void refresh(); }
+}
+
+function cancelAutoSense() {
+  if (inFlight.has('auto-sense')) return;
+  if (documentState?.auto_sense?.active) {
+    void autoSenseRequest('/api/auto-sense/stop', {action: 'cancel'});
+  } else $('#auto-sens').close();
 }
 
 function closeMenus() {
@@ -624,12 +653,18 @@ function setupDialogs() {
   }
   $('#auto-all').addEventListener('click', () => all('#auto-channels input:not(:disabled)').forEach(input => { input.checked = true; }));
   $('#auto-none').addEventListener('click', () => all('#auto-channels input').forEach(input => { input.checked = false; }));
-  $('#auto-start').addEventListener('click', async () => {
+  $('#auto-start').addEventListener('click', () => {
+    if (documentState?.auto_sense?.active) {
+      void autoSenseRequest('/api/auto-sense/stop', {action: 'finish'});
+      return;
+    }
+    if (!canOperate()) return;
     const channels = all('#auto-channels input:checked:not(:disabled)').reduce((mask, input) => mask | 1 << Number(input.value), 0);
     if (!channels) { notify('Select at least one input channel.'); return; }
-    try { await api('/api/auto-sense/start', {channels}); }
-    catch (error) { notify(error.message); }
+    void autoSenseRequest('/api/auto-sense/start', {channels});
   });
+  $('#auto-cancel').addEventListener('click', cancelAutoSense);
+  $('#auto-sens').addEventListener('cancel', event => { event.preventDefault(); cancelAutoSense(); });
   $('#reverb-type').addEventListener('change', event => queueChange({kind: 'reverb', parameter: 'type', bank: 0, value: Number(event.target.value)}));
   $('#reverb-delay').addEventListener('change', event => queueChange({kind: 'reverb', parameter: 'pre-delay', bank: documentState.state.reverb.type, value: Number(event.target.value)}));
   $('#reverb-time').addEventListener('change', event => queueChange({kind: 'reverb', parameter: 'time', bank: documentState.state.reverb.type, value: Math.round(Number(event.target.value) * 10) - 1}));

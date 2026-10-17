@@ -22,6 +22,7 @@ struct AutoSenseOptions {
   std::uint8_t channels;
   std::chrono::milliseconds duration;
   AutoSenseAction action;
+  bool interactive = false;
 };
 
 enum class RoutingPreset : std::uint8_t { multi_monitor, playback };

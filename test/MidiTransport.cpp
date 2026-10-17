@@ -431,13 +431,17 @@ enum class AutoSenseScenario : std::uint8_t {
   missing_completion,
   unrelated_result,
   partial_stop,
-  interruption
+  interruption,
+  interactive_finish,
+  interactive_missing_completion,
+  interactive_interruption
 };
 
 bool auto_sense_should_fail(octa::AutoSenseAction action, AutoSenseScenario scenario) {
   switch (scenario) {
     case AutoSenseScenario::success:
-    case AutoSenseScenario::linked_success: return false;
+    case AutoSenseScenario::linked_success:
+    case AutoSenseScenario::interactive_finish: return false;
     case AutoSenseScenario::unselected_peer:
     case AutoSenseScenario::unrelated_result: return action == octa::AutoSenseAction::finish;
     case AutoSenseScenario::malformed:
@@ -445,6 +449,8 @@ bool auto_sense_should_fail(octa::AutoSenseAction action, AutoSenseScenario scen
     case AutoSenseScenario::missing_completion:
     case AutoSenseScenario::partial_stop:
     case AutoSenseScenario::interruption:
+    case AutoSenseScenario::interactive_missing_completion:
+    case AutoSenseScenario::interactive_interruption:
     default: return true;
   }
 }
@@ -462,14 +468,20 @@ std::vector<std::uint8_t> auto_sense_baseline(AutoSenseScenario scenario) {
   return frame;
 }
 
-bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenario) {
+bool interactive_auto_sense(AutoSenseScenario scenario) {
+  return scenario == AutoSenseScenario::interactive_finish ||
+         scenario == AutoSenseScenario::interactive_missing_completion ||
+         scenario == AutoSenseScenario::interactive_interruption;
+}
+
+bool prepare_auto_sense(octa::AutoSenseAction action,
+                        AutoSenseScenario scenario,
+                        const std::vector<std::uint8_t> &baseline) {
   io = {};
-  const auto baseline = auto_sense_baseline(scenario);
   auto result = octa::decode(baseline);
   const auto start = octa::encode_auto_sense_start(1);
   const auto stop = octa::encode_auto_sense_stop(action);
-  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
-  if (!result || !start || !stop || !query) { return false; }
+  if (!result || !start || !stop) { return false; }
   constexpr std::size_t sensitivity_offset = 0x1d;
   constexpr std::size_t low_cut_offset = 0x17;
   result->payload[sensitivity_offset] = 1;
@@ -483,10 +495,14 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
       action == octa::AutoSenseAction::finish &&
       (scenario == AutoSenseScenario::success || scenario == AutoSenseScenario::linked_success ||
        scenario == AutoSenseScenario::unrelated_result ||
-       scenario == AutoSenseScenario::unselected_peer);
+       scenario == AutoSenseScenario::unselected_peer ||
+       scenario == AutoSenseScenario::interactive_finish);
   io.replies = {baseline, changed_reply ? *changed : baseline, baseline};
   if (scenario != AutoSenseScenario::missing_start) { io.auto_start_reply = *start; }
-  if (scenario != AutoSenseScenario::missing_completion) { io.auto_stop_reply = *stop; }
+  if (scenario != AutoSenseScenario::missing_completion &&
+      scenario != AutoSenseScenario::interactive_missing_completion) {
+    io.auto_stop_reply = *stop;
+  }
   if (scenario == AutoSenseScenario::malformed) {
     const std::array<std::uint8_t, 1> wrong_size = {1};
     const auto malformed = octa::encode(octa::Command::data, {0, 2, 1, 4}, wrong_size);
@@ -495,15 +511,31 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
   }
   io.auto_fail_stop = scenario == AutoSenseScenario::partial_stop;
   io.auto_signal = scenario == AutoSenseScenario::interruption ? SIGTERM : 0;
+  if (interactive_auto_sense(scenario)) {
+    io.auto_signal = scenario == AutoSenseScenario::interactive_interruption ? SIGTERM : SIGUSR1;
+  }
+  return true;
+}
+
+bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenario) {
+  const auto baseline = auto_sense_baseline(scenario);
+  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+  if (!query || !prepare_auto_sense(action, scenario, baseline)) { return false; }
+  const bool interactive = interactive_auto_sense(scenario);
   auto directory = std::to_array("/tmp/octa-auto-sense-test-XXXXXX");
   if (mkdtemp(directory.data()) == nullptr) { return false; }
   const auto path = std::string(directory.data()) + "/recovery.syx";
   const octa::cli::AutoSenseOptions request = {
-      .channels = 1, .duration = std::chrono::milliseconds(1), .action = action};
+      .channels = 1,
+      .duration = std::chrono::milliseconds(interactive ? 60000 : 1),
+      .action = action,
+      .interactive = interactive};
   std::stringbuf errors;
   auto *previous_errors = std::cerr.rdbuf(&errors);
+  const auto started_at = std::chrono::steady_clock::now();
   const int status =
       octa::cli::run_auto_sense(request, {.port = "hw:fake", .snapshot_path = path.c_str()});
+  const bool bounded = std::chrono::steady_clock::now() - started_at < std::chrono::seconds(5);
   std::cerr.rdbuf(previous_errors);
   std::ifstream file(path, std::ios::binary);
   std::array<std::uint8_t, octa::bulk_size + 14> bytes{};
@@ -513,7 +545,10 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
   const bool failed = auto_sense_should_fail(action, scenario);
   int expected_status = failed ? 1 : 0;
   constexpr int interrupted_status = 130;
-  if (scenario == AutoSenseScenario::interruption) { expected_status = interrupted_status; }
+  if (scenario == AutoSenseScenario::interruption ||
+      scenario == AutoSenseScenario::interactive_interruption) {
+    expected_status = interrupted_status;
+  }
   auto expected_tail = baseline;
   append_bytes(expected_tail, *query);
   const bool recovered = failed || action == octa::AutoSenseAction::cancel;
@@ -528,7 +563,7 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
   return require(
       status == expected_status && saved && io.opens == connections &&
           io.closes == connections * 2 && (!recovered || raw_tail) && recovery_verified &&
-          removed_file && removed_directory,
+          removed_file && removed_directory && bounded,
       "Auto-Sens workflow snapshots, completion, bounded result changes and raw recovery");
 }
 
@@ -1220,7 +1255,10 @@ int main() {
                                 AutoSenseScenario::missing_completion,
                                 AutoSenseScenario::unrelated_result,
                                 AutoSenseScenario::partial_stop,
-                                AutoSenseScenario::interruption}) {
+                                AutoSenseScenario::interruption,
+                                AutoSenseScenario::interactive_finish,
+                                AutoSenseScenario::interactive_missing_completion,
+                                AutoSenseScenario::interactive_interruption}) {
       auto_sense_workflow_passed =
           auto_sense_workflow(action, scenario) && auto_sense_workflow_passed;
     }

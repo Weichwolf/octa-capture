@@ -34,6 +34,14 @@ class TestApplication:
         self.calls.append(('action', body))
         return {'ok': True}
 
+    def start_auto_sense(self, body):
+        self.calls.append(('auto-start', body))
+        return {'ok': True}
+
+    def stop_auto_sense(self, body):
+        self.calls.append(('auto-stop', body))
+        return {'ok': True}
+
     def meters(self):
         return {'meters': None}
 

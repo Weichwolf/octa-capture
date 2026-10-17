@@ -23,15 +23,22 @@ std::optional<unsigned int> parse_number(std::string_view text, unsigned int max
 }
 
 int usage() {
-  std::cerr << "Usage: octa-auto-sense MASK(1..255) DURATION_MS(1..60000) finish|cancel "
-               "NEW-RECOVERY.syx [hw:CTRL-port]\n"
-               "MASK is decimal; bit 0 selects input 1. Cancel restores the complete raw state.\n";
+  std::cerr
+      << "Usage: octa-auto-sense [--interactive] MASK(1..255) DURATION_MS(1..60000) finish|cancel "
+         "NEW-RECOVERY.syx [hw:CTRL-port]\n"
+         "MASK is decimal; bit 0 selects input 1. Cancel restores the complete raw state.\n"
+         "Interactive mode emits readiness events; SIGUSR1 finishes, SIGTERM cancels.\n";
   return 2;
 }
 
 }
 
 int main(int argc, char **argv) {
+  const bool interactive = argc > 1 && std::string_view(argv[1]) == "--interactive";
+  if (interactive) {
+    --argc;
+    ++argv;
+  }
   constexpr int required_arguments = 5;
   constexpr int maximum_arguments = 6;
   if (argc < required_arguments || argc > maximum_arguments) { return usage(); }
@@ -44,7 +51,8 @@ int main(int argc, char **argv) {
   const octa::cli::AutoSenseOptions request = {
       .channels = static_cast<std::uint8_t>(*mask),
       .duration = std::chrono::milliseconds(static_cast<std::int64_t>(*duration)),
-      .action = action == "finish" ? octa::AutoSenseAction::finish : octa::AutoSenseAction::cancel};
+      .action = action == "finish" ? octa::AutoSenseAction::finish : octa::AutoSenseAction::cancel,
+      .interactive = interactive};
   const std::string_view port =
       argc == maximum_arguments ? argv[5] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
   return octa::cli::run_auto_sense(request, {.port = port, .snapshot_path = argv[4]});

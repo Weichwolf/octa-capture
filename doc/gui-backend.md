@@ -50,8 +50,8 @@ local update. Notifications may precede a reply and never split its JSON documen
 Serial zero denotes invalid protocol/device events rather than a successful reply.
 
 This is a local stdin/stdout interface, not a network listener. The HTTP layer
-below owns authentication and file operations. Interactive Auto-Sens and GTK
-embedding remain separate integration work.
+below owns authentication, file operations and interactive Auto-Sens. GTK
+embedding remains separate integration work.
 
 ## Local HTTP panel
 
@@ -74,6 +74,8 @@ before device writes. A regular browser keeps its normal sandbox enabled.
 | `GET /api/meters` | Latest actual input frame, including staleness |
 | `POST /api/control` | Validated scalar control and fresh device readback |
 | `POST /api/action` | Validated initialization, routing, memory or rate action |
+| `POST /api/auto-sense/start` | Start selected-input calibration with a private recovery snapshot |
+| `POST /api/auto-sense/stop` | Finish or cancel the active calibration |
 | `GET /api/preset` | Current Ver100 `.octa` download |
 | `POST /api/preset` | Exact-size validated upload, snapshot, apply and readback |
 | `POST /api/disconnect` | Release the panel's CTRL session |
@@ -87,7 +89,17 @@ release the bridge so the existing recovery-aware CLI owns CTRL exclusively.
 Recovery files are created privately under `$XDG_STATE_HOME/octa-capture`
 (default `~/.local/state/octa-capture`), or `--data-dir`. Keep them after an
 interrupted operation. The bridge releases CTRL after an explicit disconnect,
-server shutdown or 15 seconds without panel activity. Audio continues separately.
+server shutdown or 15 seconds without panel activity. Active Auto-Sens is
+cancelled on disconnect, shutdown or client inactivity. Audio continues separately.
+
+Auto-Sens runs in an exclusive background C++ process. Its prepared notification
+acknowledges installed signal handlers before the server sends finish/cancel;
+its running notification requires actual selected-channel device activity.
+SIGUSR1 finishes early, while SIGINT/SIGTERM cancel with recovery. Completion
+still requires device notifications and verified state bounds. A cancellation is
+reported as successful only when the CLI confirms unchanged state or verified
+raw restoration. The 60-second maximum prevents an abandoned calibration from
+running indefinitely. Other controls stay disabled while calibration is active.
 
 The independently authored web assets use the original parameter values and
 reference-derived behavior, not extracted manufacturer images. Unimplemented
@@ -124,7 +136,7 @@ tools/check-gui.sh --write
 ```
 
 `--write` uses actual browser keyboard/pointer/file events, verifies hardware
-readback and restores a fresh raw snapshot, then checks release of CTRL. The
+readback, Auto-Sens finish/cancel and restores a fresh raw snapshot, then checks release of CTRL. The
 checker saves private screenshots and recovery files under `build/gui/`.
 `tools/verify-gui-parameters.py MAC-GUI WINDOWS-GUI [--cpu]` compares all fader
 and compressor tables; `--cpu` additionally executes original macOS inverse-fader

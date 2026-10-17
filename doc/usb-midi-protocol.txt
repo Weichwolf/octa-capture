@@ -242,9 +242,16 @@ Attack, release and ratio require fixed lookup tables, not interpolation.
 Gate uses CCmpDbTbl directly; threshold/gain add 20 before the same lookup.
 References: CBarCompGate::UpdateText 0x100015bb6, Thres 0x100016250,
 Ratio 0x10001648e, Atk 0x1000166c4, Rel 0x1000168fa, Gain 0x100016b30.
-The backend still exposes raw indices; display conversion is not yet an
-implemented API. These are reference display values, not calibrated DSP
-measurements; Windows formatting and typed-input behavior need comparison.
+The C++ wire API exposes indices; gui/web/parameters.js implements the
+reference display conversions. Attack/release/ratio strings and all 1025
+CVrTbl fader coefficients match both Windows and macOS binaries. Original
+macOS CVrTbl::GetIdx (0x10001ecfa) execution confirms nearest-coefficient
+selection with upper-index ties. CDispCmp::DBtoPT (0x10001760c) uses a
+-60..0 dB graph scale, independently of its visible -48/-24/0 tick labels;
+243 original function executions match the web graph's threshold/ratio/gain
+coordinates. These are reference display values, not calibrated DSP
+measurements; complete Windows formatting and typed-input behavior still
+need comparison.
 
 Write bounds recovered from the reference GUI ranges/tables:
   Boolean switches: 0..1; sensitivity: 0..100; gate/threshold: 0..50;

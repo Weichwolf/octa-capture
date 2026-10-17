@@ -35,17 +35,29 @@ namespace octa::cli {
 namespace {
 
 volatile sig_atomic_t interrupted = 0;
+volatile sig_atomic_t finish_requested = 0;
 
-void interrupt(int /*signal*/) {
-  interrupted = 1;
+void interrupt(int signal) {
+  if (signal == SIGUSR1) {
+    finish_requested = 1;
+  } else {
+    interrupted = 1;
+  }
 }
 
-bool install_handlers() {
+bool install_handlers(bool interactive = false) {
   interrupted = 0;
+  finish_requested = 0;
   struct sigaction action{};
   action.sa_handler = &interrupt;
-  return sigemptyset(&action.sa_mask) == 0 && sigaction(SIGINT, &action, nullptr) == 0 &&
-         sigaction(SIGTERM, &action, nullptr) == 0;
+  if (sigemptyset(&action.sa_mask) != 0 || sigaction(SIGINT, &action, nullptr) != 0 ||
+      sigaction(SIGTERM, &action, nullptr) != 0) {
+    return false;
+  }
+  if (!interactive) { return true; }
+  if (sigaction(SIGUSR1, &action, nullptr) != 0) { return false; }
+  action.sa_handler = SIG_IGN;
+  return sigaction(SIGPIPE, &action, nullptr) == 0;
 }
 
 int failure(const MidiError &error) {
@@ -168,6 +180,9 @@ int failed_change(const MidiError &error,
                   bool restore_runtime,
                   bool cancel_auto = false) {
   failure(error);
+  if (!state.write_attempted && state.snapshot.has_value()) {
+    std::cerr << "Original raw state unchanged; no device write attempted.\n";
+  }
   if (state.write_attempted && state.snapshot.has_value()) {
     if (restore_runtime) {
       // The attempted operation has closed its connection before recovery opens another.
@@ -257,6 +272,7 @@ struct AutoSenseProgress {
   bool started = false;
   bool completed = false;
   std::size_t notifications = 0;
+  bool interactive = false;
 };
 
 std::expected<void, MidiError> update_auto_sense(AutoSenseProgress &progress,
@@ -270,6 +286,7 @@ std::expected<void, MidiError> update_auto_sense(AutoSenseProgress &progress,
     return std::unexpected(MidiError{.code = -EBADMSG, .operation = "Auto-Sens notification"});
   }
   ++progress.notifications;
+  const bool was_started = progress.started;
   const bool active = std::ranges::any_of(progress.active, [](bool channel) { return channel; });
   for (std::size_t channel = 0; channel < progress.active.size(); ++channel) {
     if (progress.active[channel] && (progress.selected & (1U << channel)) != 0) {
@@ -277,16 +294,25 @@ std::expected<void, MidiError> update_auto_sense(AutoSenseProgress &progress,
     }
   }
   progress.completed = progress.started && !active;
+  if (progress.interactive && progress.started && !was_started) {
+    std::cout << "{\"event\":\"auto-sense-started\"}\n" << std::flush;
+    if (!std::cout.good()) {
+      return std::unexpected(MidiError{.code = -EPIPE, .operation = "Auto-Sens progress output"});
+    }
+  }
   return {};
 }
 
-std::expected<void, MidiError>
-wait_auto_sense(MidiSession &session, AutoSenseProgress &progress, Clock::time_point deadline) {
+std::expected<void, MidiError> wait_auto_sense(MidiSession &session,
+                                               AutoSenseProgress &progress,
+                                               Clock::time_point deadline,
+                                               bool allow_finish = false) {
   constexpr auto poll_interval = std::chrono::milliseconds(50);
   while (Clock::now() < deadline && !progress.completed) {
     if (interrupted != 0) {
       return std::unexpected(MidiError{.code = -EINTR, .operation = "Auto-Sens interrupted"});
     }
+    if (allow_finish && finish_requested != 0 && progress.started) { return {}; }
     const auto until = deadline - Clock::now();
     auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(until);
     if (remaining < until) { ++remaining; }
@@ -335,7 +361,8 @@ attempt_auto_sense(AutoSenseOptions request, ApplyState &state, AutoSenseProgres
   state.write_attempted = true;
   const auto started = session->start_auto_sense(request.channels);
   if (!started) { return std::unexpected(started.error()); }
-  const auto observed = wait_auto_sense(*session, progress, Clock::now() + request.duration);
+  const auto observed =
+      wait_auto_sense(*session, progress, Clock::now() + request.duration, request.interactive);
   if (!observed) { return std::unexpected(observed.error()); }
   if (!progress.started) {
     return std::unexpected(
@@ -464,11 +491,18 @@ int run_auto_sense(AutoSenseOptions request, ApplyOptions options) {
       request.duration > maximum_duration || !encode_auto_sense_stop(request.action)) {
     return failure({.code = -EINVAL, .operation = "Auto-Sens options"});
   }
-  if (!install_handlers()) {
+  if (!install_handlers(request.interactive)) {
     return failure({.code = -errno, .operation = "Auto-Sens signal handlers"});
   }
+  if (request.interactive) {
+    std::cout << "{\"event\":\"auto-sense-prepared\"}\n" << std::flush;
+    if (!std::cout.good()) {
+      return failure({.code = -EPIPE, .operation = "Auto-Sens progress output"});
+    }
+  }
   ApplyState state{.options = options, .snapshot = std::nullopt, .write_attempted = false};
-  AutoSenseProgress progress{.active = {}, .selected = request.channels};
+  AutoSenseProgress progress{
+      .active = {}, .selected = request.channels, .interactive = request.interactive};
   auto result = attempt_auto_sense(request, state, progress);
   if (result && interrupted != 0) {
     result = std::unexpected(MidiError{.code = -EINTR, .operation = "Auto-Sens interrupted"});

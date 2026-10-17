@@ -220,7 +220,10 @@ class Handler(BaseHTTPRequestHandler):
                         raise InvalidControl('Invalid disconnect request.')
                     self.reply(200, application.disconnect())
                 return
-            if path not in ('/api/control', '/api/action'):
+            operations = {'/api/control': application.change, '/api/action': application.action,
+                          '/api/auto-sense/start': application.start_auto_sense,
+                          '/api/auto-sense/stop': application.stop_auto_sense}
+            if path not in operations:
                 self.failure(404, 'Not found.')
                 return
             data = self.body('application/json')
@@ -228,7 +231,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             body = json.loads(data.decode('utf-8'), object_pairs_hook=unique_object,
                               parse_constant=invalid_constant)
-            result = application.change(body) if path == '/api/control' else application.action(body)
+            result = operations[path](body)
             self.reply(200, result)
         except (InvalidControl, ValueError, UnicodeError, RecursionError):
             self.failure(400, 'Invalid control request.')

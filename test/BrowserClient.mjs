@@ -89,7 +89,7 @@ export class BrowserClient {
   }
 
   async ready(selector) {
-    await until(() => this.evaluate(`(() => {const node=document.querySelector(${JSON.stringify(selector)});return node && !node.disabled && node.getAttribute('aria-disabled') !== 'true' && !node.closest('.unavailable-channel') && document.querySelector('#busy-message').hidden;})()`), 'enabled browser control');
+    await until(() => this.evaluate(`(() => {const node=document.querySelector(${JSON.stringify(selector)});return node && !node.disabled && node.getAttribute('aria-disabled') !== 'true' && !node.closest('.unavailable-channel') && (node.closest('#auto-sens') || document.querySelector('#busy-message').hidden);})()`), 'enabled browser control');
   }
 
   async screenshot(filename) {
