@@ -26,7 +26,7 @@ source /etc/octa-capture-dev.env
 
 The script currently exists only in `/tmp` and is not part of the repository. The WSL kernel build takes time and several GB of disk space. Modules must match the kernel version of each test system.
 
-The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, and `shellcheck`.
+The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, and `shellcheck`, and `python3`.
 
 ```bash
 make test       # strict warnings, clang-tidy, ASan/UBSan, and protocol tests
@@ -36,6 +36,8 @@ make release    # optimized build and tests
 ./tools/fuzz-midi.sh 120  # offline persistent CTRL session with simulated ALSA I/O
 ./build/strict/octa-probe   # read-only clock status, requires USB device access
 ./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
+./build/strict/octa-preset inspect settings.octa  # offline Ver100 file summary
+./build/strict/octa-preset normalize settings.octa > normalized.octa
 ./build/strict/octa-meters 2000  # observe eight input levels for 2000 ms as JSON lines
 python3 tools/check-meters.py   # hardware checks for meter shutdown and exclusive CTRL access
 ./build/strict/octa-session-check  # share meters, bulk queries and same-value DSP writes
@@ -56,6 +58,8 @@ The `MidiSession` library API supports a persistent connection for meter message
 `tools/check-meters.py` reproduces normal, signal, broken-pipe and competing-open checks, validates JSON values, checks for a quiet CTRL port after each case, and compares the complete bulk state before/after. It requires `amidi`; `--bin-dir` and `--port` select a build and device.
 
 `octa-dsp` controls the direct mixers, masters, reverb and output routing; invoke it without arguments for syntax. Mixer buses are A..D, channels and output pairs start at 1, and values are decimal wire coefficients/indices. `--dry-run` prints the encoded frame without opening a MIDI device. Writes validate reference GUI bounds before device access and require a fresh bulk reply containing the requested value. Stereo-pair changes use the first channel of the pair. This is a protocol interface; GUI gestures that coordinate several controls still need implementation.
+
+The [Ver100 preset codec](doc/preset-format.txt) reads and writes the original `.octa` layout. It preserves full-width file values and normalizes flag bytes. Windows-writer reference fixtures round-trip byte-for-byte. These commands perform no device I/O; applying a file to hardware still requires implementation and control-bound validation.
 
 The `fuzz` preset instruments the protocol library with libFuzzer and ASan/UBSan. Synthetic seeds cover framing, stream recovery, size limits, bulk state, and parameter notifications; invariants check round trips and rejection without state changes. `tools/fuzz-midi.sh` also exercises the persistent CTRL session through test-only ALSA symbols, with fragmented input and partial writes. The corpus and crash artifacts remain in `build/fuzz/`. No fuzz input is sent to hardware. These campaigns do not establish kernel robustness; KASAN/UBSAN, fault injection, and malformed USB descriptor/URB tests on a test kernel remain required.
 

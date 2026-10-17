@@ -1,0 +1,62 @@
+OCTA-CAPTURE .octa presets (Ver100)
+==================================
+
+Evidence
+--------
+Windows 1.5.3 RDDP1110.EXE: Save at 0x140007720, SaveCpl at
+0x140007820, byte writer at 0x14000a5c0, DWORD writer at 0x14000a630.
+macOS 1.5.9 x86_64: CCplFile::Save at 0x10003a4b4, SaveCpl at
+0x10003a66e, writeTextA at 0x10003a608, writeDWord at 0x10003c74a.
+Both implementations use the following layout. This disk format is
+separate from the device's Store/Load Memory commands.
+
+All DWORDs are unsigned 32-bit little-endian values. Flags occupy one byte.
+Nonzero flags load as true; writers emit 0 or 1. There is no checksum.
+
+Offset  Size  Contents
+0       32    NUL-terminated ASCII "OCTA-CAPTURE Control Panel Data"
+32      7     NUL-terminated ASCII "Ver100"
+39      20    Five output route DWORDs
+59      44    Reverb type, then five interleaved pre-delay/time DWORD pairs
+103     268   Four preamp pairs, 67 bytes each
+371     1268  Four direct mixers, 317 bytes each
+Total: 1639 bytes.
+
+Preamp pair: link flag, then two channels. Each channel contains compressor
+on/off, six DWORD indices (gate, attack, release, threshold, ratio, gain),
+four flags (phantom, phase, Hi-Z, low-cut), and sensitivity as a DWORD.
+
+Mixer: input/output link flag, five input pairs, five playback pairs,
+input master, playback master. Each pair contains its link flag and two
+channels. A channel contains mute, solo, send DWORD, pan DWORD, volume DWORD.
+Each master contains link, return DWORD, left volume DWORD, right volume
+DWORD. Playback send/return slots are written as zero by the reference;
+the codec retains their file values. Mono switches, clock settings and
+transient Auto-Sens/meter activity are absent from this format.
+
+Implementation and verification
+-------------------------------
+Preset.hpp/Preset.cpp retain every file DWORD at full width, including
+inactive slots. The decoder requires the exact size and version, rejects
+trailing data, and normalizes flags on re-encoding. Decoding does not
+validate device control bounds. Live application of file values is not
+implemented; bounds and coordinated state changes must be validated first.
+
+octa-preset inspect FILE prints a summary. octa-preset normalize FILE writes
+a canonical binary file to stdout. Neither command opens a device.
+
+The two test/data/*.octa fixtures contain synthetic parameter data. They
+were produced by offline emulation of the original Windows SaveCpl, with
+CFile::Write replaced by a memory sink: a zeroed state and state byte i set
+to (37*i+11) modulo 256. No device state is used. Each executes 592 scalar
+writes (256 flags and 336 DWORDs). Both round-trip byte-for-byte through our
+codec; independent offset fixtures also check field meanings and ordering.
+
+To regenerate, import the original RDDP1110.EXE into a Ghidra project and run:
+  ghidra.analyzeHeadless PROJECT_DIR PROJECT -process RDDP1110.EXE \
+    -noanalysis -readOnly -scriptPath tools/ghidra \
+    -postScript EmulatePresetWriter.java OUTPUT_DIR
+The script checks the exact executable SHA-256 before emulating it. Driver
+archive provenance is in drivers-manifest.json. Manufacturer binaries and
+decompilation output remain excluded from Git. These tests establish
+serialization compatibility; they do not establish live restore behavior.

@@ -15,7 +15,7 @@ find_program(OCTA_CLANG_FORMAT NAMES clang-format-19 clang-format
   PATHS "$ENV{HOME}/.local/opt/octa-llvm19/usr/lib/llvm-19/bin" REQUIRED)
 set(CMAKE_CXX_CLANG_TIDY "${OCTA_CLANG_TIDY};--warnings-as-errors=*")
 
-add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp)
+add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp)
 target_include_directories(octa_protocol PUBLIC include)
 target_link_libraries(octa_protocol PUBLIC octa_quality)
 
@@ -24,6 +24,8 @@ pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
 add_library(octa_usb STATIC src/Usb.cpp)
 target_include_directories(octa_usb PUBLIC include)
 target_link_libraries(octa_usb PUBLIC octa_quality PRIVATE PkgConfig::LIBUSB)
+add_executable(octa-preset src/PresetMain.cpp)
+target_link_libraries(octa-preset PRIVATE octa_protocol)
 add_executable(octa-probe src/Probe.cpp)
 target_link_libraries(octa-probe PRIVATE octa_usb)
 
@@ -53,6 +55,7 @@ if(OCTA_FUZZING)
   target_link_options(midi_fuzz PRIVATE -fsanitize=fuzzer)
 endif()
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 enable_testing()
 add_executable(protocol_test test/Protocol.cpp)
 target_link_libraries(protocol_test PRIVATE octa_protocol)
@@ -72,6 +75,11 @@ add_test(NAME dsp-update COMMAND dsp_update_test)
 add_executable(dsp_control_test test/DspControl.cpp)
 target_link_libraries(dsp_control_test PRIVATE octa_protocol)
 add_test(NAME dsp-control COMMAND dsp_control_test)
+add_executable(preset_test test/Preset.cpp)
+target_link_libraries(preset_test PRIVATE octa_protocol)
+add_test(NAME preset COMMAND preset_test)
+add_test(NAME preset-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/PresetCli.py"
+  "$<TARGET_FILE:octa-preset>" "${CMAKE_SOURCE_DIR}/test/data")
 add_executable(auto_sense_test test/AutoSense.cpp)
 target_link_libraries(auto_sense_test PRIVATE octa_protocol)
 add_test(NAME auto-sense COMMAND auto_sense_test)
@@ -84,7 +92,7 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(protocol preamp control dsp dsp-update dsp-control auto-sense meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(protocol preamp control dsp dsp-update dsp-control preset preset-cli auto-sense meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 add_custom_target(format-check
@@ -97,6 +105,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/include/octa/DspControl.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Meters.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/AutoSense.hpp"
+    "${CMAKE_SOURCE_DIR}/include/octa/Preset.hpp"
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
@@ -110,6 +119,8 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/src/DspControl.cpp"
     "${CMAKE_SOURCE_DIR}/src/Meters.cpp"
     "${CMAKE_SOURCE_DIR}/src/AutoSense.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Preset.cpp"
+    "${CMAKE_SOURCE_DIR}/src/PresetMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
@@ -122,6 +133,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/test/DspControl.cpp"
     "${CMAKE_SOURCE_DIR}/test/Meters.cpp"
     "${CMAKE_SOURCE_DIR}/test/AutoSense.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Preset.cpp"
     "${CMAKE_SOURCE_DIR}/test/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/test/MidiTransport.cpp"
     "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
@@ -138,6 +150,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/include/octa/DspControl.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Meters.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/AutoSense.hpp"
+    "${CMAKE_SOURCE_DIR}/include/octa/Preset.hpp"
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
@@ -151,6 +164,8 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/src/DspControl.cpp"
     "${CMAKE_SOURCE_DIR}/src/Meters.cpp"
     "${CMAKE_SOURCE_DIR}/src/AutoSense.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Preset.cpp"
+    "${CMAKE_SOURCE_DIR}/src/PresetMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
@@ -163,6 +178,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/test/DspControl.cpp"
     "${CMAKE_SOURCE_DIR}/test/Meters.cpp"
     "${CMAKE_SOURCE_DIR}/test/AutoSense.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Preset.cpp"
     "${CMAKE_SOURCE_DIR}/test/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/test/MidiTransport.cpp"
     "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
@@ -184,6 +200,8 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/src/DspControl.cpp"
     "${CMAKE_SOURCE_DIR}/src/Meters.cpp"
     "${CMAKE_SOURCE_DIR}/src/AutoSense.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Preset.cpp"
+    "${CMAKE_SOURCE_DIR}/src/PresetMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
@@ -196,6 +214,7 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/test/DspControl.cpp"
     "${CMAKE_SOURCE_DIR}/test/Meters.cpp"
     "${CMAKE_SOURCE_DIR}/test/AutoSense.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Preset.cpp"
     "${CMAKE_SOURCE_DIR}/test/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/test/MidiTransport.cpp"
     ${octa_fuzz_sources}

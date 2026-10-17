@@ -4,6 +4,7 @@
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
+#include "octa/Preset.hpp"
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
@@ -171,6 +172,28 @@ void meter_packets(std::span<const std::uint8_t> bytes) {
   require(recovered);
 }
 
+void preset_files(std::span<const std::uint8_t> bytes) {
+  const auto decoded = octa::decode_preset(bytes);
+  if (decoded) {
+    const auto encoded = octa::encode_preset(*decoded);
+    const auto repeated = octa::decode_preset(encoded);
+    require(repeated && *repeated == *decoded);
+    if (repeated) { require(octa::encode_preset(*repeated) == encoded); }
+  }
+  // Preserve the header to exercise every raw DWORD and flag without a valid
+  // file signature being a prerequisite for mutation coverage.
+  auto synthetic = octa::encode_preset(octa::Preset{});
+  constexpr std::size_t header_size = 39;
+  const auto count = std::min(bytes.size(), synthetic.size() - header_size);
+  std::ranges::copy(bytes.first(count), std::span(synthetic).subspan(header_size).begin());
+  const auto state = octa::decode_preset(synthetic);
+  require(state.has_value());
+  if (!state) { return; }
+  const auto encoded = octa::encode_preset(*state);
+  const auto repeated = octa::decode_preset(encoded);
+  require(repeated && *repeated == *state && encoded.size() == octa::preset_size);
+}
+
 void frames(std::span<const std::uint8_t> bytes) {
   const auto decoded = octa::decode(bytes);
   if (decoded) {
@@ -291,5 +314,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
   typed_controls(bytes);
   meter_packets(bytes);
   auto_sense_controls(bytes);
+  preset_files(bytes);
   return 0;
 }
