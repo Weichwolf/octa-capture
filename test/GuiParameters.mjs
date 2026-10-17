@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import assert from 'node:assert/strict';
 import {ATTACK, RELEASE, RATIO_TEXT, PRE_DELAY, VOLUME, volumeIndex, volumeText,
-  parameterText, panToWire, wireToPan, compressorOutput} from '../gui/web/parameters.js';
+  parameterText, panToWire, wireToPan, compressorOutput, sensitivityIndex} from '../gui/web/parameters.js';
 
 assert.equal(VOLUME.length, 1025);
 assert.equal(VOLUME[0], 0);
@@ -37,4 +37,10 @@ assert.equal(compressorOutput(-20, compressor), -20);
 assert.equal(compressorOutput(-10, compressor), -17.5);
 assert.equal(compressorOutput(0, {...compressor, ratio_index: 8}), -20);
 assert.equal(compressorOutput(0, {...compressor, gain_index: 56}), -9);
+for (const [text, index] of [['0', 0], ['.5', 1], ['1.', 2], ['8.25', 16], ['25.9', 51], ['50.0', 100]]) {
+  assert.equal(sensitivityIndex(text), index);
+}
+for (const text of ['', '.', '1..2', '1e1', '-1', '50.1', '100.0', 'NaN', ' 1', null]) {
+  assert.equal(sensitivityIndex(text), null);
+}
 console.log('PASS fixed fader/parameter tables, rounding, units and compressor curve');

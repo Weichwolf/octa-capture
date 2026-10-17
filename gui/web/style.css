@@ -41,6 +41,8 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .knob:hover .knob-value, .knob:focus .knob-value, .knob.dragging .knob-value { display: block; }
 .sensitivity .knob-value { display: block; position: static; transform: none; background: #151515; color: #e5e5e5; font-size: 8px; order: -1; height: 12px; min-width: 38px; padding: 0; border: 0; }
 .sensitivity .knob-dial { width: 31px; height: 31px; }
+.sensitivity input.knob-value { width: 38px; cursor: text; border-radius: 0; }
+.sensitivity input.knob-value:not([readonly]) { outline: 1px solid #e2cb74; color: white; }
 .compressor { position: relative; height: 121px; border-top: 1px solid #666; border-bottom: 1px solid #5c5c5c; margin: 0 -1px; }
 .bypass { position: absolute; top: 5px; left: 23px; flex-direction: row; font-size: 9px; }
 .bypass .lamp { width: 24px; height: 21px; }

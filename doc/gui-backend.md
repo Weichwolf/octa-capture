@@ -105,6 +105,12 @@ The independently authored web assets use the original parameter values and
 reference-derived behavior, not extracted manufacturer images. Unimplemented
 capabilities stay disabled; absent output meter data is not synthesized.
 
+Sensitivity value fields support double-click editing (Enter/F2 for keyboard
+access), Enter/focus-loss commit and Escape cancellation. Four-character decimal
+values in 0..50 dB truncate to half-dB indices, matching Windows `0x140003940`
+and macOS `CValPreSens::CheckValue`. Polling preserves active edits; invalid
+decimal values restore the current display without a device write.
+
 The bridge additionally emits `pcm-meters` events with validated ALSA capture
 and playback peaks, rate/channel counts, sequences and ages. The Python cache
 retains independent MIDI/PCM receive times. The web panel uses the sources and

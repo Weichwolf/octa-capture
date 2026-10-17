@@ -145,6 +145,15 @@ export function panText(position) {
   return position === 100 ? '0%' : `${Math.abs(position - 100)}%${position < 100 ? 'L' : 'R'}`;
 }
 
+// Both reference panels truncate twice the entered dB value to the wire index.
+// The Windows edit is four characters wide and commits on Enter/focus loss.
+export function sensitivityIndex(text) {
+  if (typeof text !== 'string' || text.length > 4 ||
+      !/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/.test(text)) return null;
+  const value = Number(text);
+  return Number.isFinite(value) && value >= 0 && value <= 50 ? Math.trunc(value * 2) : null;
+}
+
 // The reference keeps the configured curve visible (dimmed) while bypassed.
 export function compressorOutput(input, compressor) {
   const threshold = compressor.threshold_index - 50;

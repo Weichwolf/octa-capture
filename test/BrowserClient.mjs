@@ -73,17 +73,17 @@ export class BrowserClient {
     return response.result.value;
   }
 
-  async click(selector) {
+  async click(selector, clickCount = 1) {
     await this.ready(selector);
     const rectangle = await this.evaluate(`(() => {const node=document.querySelector(${JSON.stringify(selector)});if(!node)throw new Error('Missing control');const r=node.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
-    await this.call('Input.dispatchMouseEvent', {type: 'mousePressed', button: 'left', clickCount: 1, ...rectangle});
-    await this.call('Input.dispatchMouseEvent', {type: 'mouseReleased', button: 'left', clickCount: 1, ...rectangle});
+    await this.call('Input.dispatchMouseEvent', {type: 'mousePressed', button: 'left', clickCount, ...rectangle});
+    await this.call('Input.dispatchMouseEvent', {type: 'mouseReleased', button: 'left', clickCount, ...rectangle});
   }
 
   async key(selector, key) {
     await this.ready(selector);
     await this.evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);
-    const codes = {ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39, Home: 36, End: 35, Escape: 27};
+    const codes = {ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39, Home: 36, End: 35, Escape: 27, Enter: 13, F2: 113};
     await this.call('Input.dispatchKeyEvent', {type: 'keyDown', key, code: key, windowsVirtualKeyCode: codes[key]});
     await this.call('Input.dispatchKeyEvent', {type: 'keyUp', key, code: key, windowsVirtualKeyCode: codes[key]});
   }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import {PRE_DELAY, PREAMP_MAX, VOLUME, GRAPH_MIN_DB, volumeIndex,
-  volumeText, parameterText, panToWire, wireToPan, panText, compressorOutput} from './parameters.js';
+  volumeText, parameterText, panToWire, wireToPan, panText, compressorOutput, sensitivityIndex} from './parameters.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -134,7 +134,9 @@ class Knob {
     this.label = el('span', 'knob-label', label.split(' / ').at(-1));
     this.dial = el('span', 'knob-dial');
     this.dial.append(el('span', 'knob-needle'));
-    this.output = el('output', 'knob-value');
+    this.output = el(extraClass === 'sensitivity' ? 'input' : 'output', 'knob-value');
+    this.editing = false;
+    if (extraClass === 'sensitivity') this.sensitivityEditor(label);
     this.node.append(this.label, this.dial, this.output);
     this.node.addEventListener('pointerdown', event => this.start(event));
     this.node.addEventListener('pointermove', event => this.move(event));
@@ -142,20 +144,23 @@ class Knob {
       this.node.addEventListener(name, () => this.end());
     }
     this.node.addEventListener('keydown', event => this.keyboard(event));
-    this.node.addEventListener('contextmenu', event => controlMenu(event, this.control(this.value)));
+    this.node.addEventListener('contextmenu', event => {
+      if (!this.editing) controlMenu(event, this.control(this.value));
+    });
     knobs.push(this);
     this.display();
   }
   display(caption) {
     const text = caption || this.format(this.value);
     this.dial.style.setProperty('--angle', `${-135 + 270 * this.value / this.maximum}deg`);
-    this.output.textContent = text;
+    if (this.output instanceof HTMLInputElement) this.output.value = text;
+    else this.output.textContent = text;
     this.node.title = text;
     this.node.setAttribute('aria-valuenow', String(this.value));
     this.node.setAttribute('aria-valuetext', text);
   }
   set(value, caption) {
-    if (this.dragging || pending.has(key(this.control(this.value)))) return;
+    if (this.dragging || this.editing || pending.has(key(this.control(this.value)))) return;
     if (!Number.isFinite(value)) return;
     this.value = Math.max(0, Math.min(this.maximum, value));
     this.display(caption);
@@ -168,6 +173,7 @@ class Knob {
     queueChange(this.control(next));
   }
   start(event) {
+    if (event.target === this.output && this.output instanceof HTMLInputElement) return;
     if (event.button !== 0 || !connected || busy || this.node.closest('.unavailable-channel')) return;
     event.preventDefault();
     this.node.focus();
@@ -197,6 +203,47 @@ class Knob {
     else return;
     event.preventDefault();
     this.change(value);
+  }
+  sensitivityEditor(label) {
+    this.output.type = 'text';
+    this.output.inputMode = 'decimal';
+    this.output.maxLength = 4;
+    this.output.readOnly = true;
+    this.output.setAttribute('aria-label', `${label.split(' / ')[0]} sensitivity value`);
+    this.output.title = 'Double-click or press Enter to enter sensitivity in dB.';
+    this.output.addEventListener('dblclick', () => this.beginEdit());
+    this.output.addEventListener('blur', () => this.finishEdit(true));
+    this.output.addEventListener('keydown', event => {
+      if (!this.editing) {
+        if (event.key === 'Enter' || event.key === 'F2') {
+          event.preventDefault(); event.stopPropagation(); this.beginEdit();
+        }
+        return;
+      }
+      event.stopPropagation();
+      if (event.key === 'Enter' || event.key === 'Escape') {
+        event.preventDefault(); this.finishEdit(event.key === 'Enter'); this.output.blur();
+      }
+    });
+    this.output.addEventListener('beforeinput', event => {
+      if (event.inputType === 'insertText' && event.data && !/^[0-9.]+$/.test(event.data)) event.preventDefault();
+    });
+  }
+  beginEdit() {
+    if (!connected || busy || this.node.closest('.unavailable-channel')) return;
+    this.editing = true;
+    this.output.readOnly = false;
+    this.output.value = (this.value / 2).toFixed(1);
+    this.output.focus();
+    this.output.select();
+  }
+  finishEdit(commit) {
+    if (!this.editing) return;
+    const value = sensitivityIndex(this.output.value);
+    this.editing = false;
+    this.output.readOnly = true;
+    if (commit && value !== null && connected && !busy && !this.node.closest('.unavailable-channel')) this.change(value);
+    this.display();
   }
 }
 
@@ -436,6 +483,7 @@ function update(result) {
     const disabled = busy || knob.node.closest('.unavailable-channel') !== null;
     knob.node.tabIndex = disabled ? -1 : 0;
     knob.node.setAttribute('aria-disabled', String(disabled));
+    if (knob.output instanceof HTMLInputElement) knob.output.disabled = disabled;
   }
   for (const {button, read, control} of switches) {
     const value = Boolean(read(state));
