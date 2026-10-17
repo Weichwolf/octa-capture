@@ -20,7 +20,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focu
 #view-switch { margin-right: 8px; color: #ddd; background: linear-gradient(#676767,#414141); box-shadow: inset 0 0 0 2px #4d4d4d; border: 1px solid #929292; border-radius: 2px; height: 20px; min-width: 118px; font-weight: bold; font-size: 11px; font-style: italic; }
 main { position: relative; border: 4px ridge #777; height: 358px; background: #252525; }
 .preamp-view { height: 350px; display: grid; grid-template-columns: repeat(8, 1fr); padding: 0 2px; }
-.preamp-strip { position: relative; min-width: 0; padding: 12px 4px 0; background: linear-gradient(90deg,#373737,#444 55%,#3c3c3c); border-right: 1px solid #555; font-family: 'Arial Narrow','Liberation Sans Narrow',Arial,sans-serif; }
+.preamp-strip { position: relative; min-width: 0; padding: 12px 4px 0; background: linear-gradient(#fff1,#0003),linear-gradient(90deg,#565656,#626262 55%,#4a4a4a); border-right: 1px solid #444; font-family: 'Arial Narrow','Liberation Sans Narrow',Arial,sans-serif; }
 .preamp-strip:nth-child(even) { border-right: 4px ridge #757575; }
 .preamp-strip:last-child { border-right: 0; }
 .pair-title { position: absolute; top: 3px; left: 67%; width: 84px; border-radius: 8px; background: #636363; color: #ddd; text-align: center; height: 12px; line-height: 12px; font: bold 10px Arial,sans-serif; z-index: 1; }
@@ -43,7 +43,7 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .sensitivity .knob-dial { width: 31px; height: 31px; }
 .sensitivity input.knob-value { width: 38px; cursor: text; border-radius: 0; }
 .sensitivity input.knob-value:not([readonly]) { outline: 1px solid #e2cb74; color: white; }
-.compressor { position: relative; height: 121px; border-top: 1px solid #666; border-bottom: 1px solid #5c5c5c; margin: 0 -1px; }
+.compressor { position: relative; height: 111px; border-top: 1px solid #666; border-bottom: 1px solid #5c5c5c; margin: 0 -1px; }
 .bypass { position: absolute; top: 5px; left: 23px; flex-direction: row; font-size: 9px; }
 .bypass .lamp { width: 24px; height: 21px; }
 .curve { position: absolute; top: 38px; left: 50%; transform: translateX(-50%); width: 52px; height: 52px; background: #604b2a; border: 1px solid #2b2b2b; }
@@ -73,7 +73,7 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .meter.in .meter-scale { left: 9px; }
 .meter.out .meter-scale { right: 9px; text-align: right; }
 .meter-name { position: absolute; bottom: -12px; left: -1px; font-size: 8px; }
-.parameters { display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: 43px 43px; gap: 1px 0; padding-top: 2px; }
+.parameters { display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: 45px 45px; gap: 1px 0; padding-top: 2px; }
 .strip-footer { height: 40px; }
 .channel-number { position: absolute; bottom: 3px; left: 5px; display: block; padding: 0 3px; color: #ccc; font: bold 18px Arial,sans-serif; background: #252525; line-height: 20px; }
 .preamp-strip:nth-child(even) .channel-number { left: auto; right: 5px; }
