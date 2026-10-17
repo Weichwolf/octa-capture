@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <expected>
+#include <vector>
 
 namespace octa {
 
@@ -37,6 +38,34 @@ struct PreampBank {
 };
 
 enum class PreampError : std::uint8_t { message, size, data, channel, parameter };
+
+enum class PreampParameter : std::uint8_t {
+  phantom,
+  low_cut,
+  phase,
+  hi_z,
+  sensitivity,
+  stereo_link,
+  compressor,
+  gate,
+  attack,
+  release,
+  threshold,
+  ratio,
+  gain
+};
+
+struct PreampChange {
+  std::uint8_t channel;
+  PreampParameter parameter;
+  std::uint8_t value;
+};
+
+// Writes use reference GUI bounds, unlike incoming raw state indices.
+[[nodiscard]] std::expected<std::vector<std::uint8_t>, PreampError>
+encode_preamp_change(PreampChange change);
+[[nodiscard]] std::expected<std::uint8_t, PreampError>
+preamp_value(const PreampBank &bank, std::uint8_t channel, PreampParameter parameter);
 
 // Retains wire indices; display units and parameter write validation are separate.
 [[nodiscard]] std::expected<PreampBank, PreampError> decode_preamps(const Message &message);

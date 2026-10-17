@@ -5,7 +5,7 @@ Device: Roland UA-1010, USB VID:PID 0582:0120.
 Reference binaries: Windows 1.5.3 and macOS 1.5.9, identified in
 drivers-manifest.json. Addresses below refer to the macOS x86_64 slices.
 Status: static analysis unless explicitly marked as a hardware observation.
-No device-control write has yet been verified on hardware.
+Preamp/compressor writes listed below have passed hardware readback tests.
 
 USB interfaces (observed from the connected device descriptors)
 --------------------------------------------------------------
@@ -70,7 +70,9 @@ SendFsC at 0x177c8 sends the following clock-change request:
   bmRequestType=40, bRequest=03, wValue=0008, wIndex=0000, wLength=0004
   payload: 01 rate_low rate_middle rate_high
 It then polls Fsc_GetStatChk1, checking flags and the requested rate.
-This write sequence is a static finding; it has not yet been run on hardware.
+The standalone module uses this sequence. Stream preparation requests for
+44.1, 96, and 192 kHz returned an error while the clock remained at its
+current 48 kHz setting; working rate changes are not established.
 
 SysEx envelope
 --------------
@@ -159,6 +161,24 @@ Recovered GUI tables contain 101 sensitivity entries (0.0..50.0), nine
 compressor ratios, 26 attack entries, and 46 release entries. Knob position,
 display value, encoded state, and physical gain must remain distinct until
 their conversion functions have been checked.
+
+Write bounds recovered from the reference GUI ranges/tables:
+  Boolean switches: 0..1; sensitivity: 0..100; gate/threshold: 0..50;
+  attack: 0..25; release: 0..45; ratio: 0..8; compressor gain: 0..74.
+src/Control.cpp rejects invalid channels, parameters, and out-of-range
+values before MIDI access. Incoming state retains raw 7-bit indices.
+octa-control writes one DT1 and immediately requests bulk state on the same
+open CTRL connection; success requires the requested value in that reply.
+tools/check-preamps.py additionally checks channel isolation and restores
+each original value. Power and stereo coupling controls are excluded from
+its automatic mutations.
+
+Hardware-verified through WSL/USB-IP: low-cut, phase, sensitivity,
+compressor enable, gate, attack, release, threshold, ratio, and gain on all
+eight channels. Each was changed by one index, independently read back,
+and restored; other preamp channels were checked for unexpected changes.
+The complete 1146-byte bulk payload matched the initial state afterward.
+This verifies these controls, not audio streaming or physical DSP response.
 
 Direct mixer encodings
 -----------------------

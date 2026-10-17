@@ -4,6 +4,7 @@
 - Roland OCTA-CAPTURE / UA-1010, USB `0582:0120`. Linux support must work on native Debian **and** in this WSL2 development environment using USB/IP.
 - Investigate and extend existing ALSA support in `snd-usb-audio` first. Device detection does not prove working audio streaming.
 - Deliver a standalone `snd-octa-capture` module for Debian; users must not patch or rebuild their kernel. ALSA source changes belong only in the private module copy.
+- Finish and test the driver and device protocol before resuming GUI development.
 - Reproduce the Windows GUI's appearance and behavior as closely as possible, including secondary dialogs. Start with HTML/CSS/JavaScript served over local HTTP; later embed the same interface in GTK4/WebKitGTK.
 - Separate the GUI, device backend, and time-critical audio streaming. Audio belongs in the driver; validate state changes in the backend. Run the GUI/backend as a regular user.
 - Bind HTTP to loopback; protect control requests with a token and Host/Origin checks. Load only local web content. A GTK message bridge can later replace HTTP.
@@ -20,6 +21,7 @@
 # Working practices
 
 - Apply strict quality gates modeled on `~/Git/outshine`: warnings are errors, clang-format, clang-tidy with zero findings and a 120-line function limit, strict compiler/linker flags, and ASan/UBSan. Run TSan separately for concurrent code. Never weaken checks or add baselines to hide findings. Kernel code uses Kbuild and kernel-specific analysis/sanitizers; do not pass userspace sanitizer/linker flags into Kbuild.
+- Fuzz untrusted protocol and parameter inputs with sanitizers; preserve regression cases for findings. Fuzz host parsers offline, never send malformed test traffic to the device. Kernel robustness needs separate kernel sanitizer/fault-injection testing.
 - Distinguish protocol observations, hypotheses, and verified behavior; record relevant findings in `doc/`.
 - Keep documentation concise: protocol facts, usage, and material limitations. Do not maintain a diary or record routine work and individual test runs.
 - Keep USB/MIDI framing, addresses, encodings, and evidence in `doc/usb-midi-protocol.txt` as analysis advances.

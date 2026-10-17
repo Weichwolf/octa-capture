@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 set(OCTA_SANITIZER "address-undefined" CACHE STRING "none, address-undefined, or thread")
 set_property(CACHE OCTA_SANITIZER PROPERTY STRINGS none address-undefined thread)
+option(OCTA_FUZZING "Instrument userspace code for libFuzzer" OFF)
 
 add_library(octa_quality INTERFACE)
 target_compile_options(octa_quality INTERFACE
@@ -33,4 +34,12 @@ if(DEFINED octa_sanitizers)
     "-fsanitize=${octa_sanitizers}" -fno-sanitize-recover=all -g
   )
   target_link_options(octa_quality INTERFACE "-fsanitize=${octa_sanitizers}")
+endif()
+
+if(OCTA_FUZZING)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR
+     NOT OCTA_SANITIZER STREQUAL "address-undefined")
+    message(FATAL_ERROR "Fuzzing requires Clang and address-undefined sanitizers")
+  endif()
+  target_compile_options(octa_quality INTERFACE -fsanitize=fuzzer-no-link)
 endif()

@@ -6,7 +6,7 @@ The target platform is native Debian. Development and local functional testing a
 
 ## Status
 
-Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, and a bulk-state reader for the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL; device communication, audio streaming, and the GUI still need completion and hardware verification.
+Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, a bulk-state reader, and validated preamp/compressor writes with readback through the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL. Audio streaming and the remaining controls need completion and hardware verification; driver work takes priority over the GUI.
 
 The driver will be a [standalone kernel module](kernel/README.md); Debian users will not need to patch or rebuild their kernel.
 
@@ -32,11 +32,18 @@ The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. De
 make test       # strict warnings, clang-tidy, ASan/UBSan, and protocol tests
 make lint       # format and full native static analysis
 make release    # optimized build and tests
+./tools/fuzz.sh 120  # offline libFuzzer campaign, seconds after build
 ./build/strict/octa-probe   # read-only clock status, requires USB device access
 ./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
+./build/strict/octa-control 1 attack 8  # set channel 1 attack index, verify fresh bulk reply
+python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
 ```
 
 Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. The separate `thread` preset is available for concurrent code. Userspace flags are not applied to kernel builds.
+
+The `fuzz` preset instruments the protocol library with libFuzzer and ASan/UBSan. Synthetic seeds cover framing, stream recovery, size limits, bulk state, and parameter notifications; invariants check round trips and rejection without state changes. The corpus and crash artifacts remain in `build/fuzz/`. No fuzz input is sent to hardware. These campaigns do not establish kernel robustness; KASAN/UBSAN, fault injection, and malformed USB descriptor/URB tests on a test kernel remain required.
+
+The Python 3 hardware checker tests ten parameters on all eight unlinked channels, changes each by one index, independently checks the complete preamp bank, and restores each value even if readback fails. Phantom power, Hi-Z, and stereo links are excluded from automated changes. A recovery snapshot is saved in `build/hardware/preamp-before.json`; interruption or device disconnection can prevent restoration, so check the reported result. All CLI values are wire indices; see the [protocol bounds](doc/usb-midi-protocol.txt).
 
 ## Documentation
 

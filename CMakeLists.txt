@@ -15,7 +15,7 @@ find_program(OCTA_CLANG_FORMAT NAMES clang-format-19 clang-format
   PATHS "$ENV{HOME}/.local/opt/octa-llvm19/usr/lib/llvm-19/bin" REQUIRED)
 set(CMAKE_CXX_CLANG_TIDY "${OCTA_CLANG_TIDY};--warnings-as-errors=*")
 
-add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp)
+add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp)
 target_include_directories(octa_protocol PUBLIC include)
 target_link_libraries(octa_protocol PUBLIC octa_quality)
 
@@ -32,6 +32,15 @@ add_library(octa_midi STATIC src/Midi.cpp)
 target_link_libraries(octa_midi PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
 add_executable(octa-state src/State.cpp)
 target_link_libraries(octa-state PRIVATE octa_midi)
+add_executable(octa-control src/ControlMain.cpp)
+target_link_libraries(octa-control PRIVATE octa_midi)
+
+if(OCTA_FUZZING)
+  set(octa_fuzz_sources "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp")
+  add_executable(protocol_fuzz test/Fuzz.cpp)
+  target_link_libraries(protocol_fuzz PRIVATE octa_protocol)
+  target_link_options(protocol_fuzz PRIVATE -fsanitize=fuzzer)
+endif()
 
 enable_testing()
 add_executable(protocol_test test/Protocol.cpp)
@@ -40,7 +49,10 @@ add_test(NAME protocol COMMAND protocol_test)
 add_executable(preamp_test test/Preamp.cpp)
 target_link_libraries(preamp_test PRIVATE octa_protocol)
 add_test(NAME preamp COMMAND preamp_test)
-set_tests_properties(protocol preamp PROPERTIES TIMEOUT 20
+add_executable(control_test test/Control.cpp)
+target_link_libraries(control_test PRIVATE octa_protocol)
+add_test(NAME control COMMAND control_test)
+set_tests_properties(protocol preamp control PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 add_custom_target(format-check
@@ -51,12 +63,16 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/include/octa/Usb.hpp"
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Control.cpp"
+    "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
     "${CMAKE_SOURCE_DIR}/test/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/test/Preamp.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Control.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
   VERBATIM)
 
 add_custom_target(format
@@ -67,23 +83,31 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/include/octa/Usb.hpp"
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Control.cpp"
+    "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
     "${CMAKE_SOURCE_DIR}/test/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/test/Preamp.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Control.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp"
   VERBATIM)
 
 add_custom_target(lint
   COMMAND "${OCTA_CLANG_TIDY}" -p "${CMAKE_BINARY_DIR}" --warnings-as-errors=*
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Control.cpp"
+    "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
     "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
     "${CMAKE_SOURCE_DIR}/test/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/test/Preamp.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Control.cpp"
+    ${octa_fuzz_sources}
   DEPENDS format-check
   VERBATIM)

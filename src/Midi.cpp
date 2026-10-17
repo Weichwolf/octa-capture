@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/Midi.hpp"
 
+#include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 
 #include <alsa/asoundlib.h>
@@ -62,10 +63,9 @@ std::expected<void, MidiError> wait_ready(snd_rawmidi_t *handle, Clock::time_poi
   }
 }
 
-std::expected<void, MidiError> send_request(snd_rawmidi_t *output, Clock::time_point deadline) {
-  const auto frame = request(bulk_address, bulk_size);
-  if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "encode request"}); }
-  auto pending = std::span(*frame);
+std::expected<void, MidiError> send_frame(snd_rawmidi_t *output,
+                                          std::span<const std::uint8_t> pending,
+                                          Clock::time_point deadline) {
   while (!pending.empty()) {
     if (Clock::now() >= deadline) {
       return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "send request"});
@@ -116,9 +116,8 @@ std::expected<Message, MidiError> receive_state(snd_rawmidi_t *input, Clock::tim
   return std::unexpected(MidiError{.code = -ETIMEDOUT, .operation = "state reply"});
 }
 
-}
-
-std::expected<Message, MidiError> read_bulk_state(std::string_view port) {
+std::expected<Message, MidiError> query_state(std::string_view port,
+                                              std::span<const std::uint8_t> update) {
   if (!port.starts_with("hw:") || port.find('\0') != std::string_view::npos) {
     return std::unexpected(MidiError{.code = -EINVAL, .operation = "hardware MIDI port"});
   }
@@ -130,9 +129,35 @@ std::expected<Message, MidiError> read_bulk_state(std::string_view port) {
   const RawMidi output(raw_output, &snd_rawmidi_close);
   if (opened < 0) { return std::unexpected(MidiError{.code = opened, .operation = "open CTRL"}); }
   const auto deadline = Clock::now() + query_timeout;
-  const auto sent = send_request(output.get(), deadline);
+  if (!update.empty()) {
+    const auto sent = send_frame(output.get(), update, deadline);
+    if (!sent) { return std::unexpected(sent.error()); }
+  }
+  const auto frame = request(bulk_address, bulk_size);
+  if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "encode request"}); }
+  const auto sent = send_frame(output.get(), *frame, deadline);
   if (!sent) { return std::unexpected(sent.error()); }
   return receive_state(input.get(), deadline);
+}
+
+}
+
+std::expected<Message, MidiError> read_bulk_state(std::string_view port) {
+  return query_state(port, {});
+}
+
+std::expected<Message, MidiError> write_preamp(std::string_view port, PreampChange change) {
+  const auto frame = encode_preamp_change(change);
+  if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "preamp value"}); }
+  auto state = query_state(port, *frame);
+  if (!state) { return state; }
+  const auto bank = decode_preamps(*state);
+  if (!bank) { return std::unexpected(MidiError{.code = -EBADMSG, .operation = "preamp state"}); }
+  const auto observed = preamp_value(*bank, change.channel, change.parameter);
+  if (!observed || *observed != change.value) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "preamp readback"});
+  }
+  return state;
 }
 
 }
