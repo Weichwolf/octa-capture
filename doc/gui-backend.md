@@ -74,6 +74,8 @@ before device writes. A regular browser keeps its normal sandbox enabled.
 | --- | --- |
 | `GET /api/state` | Full state, clock status, connection/busy/capability flags |
 | `GET /api/meters` | Latest actual input frame, including staleness |
+| `GET /api/devices` | Present OCTA-CAPTURE cards and selected identity; works while disconnected |
+| `POST /api/device` | Select a discovered identity and reopen its CTRL session |
 | `POST /api/control` | Validated scalar control and fresh device readback |
 | `POST /api/action` | Validated initialization, routing, memory or rate action |
 | `POST /api/auto-sense/start` | Start selected-input calibration with a private recovery snapshot |
@@ -92,6 +94,16 @@ Panel commands use the same endpoint: `{"kind":"display","bus":1}` or
 `{"kind":"identify"}`. Their fresh bulk reply verifies preservation of audio
 settings, not physical LCD selection or blinking. Clicking the device name sends
 identification; selecting a different visible mixer tab sends LCD selection.
+
+Right-click the device name, or use its Context Menu key/Shift+F10, to select a
+unit. While disconnected, the visible Select OCTA-CAPTURE button opens that menu.
+Selection accepts only `{"id":"serial:…"}` returned by discovery, never a
+client-supplied ALSA port or path. Discovery checks USB `0582:0120` through sysfs
+without claiming USB interfaces. Serial identities survive ALSA card renumbering;
+devices without a serial use their USB bus path. Before subsequent live operations,
+the backend resolves the selected identity again and refuses an absent unit rather
+than following another unit at its previous card number. Auto-Sens must finish or
+be cancelled before changing units. Concurrent controls use the same operation lock.
 
 The Multiple Direct Mixer switch follows both original handlers: enable assigns
 output routes `[0,1,2,3,0]`; disable initializes Patch Bay and selects Mixer A.
@@ -167,6 +179,7 @@ python3 tools/serve-gui.py --bin-dir build/strict > build/gui/server.log 2>&1
 tools/check-gui.sh
 tools/check-gui.sh --write
 tools/check-gui.sh --write --rates  # additionally change all four hardware rates
+tools/check-gui.sh --write --reload-module  # WSL development helper required
 ```
 
 `--write` uses actual browser keyboard/pointer/file events, verifies hardware
@@ -178,6 +191,14 @@ channel availability, 192 kHz menu/dialog restrictions and PCM meter recovery,
 then restores the original rate. The Initialize submenu stays available at 192
 kHz, as in both reference dispatchers. WSL device tests pass at all four rates;
 native Debian and physical signal quality remain separate requirements.
+
+`--reload-module` uses the already provisioned `sudo -n octa-capture-dev` helper
+at `/usr/local/sbin/octa-capture-dev` to unload and reinstall this module. It
+checks the absent-card page/menu, automatic same-unit reconnection, real MIDI/PCM
+meters and full raw preservation. It does not detach/reset USB or install the
+helper. This option is specific to the development setup; physical unplug and
+native Debian lifecycle tests remain separate. Module installation runs in a
+finally block after successful unload.
 
 Driver → Show README opens an independently written local usage guide. It loads
 no external content and is available in both the browser and GTK host.

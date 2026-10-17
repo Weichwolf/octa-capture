@@ -171,6 +171,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, application.snapshot())
             elif path == '/api/meters':
                 self.reply(200, application.meters())
+            elif path == '/api/devices':
+                self.reply(200, application.devices())
             elif path == '/api/preset':
                 self.reply(200, application.export_preset(), 'application/octet-stream',
                            {'Content-Disposition': 'attachment; filename="OCTA-CAPTURE.octa"'})
@@ -223,6 +225,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.reply(200, application.disconnect())
                 return
             operations = {'/api/control': application.change, '/api/action': application.action,
+                          '/api/device': application.select_device,
                           '/api/auto-sense/start': application.start_auto_sense,
                           '/api/auto-sense/stop': application.stop_auto_sense}
             if path not in operations:

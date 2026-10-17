@@ -14,6 +14,7 @@ import time
 
 from .backend import Bridge, DeviceError, InvalidControl, integer, validate_control
 from .auto_sense import AutoSenseJob
+from .devices import discover
 
 
 class Application:
@@ -36,6 +37,7 @@ class Application:
         self._transaction = False
         self._auto_job = None
         self._auto_thread = None
+        self._selected_identity = None
 
     def _open(self):
         if self._closed:
@@ -85,6 +87,7 @@ class Application:
                 raise DeviceError('The OCTA-CAPTURE device is not available.')
             if self._cached is None or time.monotonic() - self._updated >= 0.25:
                 try:
+                    self._sync_selected_device()
                     self._remember(self.bridge.request('state')['state'])
                 except DeviceError:
                     with self._cache_lock:
@@ -102,12 +105,58 @@ class Application:
         self._touch()
         with self._operation:
             self._open()
+            self._sync_selected_device()
             self._remember(self.bridge.request(operation, arguments)['state'])
             return self._document()
 
     def meters(self):
         self._touch()
         return {'meters': self.bridge.meters()}
+
+    def devices(self):
+        self._open()
+        devices = []
+        for device in discover():
+            document = device.document(self.port)
+            if self._selected_identity is not None:
+                document['selected'] = device.identity == self._selected_identity
+            devices.append(document)
+        return {'devices': devices}
+
+    def _bind_device(self, device):
+        self.bridge.close()
+        self.port = device.port
+        self.control_port = self.port.split(',')[0]
+        self.bridge = Bridge(self.bin_dir / 'octa-bridge', self.port)
+        self._status = None
+        self._invalidate()
+
+    def _sync_selected_device(self):
+        if self._selected_identity is None:
+            return
+        device = next((device for device in discover() if device.identity == self._selected_identity), None)
+        if device is None:
+            self.bridge.close()
+            raise DeviceError('The selected OCTA-CAPTURE is disconnected.')
+        if device.port != self.port:
+            self._bind_device(device)
+
+    def select_device(self, body):
+        if type(body) is not dict or set(body) != {'id'} or type(body['id']) is not str:
+            raise InvalidControl('Expected a device identity.')
+        if not 1 <= len(body['id']) <= 96:
+            raise InvalidControl('Invalid device identity.')
+        self._require_no_auto_sense()
+        with self._operation:
+            self._open()
+            self._require_no_auto_sense()
+            device = next((device for device in discover() if device.identity == body['id']), None)
+            if device is None:
+                raise InvalidControl('The selected OCTA-CAPTURE is no longer present.')
+            self._selected_identity = device.identity
+            self._bind_device(device)
+            self._auto_job = None
+            return self.snapshot()
 
     def _touch(self):
         with self._cache_lock:
@@ -160,6 +209,7 @@ class Application:
         self._require_no_auto_sense()
         with self._operation:
             self._open()
+            self._sync_selected_device()
             self.bridge.close()
             output = self._run([self.bin_dir / 'octa-preset', 'export', self.port], timeout=15)
             if len(output) != 1639:
@@ -172,6 +222,7 @@ class Application:
         self._require_no_auto_sense()
         with self._operation:
             self._open()
+            self._sync_selected_device()
             directory = self._directory()
             uploaded = directory / 'settings.octa'
             with uploaded.open('xb') as output:
@@ -209,10 +260,12 @@ class Application:
         self._status_updated = 0
 
     def action(self, body):
-        arguments = self._action_arguments(body)
+        self._action_arguments(body)
         self._require_no_auto_sense()
         with self._operation:
             self._open()
+            self._sync_selected_device()
+            arguments = self._action_arguments(body)
             directory = self._directory()
             arguments = [str(value).replace('{recovery}', str(directory / 'recovery.syx'))
                          for value in arguments]
@@ -261,6 +314,7 @@ class Application:
         with self._operation:
             self._open()
             self._require_no_auto_sense()
+            self._sync_selected_device()
             state = self.snapshot()['state']
             if bytes.fromhex(state['payload_hex'])[2] == 3 and channels & 0xf0:
                 raise InvalidControl('Only inputs 1–4 are available at 192 kHz.')

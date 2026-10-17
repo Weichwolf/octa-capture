@@ -22,6 +22,8 @@ python3 tools/serve-gui.py --open
 
 Open the private launch link printed by the server. It listens only on `127.0.0.1`; its token, Host/Origin checks and local-only content policy protect device operations. Use an account with ALSA device access. The backend and audio streaming remain independent; closing the panel releases its exclusive CTRL connection.
 
+Right-click the device name (or press Shift+F10) to select a discovered OCTA-CAPTURE. The selector stays available while disconnected. Selected serial identities survive ALSA card renumbering; the panel reconnects automatically when the unit returns.
+
 This is a working panel with real input, compressor OUT and mixer PCM meters; complete GUI interaction parity and multi-unit behavior remain in progress. Physical audio response and native Debian validation are also outstanding. See the [function inventory](doc/function-inventory.md), [PCM meters](doc/pcm-meters.md) and [backend documentation](doc/gui-backend.md).
 
 The same panel also runs in a GTK4/WebKitGTK desktop window (Debian 13,

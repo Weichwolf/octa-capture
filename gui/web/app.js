@@ -79,7 +79,9 @@ function setConnected(value, message = 'The device could not be found.') {
   $('#view-switch').disabled = !value;
   $('#header-action').disabled = !value;
   $('[data-menu="device"]').hidden = !value;
-  $('#device-status').hidden = !value;
+  $('#device-status').hidden = false;
+  $('#device-status').setAttribute('aria-label', value ? 'Identify OCTA-CAPTURE' : 'Select OCTA-CAPTURE');
+  if (!value) $('#device-status').textContent = 'Select OCTA-CAPTURE…';
 }
 
 function queueChange(control) {
@@ -857,12 +859,21 @@ function setupEvents() {
   });
   $('#device-status').setAttribute('role', 'button');
   $('#device-status').setAttribute('aria-label', 'Identify OCTA-CAPTURE');
-  $('#device-status').title = 'Identify this OCTA-CAPTURE by blinking its display.';
+  $('#device-status').title = 'Click to identify. Right-click or press Shift+F10 to select an OCTA-CAPTURE.';
   $('#device-status').tabIndex = 0;
-  $('#device-status').addEventListener('click', () => queueChange({kind: 'identify'}));
+  $('#device-status').addEventListener('click', event => {
+    if (connected) queueChange({kind: 'identify'});
+    else void deviceMenu(event);
+  });
+  $('#device-status').addEventListener('contextmenu', event => { void deviceMenu(event); });
   $('#device-status').addEventListener('keydown', event => {
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      void deviceMenu(event); return;
+    }
     if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault(); queueChange({kind: 'identify'});
+      event.preventDefault();
+      if (connected) queueChange({kind: 'identify'});
+      else void deviceMenu(event);
     }
   });
 }
@@ -874,6 +885,32 @@ function enter(name) {
   return true;
 }
 function leave(name) { inFlight.delete(name); }
+
+async function deviceMenu(event) {
+  event.preventDefault();
+  if (!enter('devices')) return;
+  const anchor = $('#device-status');
+  anchor.focus({preventScroll: true});
+  const rect = anchor.getBoundingClientRect();
+  try {
+    const result = await api('/api/devices');
+    const items = result.devices.map(device => ({label: device.name, checked: device.selected,
+      disabled: (connected && busy) || localBusy || writing || pending.size > 0,
+      run: () => { void selectDevice(device.id); }}));
+    if (!items.length) items.push({label: 'The device could not be found.', disabled: true});
+    openMenu(items, rect.left, rect.bottom);
+  } catch (error) { notify(error.message); }
+  finally { leave('devices'); }
+}
+
+async function selectDevice(id) {
+  if ((connected && busy) || localBusy || writing || pending.size) return;
+  setOperationBusy(true); revision++;
+  closeMenus();
+  try { bus = 0; update(await api('/api/device', {id})); }
+  catch (error) { notify(error.message); }
+  finally { setOperationBusy(false); void refresh(); }
+}
 
 async function refresh() {
   if (stopped || !enter('state')) return;

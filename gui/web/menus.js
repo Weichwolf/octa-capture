@@ -52,6 +52,11 @@ export class PopupMenus {
       const button = document.createElement('button');
       button.textContent = item.label;
       button.setAttribute('role', 'menuitem'); button.tabIndex = -1;
+      if (typeof item.checked === 'boolean') {
+        button.setAttribute('role', 'menuitemradio');
+        button.setAttribute('aria-checked', String(item.checked));
+        button.textContent = `${item.checked ? '●' : '○'} ${item.label}`;
+      }
       button.disabled = Boolean(item.disabled);
       if (item.children) {
         this.children.set(button, item.children);

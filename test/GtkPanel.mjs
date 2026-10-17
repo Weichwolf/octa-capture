@@ -31,6 +31,9 @@ export async function checkPanel(write) {
   check(panel.left >= 0 && panel.top >= 0 && panel.right <= innerWidth && panel.bottom <= innerHeight,
     `Complete panel fits the GTK viewport: ${JSON.stringify({panel:panel.toJSON(), width:innerWidth, height:innerHeight})}`);
   const initial = (await api('/api/state')).state;
+  document.querySelector('#device-status').dispatchEvent(new KeyboardEvent('keydown', {key: 'ContextMenu', bubbles: true}));
+  await until(() => document.querySelector('#menus [role=menuitemradio][aria-checked=true]'), 'GTK device selection menu');
+  document.querySelector('#menus [aria-checked=true]').dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
   await until(async () => (await api('/api/meters')).meters?.age_ms < 1000, 'live device meters');
   await until(async () => {
     const pcm = (await api('/api/meters')).meters?.pcm;

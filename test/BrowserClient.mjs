@@ -43,6 +43,7 @@ export class BrowserClient {
     this.exceptions = [];
     this.securityErrors = [];
     this.controls = [];
+    this.selections = [];
     this.controlRequests = new Map();
     socket.addEventListener('message', event => {
       const value = JSON.parse(event.data);
@@ -59,11 +60,12 @@ export class BrowserClient {
         this.securityErrors.push(value.params.entry.text);
       } else if (value.method === 'Network.requestWillBeSent') {
         const request = value.params.request;
-        if (request.url.endsWith('/api/control') && typeof request.postData === 'string') {
+        if ((request.url.endsWith('/api/control') || request.url.endsWith('/api/device')) && typeof request.postData === 'string') {
           const control = {...JSON.parse(request.postData), httpStatus: null};
-          this.controls.push(control);
+          const records = request.url.endsWith('/api/device') ? this.selections : this.controls;
+          records.push(control);
           this.controlRequests.set(value.params.requestId, control);
-          if (this.controls.length > 1000) this.controls.shift();
+          if (records.length > 1000) records.shift();
         }
       } else if (value.method === 'Network.responseReceived' || value.method === 'Network.loadingFailed') {
         const control = this.controlRequests.get(value.params.requestId);
@@ -100,7 +102,7 @@ export class BrowserClient {
   async key(selector, key) {
     await this.ready(selector);
     await this.evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);
-    const codes = {ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39, Home: 36, End: 35, Escape: 27, Enter: 13, F2: 113};
+    const codes = {ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39, Home: 36, End: 35, Escape: 27, Enter: 13, F2: 113, ContextMenu: 93};
     await this.call('Input.dispatchKeyEvent', {type: 'keyDown', key, code: key, windowsVirtualKeyCode: codes[key]});
     await this.call('Input.dispatchKeyEvent', {type: 'keyUp', key, code: key, windowsVirtualKeyCode: codes[key]});
   }

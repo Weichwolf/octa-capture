@@ -4,16 +4,16 @@ set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 arguments=()
-while [[ ${1:-} == --write || ${1:-} == --rates ]]; do
+while [[ ${1:-} == --write || ${1:-} == --rates || ${1:-} == --reload-module ]]; do
     arguments+=("$1")
     shift
 done
-if [[ " ${arguments[*]} " == *' --rates '* && " ${arguments[*]} " != *' --write '* ]]; then
-    echo '--rates requires --write for recovery.' >&2
+if [[ ( " ${arguments[*]} " == *' --rates '* || " ${arguments[*]} " == *' --reload-module '* ) && " ${arguments[*]} " != *' --write '* ]]; then
+    echo '--rates/--reload-module require --write for recovery.' >&2
     exit 2
 fi
 if (( $# > 1 )); then
-    echo 'Usage: tools/check-gui.sh [--write [--rates]] [private-server-log]' >&2
+    echo 'Usage: tools/check-gui.sh [--write [--rates] [--reload-module]] [private-server-log]' >&2
     exit 2
 fi
 server_log=${1:-build/gui/server.log}

@@ -7,6 +7,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {BrowserClient, until} from './BrowserClient.mjs';
 import {checkRates} from './GuiRates.mjs';
+import {checkReconnect} from './GuiReconnect.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -14,7 +15,8 @@ const logFile = path.resolve(process.argv[2] || 'build/gui/server.log');
 const portFile = path.resolve(process.argv[3] || 'build/gui/browser-profile/DevToolsActivePort');
 const write = process.argv.includes('--write');
 const rates = process.argv.includes('--rates');
-if (rates && !write) throw new Error('--rates requires --write for recovery.');
+const reload = process.argv.includes('--reload-module');
+if ((rates || reload) && !write) throw new Error('--rates/--reload-module require --write for recovery.');
 const launch = (await fs.readFile(logFile, 'utf8')).match(/http:\/\/127\.0\.0\.1:[0-9]+\/#token=[^\s]+/)?.[0];
 if (!launch) throw new Error('No private GUI launch link in the server log.');
 const url = new URL(launch), token = new URLSearchParams(url.hash.slice(1)).get('token');
@@ -46,6 +48,19 @@ try {
   await browser.blank();
   await browser.call('Page.navigate', {url: launch});
   await until(() => browser.evaluate('document.querySelectorAll(".preamp-strip").length === 8 && document.querySelector("#connection-message").hidden'), 'live preamp view');
+  const devices = (await api('/api/devices')).devices;
+  assert.equal(devices.filter(device=>device.selected).length, 1, 'Selected card is discovered through sysfs');
+  await browser.key('#device-status', 'ContextMenu');
+  await until(() => browser.evaluate('document.querySelectorAll("#menus [role=menuitemradio]").length > 0'), 'device selection menu');
+  assert.equal(await browser.evaluate('document.querySelectorAll("#menus [role=menuitemradio]").length'), devices.length);
+  if (write) {
+    const start = browser.selections.length;
+    await browser.click('#menus [aria-checked=true]');
+    await until(() => browser.selections.slice(start).some(selection=>selection.id === devices.find(device=>device.selected).id && selection.httpStatus === 200), 'fresh device selection and CTRL reconnection');
+    await until(() => browser.evaluate('document.querySelector("#connection-message").hidden && document.querySelector("#busy-message").hidden'), 'selected device controls ready');
+    assert.deepEqual((await api('/api/state')).state, before, 'Device reselection preserves complete raw state');
+  } else await browser.key('#menus [aria-checked=true]', 'Escape');
+  console.log('PASS sysfs device menu, keyboard access and selected-device lifecycle');
   assert.equal(await browser.evaluate('document.querySelectorAll("#preamp-view .knob").length'), 56);
   assert.equal(await browser.evaluate('document.querySelectorAll("#preamp-view canvas").length'), 8);
   const exposed = await browser.evaluate('location.hash');
@@ -248,6 +263,7 @@ try {
     console.log('PASS browser Auto-Sens start/finish/cancel, verified notifications and recovery');
   }
   if (rates) await checkRates(browser, api, directory, [44100, 48000, 96000, 192000][payload[2]]);
+  if (reload) await checkReconnect(browser, api, launch, run);
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');
   assert.deepEqual(browser.securityErrors, [], 'Content Security Policy violations');
   assert.deepEqual((await api('/api/state')).state, before, 'Complete raw state preserved');

@@ -45,6 +45,13 @@ class TestApplication:
     def meters(self):
         return {'meters': None}
 
+    def devices(self):
+        return {'devices': [{'id': '1-1', 'name': 'OCTA-CAPTURE', 'selected': True}]}
+
+    def select_device(self, body):
+        self.calls.append(('device', body))
+        return {'connected': True}
+
     def export_preset(self):
         return bytes(1639)
 
@@ -133,6 +140,17 @@ class Http(unittest.TestCase):
         self.assertEqual(self.application.calls, [])
         self.assertEqual(self.request('GET', '/api/state')[0], 200)
         self.assertEqual(self.application.calls, ['state'])
+
+    def test_device_selection_is_authenticated_and_origin_checked(self):
+        self.assertEqual(self.request('GET', '/api/devices', authorized=False)[0], 403)
+        status, _, body = self.request('GET', '/api/devices')
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)['devices'][0]['id'], '1-1')
+        self.assertEqual(self.request('POST', '/api/device', '{"id":"1-1"}',
+                                      headers={'Origin': 'http://evil.example'})[0], 403)
+        self.assertEqual(self.application.calls, [])
+        self.assertEqual(self.request('POST', '/api/device', '{"id":"1-1"}')[0], 200)
+        self.assertEqual(self.application.calls, [('device', {'id': '1-1'})])
 
     def test_routes_are_fixed(self):
         for path in ('/../README.md', '/%2e%2e/README.md', '/gui/backend.py', '/package.json'):
