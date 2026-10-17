@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <expected>
 #include <iostream>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -20,6 +21,9 @@ constexpr std::array<std::uint8_t, 14> sensitivity_frame = {
 constexpr std::array<std::uint8_t, 4> bulk_size_bytes = {0, 0, 8, 0x7a};
 constexpr std::size_t original_bulk_frame_size = 1159;
 constexpr std::uint32_t largest_request = 0x0fffffff;
+constexpr std::uint8_t sysex_start = 0xf0;
+constexpr std::uint8_t midi_clock = 0xf8;
+constexpr std::uint8_t note_on = 0x90;
 
 bool require(bool passed, std::string_view description) {
   if (!passed) { std::cerr << "FAIL: " << description << '\n'; }
@@ -99,11 +103,51 @@ bool request_boundaries() {
   return require(message && message->payload == size, "base-128 request size");
 }
 
+bool stream_framing() {
+  octa::SysExReceiver receiver;
+  auto message = receiver.feed(0);
+  for (const auto byte : sensitivity_frame) {
+    const auto realtime = receiver.feed(midi_clock);
+    if (!require(realtime && !*realtime, "ignore interleaved realtime")) { return false; }
+    message = receiver.feed(byte);
+    if (!require(message.has_value(), "fragmented frame")) { return false; }
+  }
+  const auto &assembled = *message;
+  if (!require(assembled.has_value() && *assembled == *octa::decode(sensitivity_frame),
+               "reassembled message")) {
+    return false;
+  }
+  if (!require(receiver.feed(sysex_start).has_value(), "new SysEx")) { return false; }
+  const auto interrupted = receiver.feed(note_on);
+  if (!require(!interrupted && interrupted.error() == octa::ProtocolError::midi_data,
+               "abort on channel status inside SysEx")) {
+    return false;
+  }
+  for (const auto byte : bulk_request) {
+    message = receiver.feed(byte);
+    if (!require(message.has_value(), "recover after interrupted SysEx")) { return false; }
+  }
+  const auto &next = *message;
+  return require(next.has_value() && next->command == octa::Command::request, "next valid frame");
+}
+
+bool stream_bounds() {
+  octa::SysExReceiver receiver;
+  if (!require(receiver.feed(sysex_start).has_value(), "start oversized frame")) { return false; }
+  constexpr std::size_t frame_overhead = 13;
+  for (std::size_t i = 1; i < octa::maximum_payload + frame_overhead; ++i) {
+    if (!require(receiver.feed(0).has_value(), "bounded unfinished frame")) { return false; }
+  }
+  const auto exceeded = receiver.feed(0);
+  return require(!exceeded && exceeded.error() == octa::ProtocolError::size,
+                 "reject unbounded SysEx without terminator");
+}
+
 }
 
 int main() {
   const bool passed = reference_frames() && corrupted_frames() && limits() && bulk_response() &&
-                      request_boundaries();
+                      request_boundaries() && stream_framing() && stream_bounds();
   if (passed) { std::cout << "Protocol reference vectors and malformed-frame checks passed.\n"; }
   return passed ? 0 : 1;
 }

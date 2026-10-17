@@ -111,16 +111,16 @@ checks that it is below eight for per-channel controls.
 
   Parameter  Meaning                 Reference transmitter
   00         phantom power           0x1000132a8
-  01         phase/polarity           0x10001375e
-  02         Hi-Z                     0x10001389c
-  03         low-cut                  0x100013d52
+  01         low-cut                  0x100013d52
+  02         phase/polarity           0x10001375e
+  03         Hi-Z                     0x10001389c
   04         sensitivity              0x100014844
   05         preamp stereo link       0x100011a46
   06         compressor enable        0x1000152be
   07         gate threshold           0x1000160fc
-  08         compressor threshold     0x10001633a
-  09         attack                   0x1000167a6
-  0A         release                  0x1000169dc
+  08         attack                   0x1000167a6
+  09         release                  0x1000169dc
+  0A         compressor threshold     0x10001633a
   0B         ratio                    0x100016570
   0C         compressor gain          0x100016c1a
 

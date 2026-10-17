@@ -6,8 +6,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <ranges>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace octa {
@@ -99,6 +101,30 @@ std::expected<std::vector<std::uint8_t>, ProtocolError> request(Address address,
     length /= midi_base;
   }
   return encode(Command::request, address, size);
+}
+
+std::expected<std::optional<Message>, ProtocolError> SysExReceiver::feed(std::uint8_t byte) {
+  constexpr std::uint8_t realtime_start = 0xf8;
+  if (byte >= realtime_start) { return std::nullopt; }
+  if (byte == header.front()) {
+    frame_.assign(1, byte);
+    return std::nullopt;
+  }
+  if (frame_.empty()) { return std::nullopt; }
+  if (byte >= midi_base && byte != end_exclusive) {
+    frame_.clear();
+    return std::unexpected(ProtocolError::midi_data);
+  }
+  if (frame_.size() >= maximum_payload + overhead) {
+    frame_.clear();
+    return std::unexpected(ProtocolError::size);
+  }
+  frame_.push_back(byte);
+  if (byte != end_exclusive) { return std::nullopt; }
+  auto message = decode(frame_);
+  frame_.clear();
+  if (!message) { return std::unexpected(message.error()); }
+  return std::optional<Message>(std::move(*message));
 }
 
 }

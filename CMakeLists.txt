@@ -27,6 +27,12 @@ target_link_libraries(octa_usb PUBLIC octa_quality PRIVATE PkgConfig::LIBUSB)
 add_executable(octa-probe src/Probe.cpp)
 target_link_libraries(octa-probe PRIVATE octa_usb)
 
+pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
+add_library(octa_midi STATIC src/Midi.cpp)
+target_link_libraries(octa_midi PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
+add_executable(octa-state src/State.cpp)
+target_link_libraries(octa-state PRIVATE octa_midi)
+
 enable_testing()
 add_executable(protocol_test test/Protocol.cpp)
 target_link_libraries(protocol_test PRIVATE octa_protocol)
@@ -37,8 +43,11 @@ set_tests_properties(protocol PROPERTIES TIMEOUT 20
 add_custom_target(format-check
   COMMAND "${OCTA_CLANG_FORMAT}" --dry-run --Werror
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
+    "${CMAKE_SOURCE_DIR}/include/octa/Midi.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Usb.hpp"
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
+    "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
     "${CMAKE_SOURCE_DIR}/test/Protocol.cpp"
@@ -47,8 +56,11 @@ add_custom_target(format-check
 add_custom_target(format
   COMMAND "${OCTA_CLANG_FORMAT}" -i
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
+    "${CMAKE_SOURCE_DIR}/include/octa/Midi.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Usb.hpp"
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
+    "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
     "${CMAKE_SOURCE_DIR}/test/Protocol.cpp"
@@ -57,6 +69,8 @@ add_custom_target(format
 add_custom_target(lint
   COMMAND "${OCTA_CLANG_TIDY}" -p "${CMAKE_BINARY_DIR}" --warnings-as-errors=*
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Midi.cpp"
+    "${CMAKE_SOURCE_DIR}/src/State.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Probe.cpp"
     "${CMAKE_SOURCE_DIR}/test/Protocol.cpp"

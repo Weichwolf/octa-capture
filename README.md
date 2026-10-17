@@ -6,7 +6,7 @@ The target platform is native Debian. Development and local functional testing a
 
 ## Status
 
-Protocol analysis and implementation are in progress. Available: a SysEx codec and an experimental USB clock probe. Reliable device communication, audio streaming, the driver extensions, and the GUI remain unfinished.
+Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, and a bulk-state reader for the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL; device communication, audio streaming, and the GUI still need completion and hardware verification.
 
 The driver will be a [standalone kernel module](kernel/README.md); Debian users will not need to patch or rebuild their kernel.
 
@@ -26,13 +26,14 @@ source /etc/octa-capture-dev.env
 
 The script currently exists only in `/tmp` and is not part of the repository. The WSL kernel build takes time and several GB of disk space. Modules must match the kernel version of each test system.
 
-The native userspace code uses C++23, CMake/Ninja, LLVM 19, and libusb. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, and `shellcheck`.
+The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, and `shellcheck`.
 
 ```bash
 make test       # strict warnings, clang-tidy, ASan/UBSan, and protocol tests
 make lint       # format and full native static analysis
 make release    # optimized build and tests
 ./build/strict/octa-probe   # read-only clock status, requires USB device access
+./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
 ```
 
 Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. The separate `thread` preset is available for concurrent code. Userspace flags are not applied to kernel builds.

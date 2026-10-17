@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -40,5 +41,14 @@ encode(Command command, Address address, std::span<const std::uint8_t> payload);
 [[nodiscard]] std::expected<Message, ProtocolError> decode(std::span<const std::uint8_t> frame);
 [[nodiscard]] std::expected<std::vector<std::uint8_t>, ProtocolError> request(Address address,
                                                                               std::uint32_t length);
+
+// Incremental MIDI input: handles fragmented SysEx and interleaved realtime bytes.
+class SysExReceiver {
+public:
+  [[nodiscard]] std::expected<std::optional<Message>, ProtocolError> feed(std::uint8_t byte);
+
+private:
+  std::vector<std::uint8_t> frame_;
+};
 
 }
