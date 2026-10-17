@@ -41,6 +41,13 @@ def main():
                 summary['output_routes'] == list(struct.unpack_from('<5I', data, 39)) and
                 summary['reverb_type'] == struct.unpack_from('<I', data, 59)[0],
                 'Summary disagrees with independently read file offsets')
+    prepare = ['prepare', fixtures / 'preset-import-profile.octa', fixtures / 'preset-export-bulk.syx']
+    require(run(binary, prepare).stdout == (fixtures / 'preset-import-reference.syx').read_bytes(),
+            'Offline import preparation disagrees with original LoadCpl/Set/TxBlk')
+    run(binary, ['prepare', fixtures / 'preset-ver100-windows-1.octa',
+                 fixtures / 'preset-export-bulk.syx'], expected=1)
+    with open('/dev/full', 'wb') as full:
+        run(binary, prepare, expected=1, stdout=full)
     original = (fixtures / 'preset-ver100-windows-0.octa').read_bytes()
     with tempfile.TemporaryDirectory(prefix='octa-preset-test-') as directory:
         path = Path(directory) / 'test.octa'

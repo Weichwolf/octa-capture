@@ -2,6 +2,7 @@
 #include "octa/Midi.hpp"
 #include "octa/Preset.hpp"
 #include "octa/PresetState.hpp"
+#include "octa/Protocol.hpp"
 
 #include <array>
 #include <cstddef>
@@ -64,6 +65,36 @@ int export_current(std::string_view port) {
   return finish_output();
 }
 
+int prepare_file(const octa::Preset &preset, const char *bulk_path) {
+  std::ifstream input(bulk_path, std::ios::binary);
+  constexpr std::size_t frame_size = octa::bulk_size + 13;
+  std::array<std::uint8_t, frame_size + 1> bytes{};
+  input.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  const auto count = input.gcount();
+  if (input.bad() || count < 0) {
+    std::cerr << "Could not read current bulk frame.\n";
+    return 1;
+  }
+  const auto current = octa::decode(std::span(bytes).first(static_cast<std::size_t>(count)));
+  if (!current) {
+    std::cerr << "Invalid current bulk frame.\n";
+    return 1;
+  }
+  const auto target = octa::preset_to_bulk(preset, *current);
+  if (!target) {
+    std::cerr << "Could not prepare import: invalid current state or preset control bounds.\n";
+    return 1;
+  }
+  const auto wire = octa::encode(target->command, target->address, target->payload);
+  if (!wire) {
+    std::cerr << "Could not encode prepared import.\n";
+    return 1;
+  }
+  std::cout.write(reinterpret_cast<const char *>(wire->data()),
+                  static_cast<std::streamsize>(wire->size()));
+  return finish_output();
+}
+
 void print_summary(const octa::Preset &preset) {
   std::cout << R"({"format":"Ver100","bytes":)" << octa::preset_size << R"(,"output_routes":[)";
   for (const auto &route : preset.output_routes) {
@@ -82,9 +113,12 @@ int main(int argc, char **argv) {
     const std::string_view port = argc == 3 ? argv[2] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
     return export_current(port);
   }
-  if (argc != 3 || (mode != "inspect" && mode != "normalize")) {
+  const bool file_mode = mode == "inspect" || mode == "normalize" || mode == "prepare";
+  const int required_arguments = mode == "prepare" ? 4 : 3;
+  if (argc != required_arguments || !file_mode) {
     std::cerr << "Usage: octa-preset inspect|normalize FILE\n"
                  "       octa-preset export [hw:CTRL-port] > settings.octa\n"
+                 "       octa-preset prepare FILE CURRENT.syx > prepared.syx (offline)\n"
                  "normalize and export write binary Ver100 files to stdout.\n";
     return 2;
   }
@@ -93,6 +127,7 @@ int main(int argc, char **argv) {
     std::cerr << preset.error() << '\n';
     return 1;
   }
+  if (mode == "prepare") { return prepare_file(*preset, argv[3]); }
   if (mode == "inspect") {
     print_summary(*preset);
   } else {

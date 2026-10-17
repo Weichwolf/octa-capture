@@ -45,12 +45,13 @@ def load_image(cpu, image):
         offset += size
 
 
-def emulate(image, frame):
+def emulate(image, frame, preset=None):
     cpu = Uc(UC_ARCH_X86, UC_MODE_64)
     cpu.ctl_set_cpu_model(registers.UC_CPU_X86_HASWELL)
     load_image(cpu, image)
     for address, length in ((STATE, 0x4000), (FILE, 0x1000), (BULK, 0x1000),
-                            (MESSAGE, 0x1000), (STOP, 0x1000), (0x76000000, 0x10000)):
+                            (MESSAGE, 0x1000), (STOP, 0x1000), (0x76000000, 0x10000),
+                            (0x77000000, 0x4000), (0x78000000, 0x4000)):
         cpu.mem_map(address, length)
     # Emulated runtime: an open in-memory file and a stable stack guard.
     write_pointer(cpu, FILE + 8, FILE)
@@ -61,14 +62,17 @@ def emulate(image, frame):
     cpu.reg_write(registers.UC_X86_REG_CR4, cpu.reg_read(registers.UC_X86_REG_CR4) | 0x200)
     is_selector = pointer(cpu, 0x10005af08)
     write_selector = pointer(cpu, 0x10005b6c0)
+    read_selector = pointer(cpu, 0x10005b6d0)
     if bytes(cpu.mem_read(is_selector, 3)) != b'is\0' or \
             bytes(cpu.mem_read(write_selector, 18)) != b'writeData:ofSize:\0':
         raise RuntimeError('Unexpected Objective-C selectors')
     output = bytearray(HEADER)
     writes = 0
+    read_position = len(HEADER)
+    transmitted = []
 
     def objective_c_call(engine, _address, _size, _context):
-        nonlocal writes
+        nonlocal writes, read_position
         selector = engine.reg_read(registers.UC_X86_REG_RSI)
         if selector == write_selector:
             address = engine.reg_read(registers.UC_X86_REG_RDX)
@@ -77,6 +81,13 @@ def emulate(image, frame):
                 raise RuntimeError('Unexpected reference write')
             output.extend(engine.mem_read(address, size))
             writes += 1
+        elif selector == read_selector and preset is not None:
+            address = engine.reg_read(registers.UC_X86_REG_RDX)
+            size = engine.reg_read(registers.UC_X86_REG_RCX)
+            if size not in (1, 4) or read_position + size > len(preset):
+                raise RuntimeError('Unexpected reference read')
+            engine.mem_write(address, preset[read_position:read_position + size])
+            read_position += size
         elif selector != is_selector:
             raise RuntimeError('Unexpected Objective-C call')
         stack = engine.reg_read(registers.UC_X86_REG_RSP)
@@ -85,6 +96,27 @@ def emulate(image, frame):
         engine.reg_write(registers.UC_X86_REG_RAX, 1)
         engine.reg_write(registers.UC_X86_REG_RIP, returned)
 
+    def runtime_call(engine, address, _size, _context):
+        if address == 0x10003e526:  # bzero used by the original TxBlk.
+            destination = engine.reg_read(registers.UC_X86_REG_RDI)
+            size = engine.reg_read(registers.UC_X86_REG_RSI)
+            if size != 1146:
+                raise RuntimeError('Unexpected reference bzero')
+            engine.mem_write(destination, bytes(size))
+        else:  # Transport sink for CCplMidiEndpoint::SendLongData.
+            data = engine.reg_read(registers.UC_X86_REG_RSI)
+            size = engine.reg_read(registers.UC_X86_REG_RDX)
+            if size != 1159 or transmitted:
+                raise RuntimeError('Unexpected reference MIDI transmission')
+            transmitted.append(bytes(engine.mem_read(data, size)))
+        stack = engine.reg_read(registers.UC_X86_REG_RSP)
+        returned = pointer(engine, stack)
+        engine.reg_write(registers.UC_X86_REG_RSP, stack + 8)
+        engine.reg_write(registers.UC_X86_REG_RAX, 1)
+        engine.reg_write(registers.UC_X86_REG_RIP, returned)
+
+    cpu.hook_add(UC_HOOK_CODE, runtime_call, begin=0x10003e526, end=0x10003e526)
+    cpu.hook_add(UC_HOOK_CODE, runtime_call, begin=MESSAGE + 0x100, end=MESSAGE + 0x100)
     cpu.hook_add(UC_HOOK_CODE, objective_c_call, begin=MESSAGE, end=MESSAGE)
 
     def call(address, argument0, argument1):
@@ -103,6 +135,31 @@ def emulate(image, frame):
     call(0x100009434, STATE, BULK)  # SetBlk, including its own checksum validation.
     if cpu.mem_read(STATE + 0x815, 1) != b'\1':
         raise RuntimeError('Reference did not accept the bulk state')
+    if preset is not None:
+        if len(preset) != 1639 or not preset.startswith(HEADER):
+            raise RuntimeError('Expected a Ver100 preset')
+        source = 0x77000000
+        context = 0x78000000
+        call(0x100008afc, source, 0)
+        call(0x10003a980, FILE, source)  # LoadCpl.
+        if cpu.reg_read(registers.UC_X86_REG_RAX) != 1 or read_position != len(preset):
+            raise RuntimeError('Reference did not consume the preset')
+        cpu.mem_write(source + 0x815, b'\1')  # The parent Load marks the new state valid.
+        # Cached device properties are retained by CCplDev::Set. Model the
+        # current values that MakeExBulk serializes into the bulk prefix.
+        cpu.mem_write(STATE + 0xc, struct.pack('<I', frame[13]))
+        cpu.mem_write(STATE + 0x10, bytes([frame[14] & 1]))
+        cpu.mem_write(STATE + 0x14, struct.pack('<I', frame[15]))
+        call(0x10003be72, STATE, source)  # Set, preserving current system fields.
+        cpu.mem_write(context + 0x48, bytes(cpu.mem_read(STATE, 0x816)))
+        write_pointer(cpu, context + 8, 1)
+        write_pointer(cpu, context + 0x10, FILE + 0x200)
+        write_pointer(cpu, FILE + 0x200, FILE + 0x300)
+        write_pointer(cpu, FILE + 0x340, MESSAGE + 0x100)
+        call(0x10002a9b0, context, 0)  # Full original TxBlk, including header/checksum.
+        if len(transmitted) != 1:
+            raise RuntimeError('Reference did not produce one bulk transmission')
+        return transmitted[0]
     call(0x10003a66e, FILE, STATE)  # SaveCpl.
     if cpu.reg_read(registers.UC_X86_REG_RAX) != 1 or len(output) != 1639 or writes != 592:
         raise RuntimeError('Unexpected reference preset layout')
@@ -113,7 +170,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('executable', type=Path, help='extracted macOS 1.5.9 x86_64 control panel')
     parser.add_argument('bulk', type=Path, help='complete checksum-valid bulk DT1 .syx file')
-    parser.add_argument('output', type=Path, help='destination .octa file')
+    parser.add_argument('output', type=Path, help='destination .octa file or import .syx frame')
+    parser.add_argument('--import-preset', type=Path, help='emulate LoadCpl/Set/TxBlk instead of export')
     args = parser.parse_args()
     image = args.executable.read_bytes()
     if hashlib.sha256(image).hexdigest() != REFERENCE_SHA256:
@@ -122,9 +180,11 @@ def main():
     if len(frame) != 1159 or not frame.startswith(bytes.fromhex('f0 41 10 00 00 4d 12 01 00 00 00')) or \
             frame[-1] != 0xf7 or any(byte >= 128 for byte in frame[7:-1]) or sum(frame[7:-1]) % 128:
         raise RuntimeError('Expected a checksum-valid OCTA-CAPTURE bulk DT1 frame')
-    result = emulate(image, frame)
+    preset = args.import_preset.read_bytes() if args.import_preset else None
+    result = emulate(image, frame, preset)
     args.output.write_bytes(result)
-    print(f'Bulk/preset reference: {len(result)} bytes, 592 original writer calls; no device I/O.')
+    operation = 'import frame' if preset is not None else 'export file'
+    print(f'Bulk/preset reference: {operation}, {len(result)} bytes; no device I/O.')
 
 
 if __name__ == '__main__':

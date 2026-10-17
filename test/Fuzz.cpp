@@ -205,6 +205,57 @@ void check_preset_export(const octa::Message &message) {
   require(decoded && *decoded == *exported);
 }
 
+void check_preset_import(const octa::Preset &preset, const octa::Message &current) {
+  const auto target = octa::preset_to_bulk(preset, current);
+  if (!target) { return; }
+  require(target->command == octa::Command::data && target->address == octa::bulk_address &&
+          target->payload.size() == octa::bulk_size);
+  const auto wire = octa::encode(target->command, target->address, target->payload);
+  require(wire.has_value());
+  if (!wire) { return; }
+  const auto decoded = octa::decode(*wire);
+  require(decoded && *decoded == *target);
+  require(target->payload[0] == (current.payload[0] & 1U) &&
+          target->payload[1] == current.payload[1] && target->payload[2] == current.payload[2] &&
+          target->payload[3] == (current.payload[3] & 1U) &&
+          target->payload[4] == (current.payload[2] == 3 ? 0 : current.payload[4]));
+  const auto exported = octa::preset_from_bulk(*target);
+  require(exported.has_value());
+  if (!exported) { return; }
+  const auto repeated = octa::preset_to_bulk(*exported, *target);
+  require(repeated && *repeated == *target);
+}
+
+void preset_imports(std::span<const std::uint8_t> bytes) {
+  octa::Message current = {.command = octa::Command::data,
+                           .address = octa::bulk_address,
+                           .payload = std::vector<std::uint8_t>(octa::bulk_size)};
+  const auto count = std::min(current.payload.size(), bytes.size());
+  std::ranges::transform(bytes.first(count), current.payload.begin(), [](std::uint8_t byte) {
+    return static_cast<std::uint8_t>(byte & 15U);
+  });
+  const auto decoded = octa::decode_preset(bytes);
+  if (decoded) { check_preset_import(*decoded, current); }
+  auto synthetic = octa::encode_preset(octa::Preset{});
+  constexpr std::size_t header_size = 39;
+  const auto file_count = std::min(bytes.size(), synthetic.size() - header_size);
+  std::ranges::copy(bytes.first(file_count), std::span(synthetic).subspan(header_size).begin());
+  const auto arbitrary = octa::decode_preset(synthetic);
+  require(arbitrary.has_value());
+  if (arbitrary) { check_preset_import(*arbitrary, current); }
+  octa::Preset valid{};
+  if (!bytes.empty()) {
+    valid.reverb.type = bytes.front() % 5U;
+    valid.preamps.back().channels.back().phantom = (bytes.front() & 1U) != 0;
+    constexpr unsigned int volume_shift = 12;
+    valid.mixers.back().playback.back().channels.back().volume =
+        static_cast<std::uint32_t>(bytes.back()) << volume_shift;
+  }
+  const auto target = octa::preset_to_bulk(valid, current);
+  require(target.has_value());
+  check_preset_import(valid, current);
+}
+
 void frames(std::span<const std::uint8_t> bytes) {
   const auto decoded = octa::decode(bytes);
   if (decoded) {
@@ -329,5 +380,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
   meter_packets(bytes);
   auto_sense_controls(bytes);
   preset_files(bytes);
+  preset_imports(bytes);
   return 0;
 }

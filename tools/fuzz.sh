@@ -22,6 +22,7 @@ def frame(command, address, payload):
     return bytes.fromhex('f0 41 10 00 00 4d') + bytes([command]) + body + bytes([-sum(body) % 128, 0xf7])
 
 seeds = {
+    'preset-import-profile': Path('test/data/preset-import-profile.octa').read_bytes(),
     'preset-zero': b'OCTA-CAPTURE Control Panel Data\0Ver100\0' + bytes(1600),
     'preset-full': b'OCTA-CAPTURE Control Panel Data\0Ver100\0' + bytes([255] * 1600),
     'auto-sense-start': frame(0x12, [0, 2, 1, 4], [1, 9]),

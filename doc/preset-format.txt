@@ -39,8 +39,9 @@ Implementation and verification
 Preset.hpp/Preset.cpp retain every file DWORD at full width, including
 inactive slots. The decoder requires the exact size and version, rejects
 trailing data, and normalizes flags on re-encoding. Decoding does not
-validate device control bounds. Live application of file values is not
-implemented; bounds and coordinated state changes must be validated first.
+validate device control bounds. Offline import preparation validates effective control bounds before
+returning a target bulk message. Live transmission/readback/recovery are
+not implemented yet.
 
 octa-preset inspect FILE prints a summary. octa-preset normalize FILE writes
 a canonical binary file to stdout. Neither command opens a device. octa-preset export [hw:CTRL-port] queries
@@ -85,3 +86,40 @@ only the specified original binary into emulated memory and bounds execution
 by instruction count and time. It performs no device I/O. Manufacturer
 binaries and hardware snapshots remain local; the committed fixtures contain
 synthetic parameters only. Live preset application remains unimplemented.
+
+Offline import preparation
+--------------------------
+PresetImport.cpp implements preset_to_bulk(preset, current_bulk). It returns
+one complete DT1 target without opening a device; a failure returns no
+partial target. octa-preset prepare FILE CURRENT.syx writes the encoded frame
+to stdout. CURRENT.syx must be a complete checksum-valid bulk reply.
+
+All effective preamp, compressor, routing, mixer, master and reverb values
+use the existing typed control validators before encoding. The inactive
+reverb bank 0 permits raw seven-bit indices. Inactive file send/return slots
+are ignored by the hardware mapping, including full-width values, as in
+the reference. The input Preset retains those values for file handling.
+
+The reference loads into a newly constructed CCplDev and copies routes,
+reverb, preamps and mixers into its current object. Consequently, all mono
+switches and the unmapped per-mixer flag (bulk 0x442..0x445) reset to zero.
+Other reserved payload bits/bytes start at zero in TxBlk. Current cached
+device properties in the first five payload bytes are retained with the
+original flag canonicalization: bytes 0 and 3 keep bit 0; byte 4 is zero
+when byte 2 equals 3. Current properties are separate from preset contents.
+
+The synthetic preset-import-profile.octa exercises nonzero controls and
+ignored full-width fields. GeneratePresetImport.py reproduces it. The
+preset-import-reference.syx fixture was captured from original LoadCpl
+(0x10003a980), Set (0x10003be72), and TxBlk (0x10002a9b0) in CPU emulation.
+The reference harness supplies cached device properties from the current
+bulk prefix and replaces file reads/MIDI output with memory streams.
+
+To regenerate the reference using the existing synthetic current bulk:
+  python3 test/GeneratePresetImport.py test/data/preset-import-profile.octa
+  python3 tools/emulate-bulk-preset.py gui-x86_64 \
+    test/data/preset-export-bulk.syx OUTPUT.syx \
+    --import-preset test/data/preset-import-profile.octa
+The complete prepared frame, including its checksum, matches this reference
+byte-for-byte. A hardware-derived state/preset pair also matched offline.
+No prepared import frame has been sent to hardware by these tests.
