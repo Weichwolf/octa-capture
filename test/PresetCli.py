@@ -59,8 +59,9 @@ def main():
         require(run(binary, ['normalize', path]).stdout == noncanonical,
                 'Nonzero flag did not normalize without changing other data')
         run(binary, ['inspect', Path(directory) / 'missing.octa'], expected=1)
-    for arguments in ([], ['inspect'], ['unknown', fixtures], ['inspect', fixtures, 'extra']):
+    for arguments in ([], ['inspect'], ['unknown', fixtures], ['inspect', fixtures, 'extra'], ['export', 'invalid', 'extra']):
         run(binary, arguments, expected=2)
+    run(binary, ['export', 'invalid'], expected=1)
     for mode in ('normalize', 'inspect'):
         with open('/dev/full', 'wb') as full:
             result = run(binary, [mode, fixtures / 'preset-ver100-windows-0.octa'], expected=1, stdout=full)

@@ -5,6 +5,7 @@
 #include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
+#include "octa/PresetState.hpp"
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
@@ -194,6 +195,16 @@ void preset_files(std::span<const std::uint8_t> bytes) {
   require(repeated && *repeated == *state && encoded.size() == octa::preset_size);
 }
 
+void check_preset_export(const octa::Message &message) {
+  const auto exported = octa::preset_from_bulk(message);
+  if (!exported) { return; }
+  require(message.command == octa::Command::data && message.address == octa::bulk_address &&
+          message.payload.size() == octa::bulk_size);
+  const auto encoded = octa::encode_preset(*exported);
+  const auto decoded = octa::decode_preset(encoded);
+  require(decoded && *decoded == *exported);
+}
+
 void frames(std::span<const std::uint8_t> bytes) {
   const auto decoded = octa::decode(bytes);
   if (decoded) {
@@ -211,6 +222,7 @@ void frames(std::span<const std::uint8_t> bytes) {
     const auto &message = *result;
     if (message.has_value()) {
       round_trip(*message);
+      check_preset_export(*message);
       const auto preamps = octa::decode_preamps(*message);
       if (preamps) { bank = *preamps; }
       check_preamp(bank, *message);
@@ -245,6 +257,7 @@ void structured(std::span<const std::uint8_t> bytes) {
   const octa::Message message = {.command = static_cast<octa::Command>(bytes.front()),
                                  .address = address,
                                  .payload = {payload.begin(), payload.end()}};
+  check_preset_export(message);
   const auto encoded = octa::encode(message.command, message.address, message.payload);
   if (encoded) {
     const auto decoded = octa::decode(*encoded);
@@ -295,6 +308,7 @@ void structured(std::span<const std::uint8_t> bytes) {
     constexpr std::uint8_t nibble_mask = 15;
     byte &= nibble_mask;
   }
+  check_preset_export(synthetic);
   const auto synthetic_dsp = octa::decode_dsp(synthetic);
   require(synthetic_dsp.has_value());
   if (synthetic_dsp) {

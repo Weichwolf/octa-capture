@@ -43,9 +43,16 @@ validate device control bounds. Live application of file values is not
 implemented; bounds and coordinated state changes must be validated first.
 
 octa-preset inspect FILE prints a summary. octa-preset normalize FILE writes
-a canonical binary file to stdout. Neither command opens a device.
+a canonical binary file to stdout. Neither command opens a device. octa-preset export [hw:CTRL-port] queries
+the current bulk state and writes its Ver100 file to stdout. PresetState.cpp
+validates the bulk reply before conversion. Incoming raw indices and
+coefficients remain intact; exporting does not apply GUI write limits.
+Only mixer A input sends and return come from the bulk payload. B-D sends
+remain zero; B-D input returns retain the original constructor's unity
+value, 0x200000. The Windows master constructor at 0x140006620 confirms
+the same default. Playback send/return slots are zero.
 
-The two test/data/*.octa fixtures contain synthetic parameter data. They
+The two test/data/preset-ver100-windows-*.octa fixtures contain synthetic parameter data. They
 were produced by offline emulation of the original Windows SaveCpl, with
 CFile::Write replaced by a memory sink: a zeroed state and state byte i set
 to (37*i+11) modulo 256. No device state is used. Each executes 592 scalar
@@ -60,3 +67,21 @@ The script checks the exact executable SHA-256 before emulating it. Driver
 archive provenance is in drivers-manifest.json. Manufacturer binaries and
 decompilation output remain excluded from Git. These tests establish
 serialization compatibility; they do not establish live restore behavior.
+
+Bulk export reference
+---------------------
+test/data/preset-export-bulk.syx is a synthetic DT1 whose payload byte i is
+(7*i+3) modulo 16. preset-export-reference.octa is the output of the original
+Mac CCplDev constructor (0x100008afc), SetBlk (0x100009434) and SaveCpl
+(0x10003a66e), executed in Unicorn with Objective-C file calls replaced by
+a memory sink. The converter must produce the exact same bytes. A captured
+hardware bulk reply was also compared with this reference path, and export
+left the complete bulk state unchanged.
+
+Optional reference regeneration requires Debian's python3-unicorn package:
+  python3 tools/emulate-bulk-preset.py gui-x86_64 BULK.syx OUTPUT.octa
+The tool verifies the exact executable hash and the bulk checksum. It loads
+only the specified original binary into emulated memory and bounds execution
+by instruction count and time. It performs no device I/O. Manufacturer
+binaries and hardware snapshots remain local; the committed fixtures contain
+synthetic parameters only. Live preset application remains unimplemented.

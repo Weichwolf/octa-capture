@@ -281,7 +281,8 @@ The confirmed callers at 0x10002a328 (Store Memory) and 0x10002a2ea
 These persistent device operations are not exposed or hardware-tested yet.
 No initialization, save, or restore operation has been executed. Disk .octa
 presets use a separate Ver100 format; see preset-format.txt for its layout
-and offline codec. No live preset restore is implemented yet.
+and codec. Current-state export is read-only; no live preset restore is
+implemented yet.
 
 Input level meters
 ------------------

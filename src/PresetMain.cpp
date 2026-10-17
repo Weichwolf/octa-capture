@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "octa/Midi.hpp"
 #include "octa/Preset.hpp"
+#include "octa/PresetState.hpp"
 
 #include <array>
 #include <cstddef>
@@ -32,6 +34,36 @@ std::expected<octa::Preset, std::string_view> load_file(const char *path) {
   return std::unexpected("Unsupported preset version.");
 }
 
+void print_binary(const octa::Preset &preset) {
+  const auto bytes = octa::encode_preset(preset);
+  std::cout.write(reinterpret_cast<const char *>(bytes.data()),
+                  static_cast<std::streamsize>(bytes.size()));
+}
+
+int finish_output() {
+  std::cout.flush();
+  if (!std::cout.good()) {
+    std::cerr << "Could not write preset output.\n";
+    return 1;
+  }
+  return 0;
+}
+
+int export_current(std::string_view port) {
+  const auto state = octa::read_bulk_state(port);
+  if (!state) {
+    std::cerr << state.error().operation << ": ALSA error " << state.error().code << '\n';
+    return 1;
+  }
+  const auto preset = octa::preset_from_bulk(*state);
+  if (!preset) {
+    std::cerr << "Could not convert device bulk state to a preset.\n";
+    return 1;
+  }
+  print_binary(*preset);
+  return finish_output();
+}
+
 void print_summary(const octa::Preset &preset) {
   std::cout << R"({"format":"Ver100","bytes":)" << octa::preset_size << R"(,"output_routes":[)";
   for (const auto &route : preset.output_routes) {
@@ -46,9 +78,14 @@ void print_summary(const octa::Preset &preset) {
 
 int main(int argc, char **argv) {
   const std::string_view mode = argc >= 2 ? argv[1] : "";
+  if (mode == "export" && (argc == 2 || argc == 3)) {
+    const std::string_view port = argc == 3 ? argv[2] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
+    return export_current(port);
+  }
   if (argc != 3 || (mode != "inspect" && mode != "normalize")) {
     std::cerr << "Usage: octa-preset inspect|normalize FILE\n"
-                 "normalize writes a canonical Ver100 file to stdout; no device I/O.\n";
+                 "       octa-preset export [hw:CTRL-port] > settings.octa\n"
+                 "normalize and export write binary Ver100 files to stdout.\n";
     return 2;
   }
   const auto preset = load_file(argv[2]);
@@ -59,14 +96,7 @@ int main(int argc, char **argv) {
   if (mode == "inspect") {
     print_summary(*preset);
   } else {
-    const auto bytes = octa::encode_preset(*preset);
-    std::cout.write(reinterpret_cast<const char *>(bytes.data()),
-                    static_cast<std::streamsize>(bytes.size()));
+    print_binary(*preset);
   }
-  std::cout.flush();
-  if (!std::cout.good()) {
-    std::cerr << "Could not write preset output.\n";
-    return 1;
-  }
-  return 0;
+  return finish_output();
 }

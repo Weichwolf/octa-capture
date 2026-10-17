@@ -37,6 +37,7 @@ make release    # optimized build and tests
 ./build/strict/octa-probe   # read-only clock status, requires USB device access
 ./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
 ./build/strict/octa-preset inspect settings.octa  # offline Ver100 file summary
+./build/strict/octa-preset export > current.octa  # read current device state and export
 ./build/strict/octa-preset normalize settings.octa > normalized.octa
 ./build/strict/octa-meters 2000  # observe eight input levels for 2000 ms as JSON lines
 python3 tools/check-meters.py   # hardware checks for meter shutdown and exclusive CTRL access
@@ -59,7 +60,7 @@ The `MidiSession` library API supports a persistent connection for meter message
 
 `octa-dsp` controls the direct mixers, masters, reverb and output routing; invoke it without arguments for syntax. Mixer buses are A..D, channels and output pairs start at 1, and values are decimal wire coefficients/indices. `--dry-run` prints the encoded frame without opening a MIDI device. Writes validate reference GUI bounds before device access and require a fresh bulk reply containing the requested value. Stereo-pair changes use the first channel of the pair. This is a protocol interface; GUI gestures that coordinate several controls still need implementation.
 
-The [Ver100 preset codec](doc/preset-format.txt) reads and writes the original `.octa` layout. It preserves full-width file values and normalizes flag bytes. Windows-writer reference fixtures round-trip byte-for-byte. These commands perform no device I/O; applying a file to hardware still requires implementation and control-bound validation.
+The [Ver100 preset codec](doc/preset-format.txt) reads and writes the original `.octa` layout. It preserves full-width file values and normalizes flag bytes. Windows-writer reference fixtures round-trip byte-for-byte. `inspect` and `normalize` work offline. `export [hw:CTRL-port]` queries the device and writes its current preset to stdout. Its mapping is checked byte-for-byte against emulation of the original Mac bulk decoder and writer. Applying a file to hardware still requires implementation and control-bound validation.
 
 The `fuzz` preset instruments the protocol library with libFuzzer and ASan/UBSan. Synthetic seeds cover framing, stream recovery, size limits, bulk state, and parameter notifications; invariants check round trips and rejection without state changes. `tools/fuzz-midi.sh` also exercises the persistent CTRL session through test-only ALSA symbols, with fragmented input and partial writes. The corpus and crash artifacts remain in `build/fuzz/`. No fuzz input is sent to hardware. These campaigns do not establish kernel robustness; KASAN/UBSAN, fault injection, and malformed USB descriptor/URB tests on a test kernel remain required.
 
