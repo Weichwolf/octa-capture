@@ -128,14 +128,14 @@ std::optional<int> device_command(std::string_view mode, int argc, char **argv) 
         mode == "memory-store" ? octa::MemoryAction::store : octa::MemoryAction::load;
     return octa::cli::operate_memory(action, {.port = port, .snapshot_path = argv[2]});
   }
-  if (mode == "restore" && (argc == 3 || argc == 4)) {
+  if ((mode == "restore" || mode == "restore-auto") && (argc == 3 || argc == 4)) {
     const auto snapshot = load_bulk_file(argv[2]);
     if (!snapshot) {
       std::cerr << snapshot.error() << '\n';
       return 1;
     }
     const std::string_view port = argc == 4 ? argv[3] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
-    return octa::cli::restore_snapshot(*snapshot, port);
+    return octa::cli::restore_snapshot(*snapshot, port, mode == "restore-auto");
   }
   return std::nullopt;
 }
@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
                  "       octa-preset export [hw:CTRL-port] > settings.octa\n"
                  "       octa-preset prepare FILE CURRENT.syx > prepared.syx (offline)\n"
                  "       octa-preset apply FILE NEW-RECOVERY.syx [hw:CTRL-port]\n"
-                 "       octa-preset restore RECOVERY.syx [hw:CTRL-port]\n"
+                 "       octa-preset restore|restore-auto RECOVERY.syx [hw:CTRL-port]\n"
                  "       octa-preset memory-store|memory-load NEW-RECOVERY.syx [hw:CTRL-port]\n"
                  "normalize and export write binary Ver100 files to stdout.\n";
     return 2;

@@ -383,8 +383,29 @@ a successful send does not confirm that Auto-Sens started or completed.
 Fault tests cover partial start/finish writes, destructor cancellation,
 move ownership, shared queries/notifications and reentrancy. The MIDI
 fuzzer also exercises selections, actions and cleanup with fake ALSA.
-No automatic gain operation has been run on hardware; a CLI, gain-result
-checks and restoration on errors still require implementation.
+octa-auto-sense MASK DURATION_MS finish|cancel NEW-RECOVERY.syx [hw:CTRL-port]
+accepts decimal masks 1..255 and durations 1..60000 ms. It saves a validated,
+private full raw snapshot before starting, waits for activity on a selected
+input, sends finish/cancel and requires a notification clearing activity.
+Completion has a three-second deadline. Missing/malformed notifications,
+unrelated result changes and signals trigger cancellation plus raw recovery
+on a fresh CTRL connection. Finish accepts only bounded sensitivity changes
+on selected inputs and linked stereo peers; cancel restores the complete
+snapshot. octa-preset restore-auto RECOVERY.syx [hw:CTRL-port] explicitly
+sends cancel before manual raw recovery. Forced termination/disconnection
+can prevent cleanup; retain and check the recovery file.
+
+On the attached WSL device at 48 kHz, short input-1 finish/cancel runs
+received activity/completion notifications and passed complete result-state
+checks. SIGINT/SIGTERM restored the exact raw snapshot. Strict and release
+binaries passed; a short run also overlapped 12-in/10-out duplex smoke checks
+without ALSA errors. An idle cancel emitted no notification and left the
+raw state unchanged; recovery therefore does not require its acknowledgement.
+tools/check-auto-sense.py is read-only unless --write is supplied, which
+runs these short operations and independently restores/checks the full raw
+state after each case. These checks establish command/notification flow and
+state recovery, not analog calibration or optimal gain with a test signal.
+Native Debian and calibrated gain response remain unverified.
 
 Audio packing and initial hardware tests
 ---------------------------------------

@@ -24,6 +24,8 @@ pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
 add_library(octa_usb STATIC src/Usb.cpp)
 target_include_directories(octa_usb PUBLIC include)
 target_link_libraries(octa_usb PUBLIC octa_quality PRIVATE PkgConfig::LIBUSB)
+add_executable(octa-auto-sense src/AutoSenseMain.cpp src/PresetDevice.cpp)
+target_link_libraries(octa-auto-sense PRIVATE octa_midi)
 add_executable(octa-preset src/PresetMain.cpp src/PresetDevice.cpp)
 target_link_libraries(octa-preset PRIVATE octa_midi)
 add_executable(octa-probe src/Probe.cpp)
@@ -86,6 +88,8 @@ target_link_libraries(preset_test PRIVATE octa_protocol)
 add_test(NAME preset COMMAND preset_test)
 add_test(NAME preset-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/PresetCli.py"
   "$<TARGET_FILE:octa-preset>" "${CMAKE_SOURCE_DIR}/test/data")
+add_test(NAME auto-sense-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/AutoSenseCli.py"
+  "$<TARGET_FILE:octa-auto-sense>")
 add_executable(auto_sense_test test/AutoSense.cpp)
 target_link_libraries(auto_sense_test PRIVATE octa_protocol)
 add_test(NAME auto-sense COMMAND auto_sense_test)
@@ -98,7 +102,7 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(protocol preamp control dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(protocol preamp control dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 add_custom_target(format-check
@@ -131,6 +135,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/src/PresetImport.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetDevice.cpp"
+    "${CMAKE_SOURCE_DIR}/src/AutoSenseMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetDevice.hpp"
     "${CMAKE_SOURCE_DIR}/src/DspMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
@@ -183,6 +188,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/src/PresetImport.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetDevice.cpp"
+    "${CMAKE_SOURCE_DIR}/src/AutoSenseMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetDevice.hpp"
     "${CMAKE_SOURCE_DIR}/src/DspMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
@@ -225,6 +231,7 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/src/PresetImport.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetDevice.cpp"
+    "${CMAKE_SOURCE_DIR}/src/AutoSenseMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"

@@ -135,7 +135,8 @@ Message equality is required, including fields absent from .octa files.
 On failure after a write attempt, or SIGINT/SIGTERM during application,
 the command closes its connection and attempts verified raw recovery on
 a fresh connection. octa-preset restore RECOVERY.syx [hw:CTRL-port] can
-repeat that operation manually. Raw recovery preserves mono and opaque
+repeat that operation manually. The restore-auto variant sends Auto-Sens
+cancel before restoring the snapshot. Raw recovery preserves mono and opaque
 fields that preset application resets according to the original driver.
 Forced termination, power loss or disconnection can prevent recovery;
 retain the recovery file and check the command's result. File fsync does

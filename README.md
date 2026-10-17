@@ -42,6 +42,8 @@ make release    # optimized build and tests
 ./build/strict/octa-preset prepare settings.octa current.syx > prepared.syx  # offline
 ./build/strict/octa-preset apply settings.octa recovery.syx  # recovery file must be new
 ./build/strict/octa-preset restore recovery.syx  # restore complete raw state
+./build/strict/octa-auto-sense 1 1000 cancel auto-recovery.syx  # input 1, then restore
+./build/strict/octa-preset restore-auto auto-recovery.syx  # cancel Auto-Sens before recovery
 ./build/strict/octa-preset memory-store before-store.syx  # overwrite device memory
 ./build/strict/octa-preset memory-load before-load.syx  # load device memory
 ./build/strict/octa-meters 2000  # observe eight input levels for 2000 ms as JSON lines
@@ -51,6 +53,7 @@ python3 tools/check-meters.py   # hardware checks for meter shutdown and exclusi
 ./build/strict/octa-dsp --dry-run mixer input A 3 pan 16384  # encode without MIDI access
 python3 tools/check-dsp.py            # read-only check; --write changes/restores DSP controls
 python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
+python3 tools/check-auto-sense.py     # read-only; --write checks finish/cancel and signal recovery
 ./build/strict/octa-audio-check 48000 prepare-capture  # configure/prepare without streaming
 ./build/strict/octa-audio-check 48000 capture          # transfer one second and check timing
 ```
@@ -59,7 +62,7 @@ Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. 
 
 `octa-meters` holds one CTRL connection while observing input levels, with a duration of 1..60000 milliseconds (default 5000), a three-second inactivity timeout and an optional hardware MIDI port. It emits raw 14-bit values and reference dB display values as JSON lines. The backend attempts to disable meter output after normal completion, callback cancellation and errors. SIGINT/SIGTERM and a closed output pipe shut down through that path. Forced termination or disconnection can prevent the stop command from reaching the device. CTRL access is exclusive while this standalone observer runs.
 
-The `MidiSession` library API supports a persistent connection for meter messages, bulk queries and verified parameter writes. Query callbacks receive intervening notifications; unread bytes and partial frames survive across calls. Queries use a three-second I/O deadline. The session belongs to one thread, rejects reentrant operations and requires reopening after an unresolved query. `octa-session-check` verifies shared meter/query traffic and four writes of the current pan value; it checks that the complete bulk state stays unchanged. Meter disable is asynchronous: in-flight packets may follow. The shared-session checker validates and drains these until the input is quiet. `start_auto_sense(mask)` and `stop_auto_sense(finish/cancel)` share that session; destruction attempts cancellation for an owned start, including partial start/stop failures. Transmission success does not confirm activity or completion. Auto-Sens has offline transport/reference tests but no CLI or hardware verification yet.
+The `MidiSession` library API supports a persistent connection for meter messages, bulk queries and verified parameter writes. Query callbacks receive intervening notifications; unread bytes and partial frames survive across calls. Queries use a three-second I/O deadline. The session belongs to one thread, rejects reentrant operations and requires reopening after an unresolved query. `octa-session-check` verifies shared meter/query traffic and four writes of the current pan value; it checks that the complete bulk state stays unchanged. Meter disable is asynchronous: in-flight packets may follow. The shared-session checker validates and drains these until the input is quiet. `start_auto_sense(mask)` and `stop_auto_sense(finish/cancel)` share that session; destruction attempts cancellation for an owned start, including partial start/stop failures. Transmission success does not confirm activity or completion. `octa-auto-sense MASK DURATION_MS finish|cancel NEW-RECOVERY.syx [hw:CTRL-port]` saves a private raw snapshot, requires selected-input activity and completion notifications, and reads back all state. Finish permits only selected sensitivity changes and linked stereo peers; cancel restores the full snapshot. Errors/signals attempt cancellation and verified recovery on a new connection. `restore-auto` provides manual cancel/recovery. Short finish/cancel and interruption checks pass on WSL, including a run overlapping 48 kHz duplex audio. Calibrated gain behavior and native Debian remain unverified.
 
 `tools/check-meters.py` reproduces normal, signal, broken-pipe and competing-open checks, validates JSON values, checks for a quiet CTRL port after each case, and compares the complete bulk state before/after. It requires `amidi`; `--bin-dir` and `--port` select a build and device.
 

@@ -21,6 +21,7 @@
 #include <ios>
 #include <iostream>
 #include <span>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <sys/poll.h>
@@ -52,6 +53,10 @@ struct FakeIo {
   unsigned int fail_write = 0;
   int open_error = 0;
   int read_error = 0;
+  std::vector<std::uint8_t> auto_start_reply;
+  std::vector<std::uint8_t> auto_stop_reply;
+  int auto_signal = 0;
+  bool auto_fail_stop = false;
   int memory_signal = 0;
   bool fail_after_memory = false;
   unsigned int read_failures = 0;
@@ -410,6 +415,86 @@ bool auto_sense_rejection() {
   return true;
 }
 
+enum class AutoSenseScenario : std::uint8_t {
+  success,
+  malformed,
+  missing_start,
+  missing_completion,
+  unrelated_result,
+  partial_stop,
+  interruption
+};
+
+bool auto_sense_should_fail(octa::AutoSenseAction action, AutoSenseScenario scenario) {
+  if (scenario == AutoSenseScenario::success) { return false; }
+  return scenario != AutoSenseScenario::unrelated_result || action == octa::AutoSenseAction::finish;
+}
+
+bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenario) {
+  io = {};
+  const auto baseline = bulk_frame();
+  auto result = octa::decode(baseline);
+  const auto start = octa::encode_auto_sense_start(1);
+  const auto stop = octa::encode_auto_sense_stop(action);
+  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+  if (!result || !start || !stop || !query) { return false; }
+  constexpr std::size_t sensitivity_offset = 0x1d;
+  constexpr std::size_t low_cut_offset = 0x17;
+  result->payload[sensitivity_offset] = 1;
+  if (scenario == AutoSenseScenario::unrelated_result) { result->payload[low_cut_offset] = 1; }
+  const auto changed = octa::encode(result->command, result->address, result->payload);
+  if (!changed) { return false; }
+  const bool changed_reply =
+      action == octa::AutoSenseAction::finish &&
+      (scenario == AutoSenseScenario::success || scenario == AutoSenseScenario::unrelated_result);
+  io.replies = {baseline, changed_reply ? *changed : baseline, baseline};
+  if (scenario != AutoSenseScenario::missing_start) { io.auto_start_reply = *start; }
+  if (scenario != AutoSenseScenario::missing_completion) { io.auto_stop_reply = *stop; }
+  if (scenario == AutoSenseScenario::malformed) {
+    const std::array<std::uint8_t, 1> wrong_size = {1};
+    const auto malformed = octa::encode(octa::Command::data, {0, 2, 1, 4}, wrong_size);
+    if (!malformed) { return false; }
+    io.auto_start_reply = *malformed;
+  }
+  io.auto_fail_stop = scenario == AutoSenseScenario::partial_stop;
+  io.auto_signal = scenario == AutoSenseScenario::interruption ? SIGTERM : 0;
+  auto directory = std::to_array("/tmp/octa-auto-sense-test-XXXXXX");
+  if (mkdtemp(directory.data()) == nullptr) { return false; }
+  const auto path = std::string(directory.data()) + "/recovery.syx";
+  const octa::cli::AutoSenseOptions request = {
+      .channels = 1, .duration = std::chrono::milliseconds(1), .action = action};
+  std::stringbuf errors;
+  auto *previous_errors = std::cerr.rdbuf(&errors);
+  const int status =
+      octa::cli::run_auto_sense(request, {.port = "hw:fake", .snapshot_path = path.c_str()});
+  std::cerr.rdbuf(previous_errors);
+  std::ifstream file(path, std::ios::binary);
+  std::array<std::uint8_t, octa::bulk_size + 14> bytes{};
+  file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  const bool saved = file.gcount() == static_cast<std::streamsize>(baseline.size()) &&
+                     std::ranges::equal(std::span(bytes).first(baseline.size()), baseline);
+  const bool failed = auto_sense_should_fail(action, scenario);
+  int expected_status = failed ? 1 : 0;
+  constexpr int interrupted_status = 130;
+  if (scenario == AutoSenseScenario::interruption) { expected_status = interrupted_status; }
+  auto expected_tail = baseline;
+  append_bytes(expected_tail, *query);
+  const bool recovered = failed || action == octa::AutoSenseAction::cancel;
+  const bool raw_tail =
+      io.outgoing.size() >= expected_tail.size() &&
+      std::ranges::equal(std::span(io.outgoing).last(expected_tail.size()), expected_tail);
+  const unsigned int connections = failed ? 2U : 1U;
+  const bool recovery_verified =
+      !failed || errors.str().contains("Original raw state restored and verified.");
+  const bool removed_file = unlink(path.c_str()) == 0;
+  const bool removed_directory = rmdir(directory.data()) == 0;
+  return require(
+      status == expected_status && saved && io.opens == connections &&
+          io.closes == connections * 2 && (!recovered || raw_tail) && recovery_verified &&
+          removed_file && removed_directory,
+      "Auto-Sens workflow snapshots, completion, bounded result changes and raw recovery");
+}
+
 bool memory_operations() {
   io = {};
   auto reply = level_frame();
@@ -718,6 +803,29 @@ bool open_failure() {
                  "failed open never starts the meter stream");
 }
 
+int handle_fake_data(const octa::Message &message) {
+  if (message.command != octa::Command::data) { return 0; }
+  if (message.address == octa::Address{0, 0, 0, 1}) {
+    if (io.fail_after_memory) { ++io.read_failures; }
+    if (io.memory_signal != 0 && kill(getpid(), io.memory_signal) != 0) { return -errno; }
+  }
+  if (message.address == octa::Address{0, 2, 1, 4}) {
+    append_bytes(io.incoming, io.auto_start_reply);
+    if (io.auto_fail_stop) { io.fail_write = io.writes + 2; }
+    if (io.auto_signal != 0 && kill(getpid(), io.auto_signal) != 0) { return -errno; }
+  }
+  if (message.address == octa::Address{0, 2, 1, 5}) {
+    append_bytes(io.incoming, io.auto_stop_reply);
+  }
+  return 0;
+}
+
+void handle_fake_request(const octa::Message &message) {
+  if (message.command == octa::Command::request && io.reply_position < io.replies.size()) {
+    append_bytes(io.incoming, io.replies[io.reply_position++]);
+  }
+}
+
 }
 
 // Test-only ALSA symbol implementations interpose the dynamically linked library.
@@ -766,15 +874,10 @@ snd_rawmidi_write(snd_rawmidi_t * /*rmidi*/, const void *buffer, std::size_t siz
     const auto result = io.requests.feed(byte);
     if (!result) { continue; }
     const auto &message = *result;
-    if (message.has_value() && message->command == octa::Command::data &&
-        message->address == octa::Address{0, 0, 0, 1}) {
-      if (io.fail_after_memory) { ++io.read_failures; }
-      if (io.memory_signal != 0 && kill(getpid(), io.memory_signal) != 0) { return -errno; }
-    }
-    if (message.has_value() && message->command == octa::Command::request &&
-        io.reply_position < io.replies.size()) {
-      append_bytes(io.incoming, io.replies[io.reply_position++]);
-    }
+    if (!message.has_value()) { continue; }
+    const auto status = handle_fake_data(*message);
+    if (status != 0) { return status; }
+    handle_fake_request(*message);
   }
   return static_cast<ssize_t>(count);
 }
@@ -809,15 +912,28 @@ int main() {
     memory_cli_passed = memory_cli_case(action, SIGINT, false) && memory_cli_passed;
     memory_cli_passed = memory_cli_case(action, SIGTERM, false) && memory_cli_passed;
   }
-  const bool passed = memory_cli_passed && successful_stream() && input_failure(false) &&
-                      input_failure(true) && write_failures() && deadlines() && open_failure() &&
-                      auto_sense_session() && auto_sense_cleanup() && auto_sense_failures(true) &&
-                      auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&
-                      session_queries() && session_stale_fragment() && session_writes() &&
-                      memory_operations() && memory_rejection() && memory_partial_failure() &&
-                      preset_transfer() && preset_rejection() && preset_readback_failure() &&
-                      preset_partial_failure() && session_uncertain() && session_receive_bounds() &&
-                      impossible_transfers();
+  bool auto_sense_workflow_passed = true;
+  for (const auto action : {octa::AutoSenseAction::finish, octa::AutoSenseAction::cancel}) {
+    for (const auto scenario : {AutoSenseScenario::success,
+                                AutoSenseScenario::malformed,
+                                AutoSenseScenario::missing_start,
+                                AutoSenseScenario::missing_completion,
+                                AutoSenseScenario::unrelated_result,
+                                AutoSenseScenario::partial_stop,
+                                AutoSenseScenario::interruption}) {
+      auto_sense_workflow_passed =
+          auto_sense_workflow(action, scenario) && auto_sense_workflow_passed;
+    }
+  }
+  const bool passed =
+      memory_cli_passed && auto_sense_workflow_passed && successful_stream() &&
+      input_failure(false) && input_failure(true) && write_failures() && deadlines() &&
+      open_failure() && auto_sense_session() && auto_sense_cleanup() && auto_sense_failures(true) &&
+      auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&
+      session_queries() && session_stale_fragment() && session_writes() && memory_operations() &&
+      memory_rejection() && memory_partial_failure() && preset_transfer() && preset_rejection() &&
+      preset_readback_failure() && preset_partial_failure() && session_uncertain() &&
+      session_receive_bounds() && impossible_transfers();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;
