@@ -54,7 +54,7 @@ it does not imply calibrated audio response or native Debian validation.
 | Windows sound/ASIO rate matching | Windows checkbox 1147 and handler | Host policy, not established as a device command. Trace and define the corresponding Linux behavior. |
 | VS EXPAND/two-unit synchronization | Windows checkbox 1173/handler and readme | Detection, validation, stream synchronization and routing incomplete; second-unit hardware validation unavailable here. |
 | Disconnect, suspend/resume and errors | Both native driver lifecycles | Some session/rollback fault tests exist. Complete hotplug, USB/URB faults, power management and kernel sanitizer tests remain. |
-| Signal-flow/About/warnings/preferences | Both menus, dialogs and local resources | Local HTTP panel and independently authored assets implemented with secondary dialogs. Complete visual/behavior parity, preferences and GTK embedding remain. |
+| Signal-flow/About/warnings/preferences | Both menus, dialogs and local resources | Local HTTP panel and independently authored assets implemented with secondary dialogs. GTK4/WebKitGTK embedding, native Save, external-navigation blocking and Exit also tested under WSL/Xvfb. Complete visual/behavior parity and preferences remain. |
 
 ## Specific unresolved distinctions
 

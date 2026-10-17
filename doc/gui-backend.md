@@ -50,8 +50,8 @@ local update. Notifications may precede a reply and never split its JSON documen
 Serial zero denotes invalid protocol/device events rather than a successful reply.
 
 This is a local stdin/stdout interface, not a network listener. The HTTP layer
-below owns authentication, file operations and interactive Auto-Sens. GTK
-embedding remains separate integration work.
+below owns authentication, file operations and interactive Auto-Sens. The GTK host
+uses the same server and web assets.
 
 ## Local HTTP panel
 
@@ -141,3 +141,35 @@ checker saves private screenshots and recovery files under `build/gui/`.
 `tools/verify-gui-parameters.py MAC-GUI WINDOWS-GUI [--cpu]` compares all fader
 and compressor tables; `--cpu` additionally executes original macOS inverse-fader
 and compressor-graph functions with Unicorn. Manufacturer inputs remain local.
+
+## GTK4/WebKitGTK host
+
+`python3 tools/desktop-gui.py` starts a fixed-size desktop window and a private
+loopback server on an automatically selected port. Optional arguments are
+`--bin-dir`, `--midi-port` and `--data-dir`, as for the HTTP launcher.
+Debian 13 packages are `python3-gi`, `gir1.2-gtk-4.0` and `gir1.2-webkit-6.0`;
+GTK 4.10 or later is required for the native asynchronous file dialog.
+
+The WebKit network session is ephemeral, with no system proxy, external
+navigation, pop-up windows or web permissions. The web-process sandbox stays
+enabled. WebGL/media are disabled and software rendering keeps this small 2D
+panel usable without a GPU. Only the panel's own blob downloads reach the native
+Save dialog. WebKitGTK 6.0 receives a filesystem destination path after user
+selection/overwrite confirmation. Exit and window/server shutdown release CTRL;
+the same Auto-Sens recovery lifecycle applies.
+
+The native integration checker uses real X11 key events for Ctrl+S and the Save
+dialog, validates the downloaded preset, checks live controls/meters, blocks an
+external navigation and exercises Driver → Exit. It verifies independent full
+state readback after releasing CTRL. For headless checks, install `xvfb`, `xauth`,
+`xdotool`, `dbus`, and `imagemagick`:
+
+```bash
+GSK_RENDERER=cairo GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- python3 tools/check-gtk.py
+GSK_RENDERER=cairo GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- python3 tools/check-gtk.py --write
+```
+
+`--write` changes one sensitivity value and restores a fresh complete raw
+snapshot. Screenshots and recovery files remain private under `build/gui/`.
+These are WSL/Xvfb desktop integration checks, not native Debian audio or physical
+signal-quality verification. The remaining feature gaps still apply to both hosts.

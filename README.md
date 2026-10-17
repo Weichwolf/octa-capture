@@ -22,7 +22,19 @@ python3 tools/serve-gui.py --open
 
 Open the private launch link printed by the server. It listens only on `127.0.0.1`; its token, Host/Origin checks and local-only content policy protect device operations. Use an account with ALSA device access. The backend and audio streaming remain independent; closing the panel releases its exclusive CTRL connection.
 
-This is an initial working panel, not complete GUI parity. Additional meter sources, multi-unit behavior and GTK4/WebKitGTK embedding remain in progress. Physical audio response and native Debian validation are also outstanding. See the [function inventory](doc/function-inventory.md) and [backend documentation](doc/gui-backend.md).
+This is an initial working panel, not complete GUI parity. Additional meter sources, multi-unit behavior and complete interaction parity remain in progress. Physical audio response and native Debian validation are also outstanding. See the [function inventory](doc/function-inventory.md) and [backend documentation](doc/gui-backend.md).
+
+The same panel also runs in a GTK4/WebKitGTK desktop window (Debian 13,
+GTK 4.10 or later):
+
+```bash
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-webkit-6.0
+python3 tools/desktop-gui.py
+```
+
+The desktop host keeps the WebKit sandbox enabled, uses an ephemeral session,
+blocks external navigation and handles settings downloads with a native Save
+dialog. It runs as a regular user and uses the same device/backend checks.
 
 ## Development
 

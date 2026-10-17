@@ -104,9 +104,12 @@ add_test(NAME state-json COMMAND state_json_test)
 add_test(NAME gui-backend COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiBackend.py")
 add_test(NAME gui-http COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiHttp.py")
 add_test(NAME gui-auto-sense COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiAutoSense.py")
+add_test(NAME gui-navigation COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiNavigation.py")
 add_test(NAME gui-parameters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiParameters.mjs")
 add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
-  "${CMAKE_SOURCE_DIR}/gui/web/app.js" "${CMAKE_SOURCE_DIR}/gui/web/parameters.js")
+  --config "${CMAKE_SOURCE_DIR}/gui/web/.eslintrc.json"
+  "${CMAKE_SOURCE_DIR}/gui/web/app.js" "${CMAKE_SOURCE_DIR}/gui/web/parameters.js"
+  "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs")
 set_tests_properties(gui-javascript PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 add_executable(dsp_test test/Dsp.cpp)
 target_link_libraries(dsp_test PRIVATE octa_protocol)
@@ -142,7 +145,7 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli bridge state-json gui-backend gui-http gui-auto-sense gui-parameters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-parameters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 set(octa_bridge_sources
