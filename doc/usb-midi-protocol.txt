@@ -25,8 +25,9 @@ hardware-verified, with the rate in little-endian bytes 3..5 and alternating
 packet byte 0 (00/01). CuDevPoll::send (0xa7ea) maps packet byte 2 to a
 boolean, bytes 3..5 to the 24-bit rate, byte 6 to a raw setting byte and
 byte 7 to another boolean. GetAllStat (0xa6c2) seeks phase 0 followed by
-phase 1 with a nonzero rate. The user-facing meanings of bytes 1, 2, 6, 7
-still need tracing; neither boolean is established as the clock source.
+phase 1 with a nonzero rate. Bytes 1 and 2 remain unmapped. Byte 6 bit 0 selects the reference clock
+source (0 INTERNAL, 1 EXTERNAL); byte 7 being nonzero activates its display.
+Higher bits of byte 6 are not interpreted.
 The private module exposes phase-1 packets through the read-only, volatile
 ALSA CARD control "OCTA-CAPTURE Status" (8 bytes). Its mutex serializes
 status readers; the normal USB-audio shutdown/autoresume guard protects
@@ -44,6 +45,31 @@ to this control. Both 6.12 and 6.18 module builds pass Kbuild W=1/-Werror;
 the new status source passes Sparse with warnings as errors. Suspend,
 disconnect, malformed-device/fault-injection and native Debian hardware
 checks remain required; this is not kernel-fuzzing evidence.
+
+The clock-display mapping is established by the original macOS path:
+CuFscDev::GetAllStat (0xd50e) caches byte 6 and a boolean from byte 7;
+CuFscMgrBase::GetPropsFsc (0xd64a) exports them in CuFsStats. The RDSt
+property in CA_Device::device_GetPropertyData (0xbbca) packs clock code
+(byte6 & 1) + 2*(byte7 != 0). The GUI listener reads CAPropFsStatClk;
+CDispClk::GetStat (0x10000c666) chooses frames 0/2 for inactive/active
+INTERNAL and 1/3 for EXTERNAL. Inactive EXTERNAL alternates frames 1/3.
+The optional CPU reference check verifies all display codes/blink phases:
+  python3 tools/emulate-clock-display.py gui-x86_64
+This is display semantics from reference code/assets, not measured clock
+quality; external synchronization remains hardware-unverified.
+
+DeviceStatus.cpp decodes exact eight-byte phase-1 values, rejects zero rates
+and preserves every raw byte. StatusControl.cpp opens a hardware ALSA
+control port read-only and checks CARD/type/size/access/volatility before
+reading. Invalid metadata is rejected without a value read. octa-status
+[hw:CARD=OCTACAPTURE] emits sample_rate_hz, clock_source, clock_active and
+raw_status_hex as JSON. Fake-ALSA tests cover invalid ports/metadata,
+open/info/read failures and malformed packets without device access;
+the pure decoder is also included in the offline protocol fuzzer.
+The C++ reader passed on WSL alongside four concurrent status readers,
+48 kHz duplex audio and shared CTRL/meter traffic, preserving full raw
+state. Clock-source/activation edge cases are synthetic reference-based
+tests; physical external-clock transitions and native Debian remain open.
 
 Audio alternate settings 1,2,3,4 advertise 44100,48000,96000,192000 Hz.
 Descriptors advertise 10 output/12 input channels at the first three rates

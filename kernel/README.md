@@ -32,12 +32,16 @@ detachment or disrupting audio/CTRL MIDI:
 amixer -c OCTACAPTURE cget 'iface=CARD,name=OCTA-CAPTURE Status'
 python3 tools/check-status.py
 python3 tools/check-status.py --stress  # four concurrent readers for two seconds
+./build/strict/octa-status             # C++ backend, no amixer dependency
+python3 tools/check-status.py --binary build/strict/octa-status --stress
 ```
 
 The checker requires `amixer` from `alsa-utils`, validates packet boundaries
 and verifies that ALSA rejects a write. Byte 0 is phase 1; bytes 3–5 contain
-the little-endian sample rate. Other bytes remain raw until their meanings
-are established. The driver seeks phase 0 followed by phase 1 with a
+the little-endian sample rate. Byte 6 bit 0 selects the reference clock
+source and byte 7 activates its display; other bits remain raw. These
+interpretations follow original driver/GUI code; external-clock hardware
+transitions remain unverified. The driver seeks phase 0 followed by phase 1 with a
 nonzero rate, using at most four interrupt reads with 250 ms timeouts each.
 A private mutex serializes readers; the standard USB-audio power/shutdown
 guard and heap-backed buffers cover the transfer lifetime.

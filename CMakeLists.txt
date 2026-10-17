@@ -15,7 +15,7 @@ find_program(OCTA_CLANG_FORMAT NAMES clang-format-19 clang-format
   PATHS "$ENV{HOME}/.local/opt/octa-llvm19/usr/lib/llvm-19/bin" REQUIRED)
 set(CMAKE_CXX_CLANG_TIDY "${OCTA_CLANG_TIDY};--warnings-as-errors=*")
 
-add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp src/PresetState.cpp src/PresetImport.cpp)
+add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp src/PresetState.cpp src/PresetImport.cpp src/DeviceStatus.cpp)
 target_include_directories(octa_protocol PUBLIC include)
 target_link_libraries(octa_protocol PUBLIC octa_quality)
 
@@ -32,6 +32,11 @@ add_executable(octa-probe src/Probe.cpp)
 target_link_libraries(octa-probe PRIVATE octa_usb)
 
 pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
+add_library(octa_status STATIC src/StatusControl.cpp)
+target_link_libraries(octa_status PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
+add_executable(octa-status src/StatusMain.cpp)
+target_link_libraries(octa-status PRIVATE octa_status)
+
 add_executable(octa-audio-check src/AudioCheck.cpp)
 target_link_libraries(octa-audio-check PRIVATE octa_quality PkgConfig::ALSA)
 add_library(octa_midi STATIC src/Midi.cpp)
@@ -59,6 +64,12 @@ endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 enable_testing()
+add_executable(device_status_test test/DeviceStatus.cpp)
+target_link_libraries(device_status_test PRIVATE octa_protocol)
+add_test(NAME device-status COMMAND device_status_test)
+add_executable(status_control_test test/StatusControl.cpp)
+target_link_libraries(status_control_test PRIVATE octa_status PkgConfig::ALSA)
+add_test(NAME status-control COMMAND status_control_test)
 add_executable(protocol_test test/Protocol.cpp)
 target_link_libraries(protocol_test PRIVATE octa_protocol)
 add_test(NAME protocol COMMAND protocol_test)
@@ -102,12 +113,14 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(protocol preamp control dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(device-status status-control protocol preamp control dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 add_custom_target(format-check
   COMMAND "${OCTA_CLANG_FORMAT}" --dry-run --Werror
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
+    "${CMAKE_SOURCE_DIR}/include/octa/DeviceStatus.hpp"
+    "${CMAKE_SOURCE_DIR}/include/octa/StatusControl.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Preamp.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Midi.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Usb.hpp"
@@ -118,6 +131,11 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/include/octa/Preset.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/PresetState.hpp"
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
+    "${CMAKE_SOURCE_DIR}/src/DeviceStatus.cpp"
+    "${CMAKE_SOURCE_DIR}/src/StatusControl.cpp"
+    "${CMAKE_SOURCE_DIR}/src/StatusMain.cpp"
+    "${CMAKE_SOURCE_DIR}/test/DeviceStatus.cpp"
+    "${CMAKE_SOURCE_DIR}/test/StatusControl.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
@@ -161,6 +179,8 @@ add_custom_target(format-check
 add_custom_target(format
   COMMAND "${OCTA_CLANG_FORMAT}" -i
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
+    "${CMAKE_SOURCE_DIR}/include/octa/DeviceStatus.hpp"
+    "${CMAKE_SOURCE_DIR}/include/octa/StatusControl.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Preamp.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Midi.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/Usb.hpp"
@@ -171,6 +191,11 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/include/octa/Preset.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/PresetState.hpp"
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
+    "${CMAKE_SOURCE_DIR}/src/DeviceStatus.cpp"
+    "${CMAKE_SOURCE_DIR}/src/StatusControl.cpp"
+    "${CMAKE_SOURCE_DIR}/src/StatusMain.cpp"
+    "${CMAKE_SOURCE_DIR}/test/DeviceStatus.cpp"
+    "${CMAKE_SOURCE_DIR}/test/StatusControl.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
@@ -214,6 +239,11 @@ add_custom_target(format
 add_custom_target(lint
   COMMAND "${OCTA_CLANG_TIDY}" -p "${CMAKE_BINARY_DIR}" --warnings-as-errors=*
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
+    "${CMAKE_SOURCE_DIR}/src/DeviceStatus.cpp"
+    "${CMAKE_SOURCE_DIR}/src/StatusControl.cpp"
+    "${CMAKE_SOURCE_DIR}/src/StatusMain.cpp"
+    "${CMAKE_SOURCE_DIR}/test/DeviceStatus.cpp"
+    "${CMAKE_SOURCE_DIR}/test/StatusControl.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"

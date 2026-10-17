@@ -36,6 +36,7 @@ make release    # optimized build and tests
 ./tools/fuzz-midi.sh 120  # offline persistent CTRL session with simulated ALSA I/O
 ./build/strict/octa-probe   # read-only clock status, requires USB device access
 ./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
+./build/strict/octa-status  # kernel-owned rate/source/display status as JSON
 ./build/strict/octa-preset inspect settings.octa  # offline Ver100 file summary
 ./build/strict/octa-preset export > current.octa  # read current device state and export
 ./build/strict/octa-preset normalize settings.octa > normalized.octa
@@ -57,12 +58,14 @@ python3 tools/check-dsp.py            # read-only check; --write changes/restore
 python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
 python3 tools/check-auto-sense.py     # read-only; --write checks finish/cancel and signal recovery
 python3 tools/check-routing-presets.py  # read-only; --write checks both presets and restores state
-python3 tools/check-status.py --stress  # read-only kernel status, requires the updated module
+python3 tools/check-status.py --stress --binary build/strict/octa-status  # kernel/C++ status
 ./build/strict/octa-audio-check 48000 prepare-capture  # configure/prepare without streaming
 ./build/strict/octa-audio-check 48000 capture          # transfer one second and check timing
 ```
 
 Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. The separate `thread` preset is available for concurrent code. Userspace flags are not applied to kernel builds.
+
+`octa-status` reads the kernel-owned ALSA status control through a validated, read-only C++ API. It reports rate, reference clock-source/display state and the unchanged raw packet; external-clock transitions remain hardware-unverified.
 
 Device controls use the exclusive CTRL MIDI port. `MidiSession` shares it between meters, bulk queries, typed writes and Auto-Sens; it is confined to one thread and requires reopening after an unresolved query. `octa-meters` emits raw levels and reference dB values as JSON lines. `octa-session-check` checks shared meter/query traffic without changing the final bulk state.
 

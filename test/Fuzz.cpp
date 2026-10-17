@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/AutoSense.hpp"
+#include "octa/DeviceStatus.hpp"
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
@@ -19,6 +20,16 @@ namespace {
 
 void require(bool condition) {
   if (!condition) { __builtin_trap(); }
+}
+
+void device_status(std::span<const std::uint8_t> bytes) {
+  const auto status = octa::decode_device_status(bytes);
+  if (!status) { return; }
+  require(bytes.size() == octa::device_status_bytes && bytes[0] == 1);
+  require(std::ranges::equal(bytes, status->raw));
+  require(status->sample_rate_hz != 0);
+  require(status->clock_active == (bytes[7] != 0));
+  require((status->clock_source == octa::ClockSource::external) == ((bytes[6] & 1U) != 0));
 }
 
 void round_trip(const octa::Message &message) {
@@ -382,6 +393,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) {
   const std::span bytes(data, size);
+  device_status(bytes);
   frames(bytes);
   structured(bytes);
   typed_controls(bytes);
