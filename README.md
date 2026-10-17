@@ -36,6 +36,7 @@ make release    # optimized build and tests
 ./build/strict/octa-probe   # read-only clock status, requires USB device access
 ./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
 ./build/strict/octa-meters 2000  # observe eight input levels for 2000 ms as JSON lines
+python3 tools/check-meters.py   # hardware checks for meter shutdown and exclusive CTRL access
 ./build/strict/octa-control 1 attack 8  # set channel 1 attack index, verify fresh bulk reply
 ./build/strict/octa-dsp --dry-run mixer input A 3 pan 16384  # encode without MIDI access
 python3 tools/check-dsp.py            # read-only check; --write changes/restores DSP controls
@@ -46,7 +47,7 @@ python3 tools/check-preamps.py        # read-only check; --write tests and resto
 
 Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. The separate `thread` preset is available for concurrent code. Userspace flags are not applied to kernel builds.
 
-`octa-meters` holds one CTRL connection while observing input levels, with a duration of 1..60000 milliseconds (default 5000), a three-second inactivity timeout and an optional hardware MIDI port. It emits raw 14-bit values and reference dB display values as JSON lines. The backend attempts to disable meter output after normal completion, callback cancellation and errors. SIGINT/SIGTERM and a closed output pipe shut down through that path. Forced termination or disconnection can prevent the stop command from reaching the device. CTRL access is exclusive while this standalone observer runs.
+`octa-meters` holds one CTRL connection while observing input levels, with a duration of 1..60000 milliseconds (default 5000), a three-second inactivity timeout and an optional hardware MIDI port. It emits raw 14-bit values and reference dB display values as JSON lines. The backend attempts to disable meter output after normal completion, callback cancellation and errors. SIGINT/SIGTERM and a closed output pipe shut down through that path. Forced termination or disconnection can prevent the stop command from reaching the device. CTRL access is exclusive while this standalone observer runs. `tools/check-meters.py` reproduces normal, signal, broken-pipe and competing-open checks, validates JSON values, checks for a quiet CTRL port after each case, and compares the complete bulk state before/after. It requires `amidi`; `--bin-dir` and `--port` select a build and device.
 
 `octa-dsp` controls the direct mixers, masters, reverb and output routing; invoke it without arguments for syntax. Mixer buses are A..D, channels and output pairs start at 1, and values are decimal wire coefficients/indices. `--dry-run` prints the encoded frame without opening a MIDI device. Writes validate reference GUI bounds before device access and require a fresh bulk reply containing the requested value. Stereo-pair changes use the first channel of the pair. This is a protocol interface; GUI gestures that coordinate several controls still need implementation.
 
