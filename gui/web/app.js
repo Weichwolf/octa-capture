@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
-import {PRE_DELAY, PREAMP_MAX, VOLUME, GRAPH_MIN_DB, volumeIndex,
-  volumeText, parameterText, panToWire, wireToPan, panText, compressorOutput, sensitivityIndex} from './parameters.js';
+import {PRE_DELAY, PREAMP_MAX, VOLUME, volumeIndex,
+  volumeText, parameterText, panToWire, wireToPan, panText, sensitivityIndex} from './parameters.js';
 import {MeterBallistics, METER_TICK_MS, meterDb, meterY} from './meters.js';
 import {PopupMenus} from './menus.js';
 import {PanelWarnings} from './warnings.js';
+import {drawCompressor} from './graphs.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -276,7 +277,7 @@ function toggle(label, control, read, className = '') {
 function meter(kind, channel) {
   const node = el('div', `meter ${kind}`);
   node.dataset.channel = channel;
-  node.append(el('span', 'meter-clip'), el('span', 'meter-fill'), el('span', 'meter-peak'),
+  node.append(el('span', 'meter-clip'), el('span', 'meter-clip-title', 'CLIP'), el('span', 'meter-fill'), el('span', 'meter-peak'),
     el('span', 'meter-name', kind.toUpperCase()));
   const scale = el('span', 'meter-scale');
   for (const text of ['-2', '-6', '-12', '-24', '-48']) scale.append(el('span', '', text));
@@ -316,8 +317,8 @@ function makePreamps() {
     bypass.replaceChildren(el('span', 'lamp'), el('span', '', 'BYPASS'));
     bypass.setAttribute('aria-label', `Input ${channel + 1} compressor bypass`);
     const canvas = el('canvas', 'curve');
-    canvas.width = 104;
-    canvas.height = 104;
+    canvas.width = 102;
+    canvas.height = 102;
     canvas.setAttribute('aria-label', `Input ${channel + 1} compressor transfer curve`);
     const axis = el('div', 'graph-axis');
     for (const value of ['-48', '-24', '0']) axis.append(el('span', '', value));
@@ -463,31 +464,6 @@ function makeMasters() {
   master.append(groups); $('#mixer-groups').append(master);
 }
 
-function drawCurve(canvas, compressor) {
-  const context = canvas.getContext('2d');
-  const width = canvas.width, height = canvas.height;
-  context.clearRect(0, 0, width, height);
-  context.fillStyle = compressor.enabled ? '#70582a' : '#594b34';
-  context.fillRect(0, 0, width, height);
-  context.strokeStyle = compressor.enabled ? '#9b7731' : '#67573a';
-  context.lineWidth = 1;
-  for (let point = 0; point <= 8; point++) {
-    context.beginPath(); context.moveTo(point * width / 8, 0); context.lineTo(point * width / 8, height); context.stroke();
-    context.beginPath(); context.moveTo(0, point * height / 8); context.lineTo(width, point * height / 8); context.stroke();
-  }
-  const gate = compressor.gate_index === 0 ? -Infinity : compressor.gate_index - 70;
-  context.beginPath();
-  context.moveTo(0, height);
-  for (let point = 0; point <= width; point++) {
-    const input = GRAPH_MIN_DB * (1 - point / width);
-    const output = input < gate ? GRAPH_MIN_DB : compressorOutput(input, compressor);
-    context.lineTo(point, height * output / GRAPH_MIN_DB);
-  }
-  context.strokeStyle = compressor.enabled ? '#efce62' : '#aa9974';
-  context.lineWidth = 2;
-  context.stroke();
-}
-
 function update(result) {
   if (!result.state) return;
   documentState = result;
@@ -519,7 +495,7 @@ function update(result) {
     if (!pending.has(key(control(0)))) input.value = volumeIndex(read(state));
     input.title = volumeText(read(state)); input.disabled = busy || input.closest('.unavailable-channel') !== null;
   }
-  for (const {canvas, channel} of plots) drawCurve(canvas, state.preamps[channel].compressor);
+  for (const {canvas, channel} of plots) drawCompressor(canvas, state.preamps[channel].compressor);
   for (const node of all('.mixer-send, .master-return, .master-reverb-type')) node.style.visibility = bus === 0 && rateIndex !== 3 ? 'visible' : 'hidden';
   $('.master-reverb-type').classList.toggle('lit', state.reverb.type !== 0);
   $('.master-reverb-type').setAttribute('aria-pressed', String(state.reverb.type !== 0));

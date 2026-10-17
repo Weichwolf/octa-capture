@@ -46,32 +46,33 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .compressor { position: relative; height: 111px; border-top: 1px solid #666; border-bottom: 1px solid #5c5c5c; margin: 0 -1px; }
 .bypass { position: absolute; top: 5px; left: 23px; flex-direction: row; font-size: 9px; }
 .bypass .lamp { width: 24px; height: 21px; }
-.curve { position: absolute; top: 38px; left: 50%; transform: translateX(-50%); width: 52px; height: 52px; background: #604b2a; border: 1px solid #2b2b2b; }
-.graph-axis { position: absolute; top: 88px; left: 50%; width: 52px; height: 10px; transform: translateX(-50%); font-size: 8px; }
+.curve { position: absolute; top: 38px; left: calc(50% - 5px); transform: translateX(-50%); width: 51px; height: 51px; background: #634d42; }
+.graph-axis { position: absolute; top: 88px; left: calc(50% - 5px); width: 51px; height: 10px; transform: translateX(-50%); font-size: 8px; }
 .graph-axis span { position: absolute; transform: translateX(-50%); }
 .graph-axis span:nth-child(1) { left: 20%; }
 .graph-axis span:nth-child(2) { left: 60%; }
 .graph-axis span:nth-child(3) { left: 100%; }
-.graph-y-axis { position: absolute; top: 38px; left: calc(50% + 28px); height: 52px; font-size: 7px; }
+.graph-y-axis { position: absolute; top: 38px; left: calc(50% + 23px); height: 51px; font-size: 7px; }
 .graph-y-axis span { position: absolute; }
 .graph-y-axis span:nth-child(1) { top: 0; }
 .graph-y-axis span:nth-child(2) { top: 40%; }
 .graph-y-axis span:nth-child(3) { top: 80%; }
-.meter { position: absolute; top: 8px; bottom: 21px; width: 8px; background: repeating-linear-gradient(to top,#242724 0 5px,#333 5px 6px); border: 1px solid #181818; }
+.meter { position: absolute; top: 26px; bottom: 24px; width: 5px; background: repeating-linear-gradient(to top,#242724 0 5px,#333 5px 6px); }
 .meter.in { left: 2px; }
-.meter.out { right: 2px; }
+.meter.out { right: 14px; }
 .meter-fill { position: absolute; inset: auto 0 0; height: var(--level,0%); background: repeating-linear-gradient(to top,#adba45 0 5px,#485526 5px 6px); }
-.meter-clip { position: absolute; top: -6px; left: 0; width: 6px; height: 4px; background: #7a7a72; }
+.meter-clip { position: absolute; top: -10px; left: 0; width: 5px; height: 6px; background: #7a7a72; }
+.meter-clip-title { position: absolute; top: -22px; left: -3px; font-size: 7px; line-height: 8px; }
 .meter.clipped .meter-clip { background: #f4442d; box-shadow: 0 0 3px #ff3b16; }
 .meter-peak { display: none; position: absolute; left: 0; right: 0; bottom: var(--peak,0px); height: 2px; background: #e4d77f; }
 .has-peak .meter-peak { display: block; }
 .level-lane .meter-clip { width: 3px; left: 0; top: -5px; height: 3px; }
 .level-lane.clipped .meter-clip { background: #f4442d; }
-.meter.unavailable { opacity: .35; }
+.meter.unavailable .meter-fill, .meter.unavailable .meter-peak { visibility: hidden; }
 .meter-scale { position: absolute; top: 0; bottom: 0; width: 18px; font-size: 8px; }
 .meter-scale > span { position: absolute; left: 0; right: 0; }
 .meter.in .meter-scale { left: 9px; }
-.meter.out .meter-scale { right: 9px; text-align: right; }
+.meter.out .meter-scale { left: 9px; text-align: left; }
 .meter-name { position: absolute; bottom: -12px; left: -1px; font-size: 8px; }
 .parameters { display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: 45px 45px; gap: 1px 0; padding-top: 2px; }
 .strip-footer { height: 40px; }

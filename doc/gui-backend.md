@@ -222,6 +222,15 @@ does not change audio settings. Storage failure keeps the prior file and value.
 and compressor tables; `--cpu` additionally executes original macOS inverse-fader
 and compressor-graph functions with Unicorn. Manufacturer inputs remain local.
 
+Compressor graphs use the original filled five-vertex polygon and three/four-point
+line, including the gate step, five grid intervals and separate enabled/bypassed
+palettes. Both binaries agree on fill/line colors and the 1.8-pixel pen width;
+1,440 geometry/style cases match original Mac drawing execution. Optional
+`tools/verify-compressor-render.py MAC-GUI WINDOWS-GUI --resources MAC-APP-RESOURCES`
+reproduces that check with Unicorn and ImageMagick. The web renderer draws its
+own grid and shadow; no manufacturer artwork is shipped. Browser/GTK checks
+also inspect actual rendered pixels.
+
 ## GTK4/WebKitGTK host
 
 `python3 tools/desktop-gui.py` starts a fixed-size desktop window and a private

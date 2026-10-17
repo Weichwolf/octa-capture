@@ -31,6 +31,11 @@ export async function checkPanel(write) {
   check(panel.left >= 0 && panel.top >= 0 && panel.right <= innerWidth && panel.bottom <= innerHeight,
     `Complete panel fits the GTK viewport: ${JSON.stringify({panel:panel.toJSON(), width:innerWidth, height:innerHeight})}`);
   const initial = (await api('/api/state')).state;
+  const palette = initial.preamps[0].compressor.enabled ? [208, 155, 66] : [99, 77, 66];
+  await until(() => {
+    const pixel = document.querySelector('.preamp-strip:first-child canvas').getContext('2d').getImageData(11, 11, 1, 1).data;
+    return palette.every((value, index) => value === pixel[index]);
+  }, 'GTK compressor reference palette');
   document.querySelector('#device-status').dispatchEvent(new KeyboardEvent('keydown', {key: 'ContextMenu', bubbles: true}));
   await until(() => document.querySelector('#menus [role=menuitemradio][aria-checked=true]'), 'GTK device selection menu');
   document.querySelector('#menus [aria-checked=true]').dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));

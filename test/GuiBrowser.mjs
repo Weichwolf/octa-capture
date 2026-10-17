@@ -66,6 +66,13 @@ try {
   const exposed = await browser.evaluate('location.hash');
   assert.equal(exposed, '');
   await browser.screenshot(path.join(directory, 'preamp.png'));
+  await fs.writeFile(path.join(directory, 'preamp-geometry.json'), JSON.stringify(await browser.evaluate(`(() => {
+    const panel=document.querySelector('#panel').getBoundingClientRect();
+    return [...document.querySelectorAll('.preamp-strip:first-child .knob-dial, .preamp-strip:first-child .toggle, .preamp-strip:first-child canvas, .preamp-strip:first-child .meter')].map(node=>{
+      const r=node.getBoundingClientRect(); return {label:node.getAttribute('aria-label') || node.parentElement.getAttribute('aria-label') || node.className,
+        x:r.x-panel.x,y:r.y-panel.y,width:r.width,height:r.height};
+    });
+  })()`), null, 2), {mode: 0o600});
   await until(async () => (await api('/api/meters')).meters?.age_ms < 1000, 'actual input meters');
   await until(async () => {
     const pcm = (await api('/api/meters')).meters?.pcm;
@@ -113,9 +120,18 @@ try {
     await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'attack', value: before.preamps[0].compressor.attack_index});
     const outputMeter = '.preamp-strip:first-child .meter.out';
     await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'compressor', value: 1});
+    const graphPalette = async (background, grid) => {
+      await until(() => browser.evaluate(`(() => {
+        const context=document.querySelector('.preamp-strip:first-child canvas').getContext('2d');
+        return JSON.stringify([...context.getImageData(11,11,1,1).data].slice(0,3)) === '${JSON.stringify(background)}' &&
+          JSON.stringify([...context.getImageData(21,11,1,1).data].slice(0,3)) === '${JSON.stringify(grid)}';
+      })()`), 'actual rendered compressor background and overlaid grid');
+    };
+    await graphPalette([208, 155, 66], [133, 115, 88]);
     await until(() => browser.evaluate(`!document.querySelector(${JSON.stringify(outputMeter)}).matches('.unavailable, .stale')`), 'enabled compressor shows actual USB capture meter');
     await browser.click('[aria-label="Input 1 compressor bypass"]');
     await hardware(state => !state.preamps[0].compressor.enabled, 'compressor bypass readback');
+    await graphPalette([99, 77, 66], [107, 89, 62]);
     await until(() => browser.evaluate(`document.querySelector(${JSON.stringify(outputMeter)}).classList.contains('unavailable')`), 'bypassed compressor hides OUT meter');
     await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'compressor', value: Number(before.preamps[0].compressor.enabled)});
     console.log('PASS preamp controls: actual keyboard/pointer events and device readback');
