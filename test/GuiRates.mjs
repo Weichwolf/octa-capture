@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Optional real-device rate transitions through the browser's settings dialog.
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {until} from './BrowserClient.mjs';
+
+export async function checkRates(browser, api, directory, originalRate) {
+  const rates = [44100, 48000, 96000, 192000];
+  const change = async rate => {
+    const index = rates.indexOf(rate);
+    await browser.click('[data-menu="driver"]');
+    await browser.click('#menus button:first-of-type');
+    await until(() => browser.evaluate('document.querySelector("#settings").open'), 'driver settings');
+    await browser.key('#sample-rate', 'Home');
+    for (let step = 0; step < index; step++) await browser.key('#sample-rate', 'ArrowDown');
+    await browser.key('#sample-rate', 'Enter');
+    assert.equal(await browser.evaluate('Number(document.querySelector("#sample-rate").value)'), rate);
+    await browser.click('#apply-rate');
+    await until(async () => {
+      const document = await api('/api/state');
+      return !document.busy && parseInt(document.state.payload_hex.slice(4, 6), 16) === index &&
+        document.status?.sample_rate_hz === rate;
+    }, `${rate} Hz bulk and kernel status`, 20000);
+    await until(() => browser.evaluate(`document.querySelector('#device-status').textContent.includes('${rate / 1000} kHz') && document.querySelector('#busy-message').hidden`), 'rate shown in browser');
+    assert.equal(await browser.evaluate('document.querySelector("#toast").hidden'), true, 'No rate change error');
+    await browser.click('#settings [data-close]');
+  };
+  try {
+    for (const rate of rates) {
+      await change(rate);
+      const high = rate === 192000;
+      const expectedChannels = high ? 4 : 8;
+      await until(() => browser.evaluate(`document.querySelectorAll('.preamp-strip:not(.unavailable-channel)').length === ${expectedChannels}`), 'preamp channel availability');
+      // Inspect both views regardless of the caller's selected view.
+      if (await browser.evaluate('document.querySelector("#preamp-view").hidden')) await browser.click('#view-switch');
+      await browser.click('#header-action');
+      assert.equal(await browser.evaluate('document.querySelectorAll("#auto-channels input:not(:disabled)").length'), expectedChannels);
+      await browser.click('#auto-cancel');
+      await browser.click('#view-switch');
+      assert.equal(await browser.evaluate('document.querySelectorAll(".mixer-strip:not(.unavailable-channel)").length'), high ? 8 : 20);
+      assert.equal(await browser.evaluate('document.querySelector("#header-action").disabled'), high);
+      assert.equal(await browser.evaluate('document.querySelector("#header-action").style.visibility'), high ? 'hidden' : 'visible');
+      assert.equal(await browser.evaluate('document.querySelector(".mixer-send").style.visibility'), high ? 'hidden' : 'visible');
+      assert.equal(await browser.evaluate('document.querySelector(".master-reverb-type").style.visibility'), high ? 'hidden' : 'visible');
+      if (high) assert.equal(await browser.evaluate('document.querySelectorAll("#mixer-tabs > button:not([hidden])").length'), 1);
+      await browser.click('[data-menu="device"]');
+      assert.deepEqual(await browser.evaluate(`[...document.querySelectorAll('#menus button')].filter(node=>node.textContent.startsWith('Open the Patch Bay') || node.textContent === 'Directly Output the Inputs').map(node=>node.disabled)`), [high, high]);
+      const initialize = '#menus button[aria-haspopup="menu"]';
+      await browser.key(initialize, 'ArrowRight');
+      assert.deepEqual(await browser.evaluate(`[...document.querySelectorAll('#menus .menu[data-depth="1"] button')].map(node=>node.disabled)`), [false, false, false, false, false]);
+      await browser.key('#menus .menu[data-depth="1"] button:first-of-type', 'Escape');
+      await browser.key(initialize, 'Escape');
+      for (const dialog of ['reverb', 'patchbay']) {
+        await browser.evaluate(`document.querySelector('#${dialog}').showModal()`);
+        assert.equal(await browser.evaluate(`[...document.querySelectorAll('#${dialog} select')].every(node=>node.disabled)`), high);
+        await browser.click(`#${dialog} [data-close]`);
+      }
+      await until(async () => {
+        const pcm = (await api('/api/meters')).meters?.pcm;
+        return pcm?.capture.fresh && pcm.playback.fresh && pcm.capture.rate === rate && pcm.playback.rate === rate &&
+          pcm.capture.channels === (high ? 4 : 12) && pcm.playback.channels === (high ? 4 : 10);
+      }, `${rate} Hz actual PCM meter recovery`, 20000);
+      await browser.screenshot(path.join(directory, `mixer-${rate}.png`));
+      console.log(`PASS browser ${rate} Hz: settings apply, kernel/bulk state, channel/dialog gating and real PCM meters`);
+    }
+  } finally {
+    await api('/api/action', {action: 'sample-rate', rate: originalRate});
+    await until(async () => parseInt((await api('/api/state')).state.payload_hex.slice(4, 6), 16) === rates.indexOf(originalRate), 'original sample rate restored');
+  }
+}

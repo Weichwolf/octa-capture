@@ -50,7 +50,11 @@ export async function checkPanel(write) {
   check(document.querySelectorAll('.mixer-strip').length === 20, 'Twenty mixer strips');
   await until(() => document.querySelectorAll('.level-lane:not(.stale)').length === 20,
     'all input/playback PCM meter lanes');
-  for (const id of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about']) {
+  document.querySelector('[data-menu="driver"]').click();
+  [...document.querySelectorAll('#menus button')].find(node=>node.textContent === 'Show README').click();
+  check(document.querySelector('#readme').open, 'Local README menu opened');
+  document.querySelector('#readme [data-close]').click();
+  for (const id of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about', 'readme']) {
     const dialog = document.querySelector(`#${id}`);
     dialog.showModal(); check(dialog.open, `${id} opened`); dialog.close();
   }

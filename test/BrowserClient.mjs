@@ -106,7 +106,14 @@ export class BrowserClient {
   }
 
   async ready(selector) {
-    await until(() => this.evaluate(`(() => {const node=document.querySelector(${JSON.stringify(selector)});return node && !node.disabled && node.getAttribute('aria-disabled') !== 'true' && !node.closest('.unavailable-channel') && (node.closest('#auto-sens') || document.querySelector('#busy-message').hidden);})()`), 'enabled browser control');
+    await until(() => this.evaluate(`(() => {
+      const node=document.querySelector(${JSON.stringify(selector)});
+      const modal=[...document.querySelectorAll('dialog[open]')].at(-1);
+      return node && node.getClientRects().length > 0 && (!modal || modal.contains(node)) &&
+        !node.disabled && node.getAttribute('aria-disabled') !== 'true' &&
+        !node.closest('.unavailable-channel') &&
+        (node.closest('#auto-sens') || document.querySelector('#busy-message')?.hidden);
+    })()`), `enabled and accessible browser control: ${selector}`);
   }
 
   async screenshot(filename) {

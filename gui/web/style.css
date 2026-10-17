@@ -148,5 +148,6 @@ dialog select, dialog input[type=number] { min-width: 100px; padding: 2px 4px; f
 .signal-flow { text-align: center; line-height: 2; }
 .signal-flow > div { padding: 8px 20px; border: 1px solid #aaa; margin-bottom: 7px; }
 .signal-flow p { font-size: 11px; color: #555; }
+.readme-content { width: 440px; max-height: 65vh; overflow: auto; line-height: 1.5; }
 @media (max-width: 998px) { body { padding-inline: 0; min-width: 978px; } .panel { margin: 0; } }
 @media (max-height: 448px) { body { padding-block: 0; } }

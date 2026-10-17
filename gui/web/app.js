@@ -517,7 +517,10 @@ function update(result) {
     input.title = volumeText(read(state)); input.disabled = busy || input.closest('.unavailable-channel') !== null;
   }
   for (const {canvas, channel} of plots) drawCurve(canvas, state.preamps[channel].compressor);
-  for (const node of all('.mixer-send, .master-return')) node.style.visibility = bus === 0 && rateIndex !== 3 ? 'visible' : 'hidden';
+  for (const node of all('.mixer-send, .master-return, .master-reverb-type')) node.style.visibility = bus === 0 && rateIndex !== 3 ? 'visible' : 'hidden';
+  $('.master-reverb-type').classList.toggle('lit', state.reverb.type !== 0);
+  $('.master-reverb-type').setAttribute('aria-pressed', String(state.reverb.type !== 0));
+  $('.master-reverb-type').disabled = busy;
   for (const [index, tab] of all('#mixer-tabs > button').entries()) {
     tab.setAttribute('aria-selected', String(index === bus));
     tab.hidden = index !== 0 && (rateIndex === 3 || !multiple);
@@ -527,6 +530,7 @@ function update(result) {
   $('#header-action').classList.toggle('lit', multiActive);
   $('#header-action').setAttribute('aria-pressed', String(multiActive));
   $('#header-action').disabled = busy || (activeView === 'mixer' && rateIndex === 3);
+  $('#header-action').style.visibility = activeView === 'mixer' && rateIndex === 3 ? 'hidden' : 'visible';
   for (const title of all('.group-title[data-source]')) {
     title.textContent = `${title.dataset.source === 'input' ? 'INPUT' : 'WAVE OUT'} MIXER ${'ABCD'[bus]}`;
   }
@@ -597,6 +601,7 @@ function renderMeters() {
 
 function showDialog(name) {
   closeMenus();
+  if (name === 'patchbay' && documentState?.state.payload_hex.slice(4, 6) === '03') return;
   const dialog = $(`#${name}`);
   if (name === 'settings') pendingRate = null;
   if (!dialog.open) dialog.showModal();
@@ -730,9 +735,10 @@ async function saveSettings() {
 }
 
 function menu(name, anchor) {
+  const highestRate = documentState?.state.payload_hex.slice(4, 6) === '03';
   const items = name === 'driver' ? [
     {label: 'Driver Settings…', disabled: !connected || busy, run: () => showDialog('settings')}, null,
-    {label: 'Always on top', disabled: true}, {label: 'Show README', disabled: true},
+    {label: 'Always on top', disabled: true}, {label: 'Show README', run: () => showDialog('readme')},
     {label: 'About Driver & Control Panel…', run: () => showDialog('about')}, null,
     {label: 'Exit', shortcut: 'Alt+F4', run: async () => {
       stopped = true;
@@ -742,15 +748,15 @@ function menu(name, anchor) {
   ] : [
     {label: 'Save settings…', shortcut: 'Ctrl+S', run: saveSettings},
     {label: 'Load settings…', shortcut: 'Ctrl+O', run: () => $('#load-file').click()}, null,
-    {label: 'Open the Patch Bay…', shortcut: 'Ctrl+P', run: () => showDialog('patchbay')}, null,
-    {label: 'Directly Output the Inputs', run: () => operation({action: 'direct-out'}, 'This will change the patchbay and direct mixer settings. Do you want to continue?')}, null,
+    {label: 'Open the Patch Bay…', shortcut: 'Ctrl+P', disabled: highestRate, run: () => showDialog('patchbay')}, null,
+    {label: 'Directly Output the Inputs', disabled: highestRate, run: () => operation({action: 'direct-out'}, 'This will change the patchbay and direct mixer settings. Do you want to continue?')}, null,
     {label: 'Initialize…', children:
       [['all', 'All'], ['preamps', 'MIC PRE'], ['direct-mix', 'DIRECT MIX'], ['reverb', 'REVERB'], ['patchbay', 'PATCHBAY']].map(([target, label]) =>
         ({label, run: () => operation({action: 'initialize', target}, `OK to initialize ${label} settings?`)}))}, null,
     {label: 'Show the signal flow', run: () => showDialog('diagram')},
   ];
   const rect = anchor.getBoundingClientRect();
-  const enabledItems = name === 'device' ? items.map(item => item ? {...item, disabled: !canOperate()} : null) : items;
+  const enabledItems = name === 'device' ? items.map(item => item ? {...item, disabled: !canOperate() || item.disabled} : null) : items;
   openMenu(enabledItems, rect.left, rect.bottom);
   anchor.setAttribute('aria-expanded', 'true');
 }

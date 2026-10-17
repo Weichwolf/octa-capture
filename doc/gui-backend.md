@@ -96,7 +96,7 @@ identification; selecting a different visible mixer tab sends LCD selection.
 The Multiple Direct Mixer switch follows both original handlers: enable assigns
 output routes `[0,1,2,3,0]`; disable initializes Patch Bay and selects Mixer A.
 Its lamp and B–D tab visibility derive from actual B–D output routes. It is hidden
-in the preamp view and unavailable at 192 kHz. Both directions ask for confirmation.
+in the preamp view and at 192 kHz. Both directions ask for confirmation.
 Initialize and context menus have keyboard-accessible submenus. Mixer level/send
 All Ch. affects ten strips; pan offers alternating Left/Right or Center. Compressor
 Bypass Off All Ch. enables compression; Bypass On All Ch. disables it.
@@ -166,12 +166,21 @@ python3 tools/serve-gui.py --bin-dir build/strict > build/gui/server.log 2>&1
 # In another terminal with ALSA access:
 tools/check-gui.sh
 tools/check-gui.sh --write
+tools/check-gui.sh --write --rates  # additionally change all four hardware rates
 ```
 
 `--write` uses actual browser keyboard/pointer/file events, verifies hardware
 readback, multiple-mixer routing, panel commands, ten-channel context actions and
 Auto-Sens finish/cancel, and restores fresh raw snapshots, then checks release of CTRL. The
 checker saves private screenshots and recovery files under `build/gui/`.
+`--rates` also checks actual settings selection/Apply, kernel/bulk rate agreement,
+channel availability, 192 kHz menu/dialog restrictions and PCM meter recovery,
+then restores the original rate. The Initialize submenu stays available at 192
+kHz, as in both reference dispatchers. WSL device tests pass at all four rates;
+native Debian and physical signal quality remain separate requirements.
+
+Driver → Show README opens an independently written local usage guide. It loads
+no external content and is available in both the browser and GTK host.
 `tools/verify-gui-parameters.py MAC-GUI WINDOWS-GUI [--cpu]` compares all fader
 and compressor tables; `--cpu` additionally executes original macOS inverse-fader
 and compressor-graph functions with Unicorn. Manufacturer inputs remain local.

@@ -6,12 +6,15 @@ import path from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {BrowserClient, until} from './BrowserClient.mjs';
+import {checkRates} from './GuiRates.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const logFile = path.resolve(process.argv[2] || 'build/gui/server.log');
 const portFile = path.resolve(process.argv[3] || 'build/gui/browser-profile/DevToolsActivePort');
 const write = process.argv.includes('--write');
+const rates = process.argv.includes('--rates');
+if (rates && !write) throw new Error('--rates requires --write for recovery.');
 const launch = (await fs.readFile(logFile, 'utf8')).match(/http:\/\/127\.0\.0\.1:[0-9]+\/#token=[^\s]+/)?.[0];
 if (!launch) throw new Error('No private GUI launch link in the server log.');
 const url = new URL(launch), token = new URLSearchParams(url.hash.slice(1)).get('token');
@@ -145,7 +148,7 @@ try {
     await browser.blank(); await api('/api/disconnect', {});
     await run(path.join(root, 'build/strict/octa-preset'), ['restore', recovery], {timeout: 20000});
     await browser.call('Page.navigate', {url: launch});
-    await until(() => browser.evaluate('document.querySelector("#connection-message").hidden'), 'reconnected after raw recovery');
+    await until(() => browser.evaluate('document.querySelector("#connection-message")?.hidden === true'), 'reconnected after raw recovery');
     await browser.click('#view-switch');
     assert.deepEqual((await api('/api/state')).state, before);
     console.log('PASS multi-mixer on/off, real LCD/identify commands, tab gating and complete raw recovery');
@@ -187,6 +190,11 @@ try {
     assert.equal(await browser.evaluate(`document.activeElement.matches(${JSON.stringify(selector)})`), true);
   }
   console.log('PASS original context labels, Initialize/All Ch. submenus and keyboard navigation');
+  await browser.click('[data-menu="driver"]');
+  await browser.click('#menus button:nth-of-type(3)');
+  assert.equal(await browser.evaluate('document.querySelector("#readme").open'), true);
+  assert.equal(await browser.evaluate('document.querySelectorAll("#readme a, #readme script, #readme iframe").length'), 0);
+  await browser.click('#readme [data-close]');
   // Dialog inspection is read-only. Dangerous power/memory controls are never clicked.
   for (const name of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about']) {
     await browser.evaluate(`document.querySelector('#${name}').showModal()`);
@@ -225,6 +233,7 @@ try {
       const result = action === 'cancel' ? 'cancelled' : 'completed';
       await until(async () => (await api('/api/state')).auto_sense?.state === result, `Auto-Sens ${result}`);
       await until(async () => !(await api('/api/state')).busy, 'Auto-Sens released CTRL');
+      await until(() => browser.evaluate(`document.querySelector('#auto-status').textContent.startsWith('${action === 'cancel' ? 'Auto-Sens cancelled.' : 'Auto-Sens complete.'}')`), 'Auto-Sens result shown in browser');
       const current = (await api('/api/state')).state;
       if (action === 'cancel') assert.deepEqual(current, before, 'Auto-Sens cancel restores full state');
       else {
@@ -234,13 +243,26 @@ try {
         await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'sensitivity', value: before.preamps[0].sensitivity_index});
       }
       await browser.click('#auto-cancel');
+      await until(() => browser.evaluate('!document.querySelector("#auto-sens").open'), 'Auto-Sens dialog closed');
     }
     console.log('PASS browser Auto-Sens start/finish/cancel, verified notifications and recovery');
   }
+  if (rates) await checkRates(browser, api, directory, [44100, 48000, 96000, 192000][payload[2]]);
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');
   assert.deepEqual(browser.securityErrors, [], 'Content Security Policy violations');
   assert.deepEqual((await api('/api/state')).state, before, 'Complete raw state preserved');
   console.log('PASS browser views, dialogs, actual meters, CSP and complete state preservation');
+} catch (error) {
+  const loaded = await browser.evaluate('Boolean(document.querySelector("#panel"))');
+  if (loaded) await browser.screenshot(path.join(directory, 'failure.png'));
+  await fs.writeFile(path.join(directory, 'failure.json'), JSON.stringify(await browser.evaluate(`({
+    busyHidden:document.querySelector('#busy-message')?.hidden,
+    connected:document.querySelector('#connection-message')?.hidden,
+    dialogs:[...document.querySelectorAll('dialog[open]')].map(node=>node.id),
+    menu:[...document.querySelectorAll('#menus button')].map(node=>({label:node.textContent,disabled:node.disabled})),
+    toast:document.querySelector('#toast')?.hidden ? null : document.querySelector('#toast')?.textContent
+  })`), null, 2), {mode: 0o600});
+  throw error;
 } finally {
   await browser.blank();
   await api('/api/disconnect', {});

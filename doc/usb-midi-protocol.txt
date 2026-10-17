@@ -513,6 +513,15 @@ route; the switch is visible only in Mixer view below 192 kHz. Both branches
 are browser/hardware tested with complete recovery. This is distinct from
 the local Preamp/Mixer view selector.
 
+GUI rate restrictions also agree with Windows CCplPnl update handler
+0x14001f0b0 and macOS ValidateMenuItem 0x10000fa7c: disable Open Patch Bay
+and Directly Output the Inputs at 192 kHz, while keeping all five Initialize
+entries available. The Reverb button, sends and return are shown only on
+Mixer A below 192 kHz (CBtnReverb::GetShow, 0x1000021f6); its lamp indicates
+nonzero reverb type (GetLed, 0x100002118). Browser hardware tests apply all
+four rates, check kernel/bulk agreement, UI channel restrictions and actual
+PCM meter recovery, then restore the original rate and complete raw state.
+
 Initialization
 --------------
 CCplDeviceIO::TxInit (macOS 1.5.9, 0x100026c28) writes one byte to

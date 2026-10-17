@@ -67,6 +67,26 @@
     <div class="dialog-content signal-flow"><div>INPUT 1–8 → PREAMP → COMPRESSOR<br>COAXIAL IN → INPUT 9–10</div><div>↓<br>INPUT MIXER A–D + WAVE OUT MIXER A–D<br>↓<br>MASTER A–D → PATCH BAY → OUTPUT 1–10</div><div>INPUT MIXER A → REVERB → MASTER A</div><p>At 192 kHz: inputs/outputs 1–4 and Mixer A; reverb and patchbay unavailable.</p></div>
     <footer><button data-close>Close</button></footer>
   </dialog>
+  <dialog id="readme" aria-labelledby="readme-title">
+    <h2 id="readme-title">OCTA-CAPTURE Linux — README</h2>
+    <div class="dialog-content readme-content">
+      <p>Use MIC PRE and DIRECT MIXER to switch views. Turn knobs by dragging or
+        using the arrow keys; hold Shift for finer steps. Double-click a
+        sensitivity value to type it, then press Enter to apply or Escape to cancel.</p>
+      <p>Right-click a control for its preset values and available All Ch. actions.
+        Bypass On disables compression. Auto-Sens adjusts the selected inputs to
+        the loudest signal you provide; Cancel restores their previous settings.</p>
+      <p>Device → Save settings exports an .octa file (Ctrl+S); Load settings
+        imports one (Ctrl+O). The Patch Bay (Ctrl+P) selects the source for each
+        output pair. Multiple Direct Mixer changes that routing to enable A–D.</p>
+      <p>Choose the sample rate under Driver → Driver Settings and click Apply.
+        Audio applications choose their own ALSA buffer size. At 192 kHz only
+        channels 1–4 and Mixer A are available; reverb and patchbay are unavailable.</p>
+      <p>Click the device name to send its identification command. Closing the
+        panel releases its control connection; audio applications continue running.</p>
+    </div>
+    <footer><button data-close>Close</button></footer>
+  </dialog>
   <dialog id="about" aria-labelledby="about-title">
     <h2 id="about-title">About Driver &amp; Control Panel</h2>
     <div class="dialog-content"><strong>OCTA-CAPTURE Linux Control Panel</strong><p>Independent Linux implementation · GPL-2.0-only</p><p>Roland OCTA-CAPTURE / UA-1010</p></div>
