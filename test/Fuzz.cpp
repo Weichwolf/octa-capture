@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/Dsp.hpp"
+#include "octa/DspControl.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 
@@ -45,6 +46,44 @@ void check_dsp(octa::DspState &state, const octa::Message &message) {
   require(*changed == (state != previous));
   const auto repeated = octa::apply_dsp_update(state, message);
   require(repeated && !*repeated);
+}
+
+void check_dsp_control(const octa::DspChange &change) {
+  const auto frame = octa::encode_dsp_change(change);
+  octa::DspState state{};
+  const auto before = octa::matches_dsp_change(state, change);
+  require(frame.has_value() == before.has_value());
+  if (!frame) { return; }
+  const auto message = octa::decode(*frame);
+  require(message.has_value());
+  if (!message) { return; }
+  const auto applied = octa::apply_dsp_update(state, *message);
+  require(applied && before && *before != *applied);
+  const auto after = octa::matches_dsp_change(state, change);
+  require(after && *after);
+}
+
+void typed_controls(std::span<const std::uint8_t> bytes) {
+  constexpr std::size_t minimum_size = 9;
+  if (bytes.size() < minimum_size) { return; }
+  std::uint32_t value = 0;
+  constexpr unsigned int byte_bits = 8;
+  for (const auto byte : bytes.subspan(5, 4)) { value = (value << byte_bits) | byte; }
+  const auto source = static_cast<octa::MixerSource>(bytes[1]);
+  check_dsp_control(octa::MixerChange{.source = source,
+                                      .bus = bytes[2],
+                                      .channel = bytes[3],
+                                      .parameter = static_cast<octa::MixerParameter>(bytes[4]),
+                                      .value = value});
+  check_dsp_control(octa::MasterChange{.source = source,
+                                       .bus = bytes[2],
+                                       .channel = bytes[3],
+                                       .parameter = static_cast<octa::MasterParameter>(bytes[4]),
+                                       .value = value});
+  check_dsp_control(octa::ReverbChange{.parameter = static_cast<octa::ReverbParameter>(bytes[1]),
+                                       .bank = bytes[2],
+                                       .value = bytes[3]});
+  check_dsp_control(octa::RouteChange{.pair = bytes[1], .selection = bytes[2]});
 }
 
 void frames(std::span<const std::uint8_t> bytes) {
@@ -158,5 +197,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
   const std::span bytes(data, size);
   frames(bytes);
   structured(bytes);
+  typed_controls(bytes);
   return 0;
 }

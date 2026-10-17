@@ -6,7 +6,7 @@ The target platform is native Debian. Development and local functional testing a
 
 ## Status
 
-Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, a bulk-state reader for preamps, four direct mixers, reverb and output routing, and validated preamp/compressor writes with readback through the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL. Audio streaming and the remaining controls need completion and hardware verification; driver work takes priority over the GUI.
+Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, a bulk-state reader for preamps, four direct mixers, reverb and output routing, and validated preamp/compressor and DSP writes with readback through the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL. Timed audio capture/playback checks pass at all four rates under WSL after a [USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation). Signal integrity and the remaining controls still need completion and hardware verification; driver work takes priority over the GUI.
 
 The driver will be a [standalone kernel module](kernel/README.md); Debian users will not need to patch or rebuild their kernel.
 
@@ -36,6 +36,8 @@ make release    # optimized build and tests
 ./build/strict/octa-probe   # read-only clock status, requires USB device access
 ./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
 ./build/strict/octa-control 1 attack 8  # set channel 1 attack index, verify fresh bulk reply
+./build/strict/octa-dsp --dry-run mixer input A 3 pan 16384  # encode without MIDI access
+python3 tools/check-dsp.py            # read-only check; --write changes/restores DSP controls
 python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
 ./build/strict/octa-audio-check 48000 prepare-capture  # configure/prepare without streaming
 ./build/strict/octa-audio-check 48000 capture          # transfer one second and check timing
@@ -43,11 +45,15 @@ python3 tools/check-preamps.py        # read-only check; --write tests and resto
 
 Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. The separate `thread` preset is available for concurrent code. Userspace flags are not applied to kernel builds.
 
+`octa-dsp` controls the direct mixers, masters, reverb and output routing; invoke it without arguments for syntax. Mixer buses are A..D, channels and output pairs start at 1, and values are decimal wire coefficients/indices. `--dry-run` prints the encoded frame without opening a MIDI device. Writes validate reference GUI bounds before device access and require a fresh bulk reply containing the requested value. Stereo-pair changes use the first channel of the pair. This is a protocol interface; GUI gestures that coordinate several controls still need implementation.
+
 The `fuzz` preset instruments the protocol library with libFuzzer and ASan/UBSan. Synthetic seeds cover framing, stream recovery, size limits, bulk state, and parameter notifications; invariants check round trips and rejection without state changes. The corpus and crash artifacts remain in `build/fuzz/`. No fuzz input is sent to hardware. These campaigns do not establish kernel robustness; KASAN/UBSAN, fault injection, and malformed USB descriptor/URB tests on a test kernel remain required.
 
-The Python 3 hardware checker tests ten parameters on all eight unlinked channels, changes each by one index, independently checks the complete preamp bank, and restores each value even if readback fails. Phantom power, Hi-Z, and stereo links are excluded from automated changes. A recovery snapshot is saved in `build/hardware/preamp-before.json`; interruption or device disconnection can prevent restoration, so check the reported result. All CLI values are wire indices; see the [protocol bounds](doc/usb-midi-protocol.txt).
+The Python 3 preamp hardware checker tests ten parameters on all eight unlinked channels, changes each by one index, independently checks the complete preamp bank, and restores each value even if readback fails. Phantom power, Hi-Z, and stereo links are excluded from automated changes. A recovery snapshot is saved in `build/hardware/preamp-before.json`; interruption or device disconnection can prevent restoration, so check the reported result. All CLI values are wire indices; see the [protocol bounds](doc/usb-midi-protocol.txt).
 
-`octa-audio-check` accepts 44100/48000/96000/192000 Hz, `capture`, `playback`, `prepare-capture`, or `prepare-playback`, and an optional `hw:` PCM device. It uses packed 24-bit samples and descriptor channel counts. Streaming checks discard input or play zeros, reject ALSA errors, and require one second of frames to complete in 800..2000 ms, with a four-second transfer deadline. Preparation success is reported separately. This smoke test checks gross timing and transfer completion; channel identity, signal integrity, latency, and long-duration stability need separate tests. The current WSL audio checks fail; native Debian hardware checks are still required.
+`tools/check-dsp.py --write` tests mute, solo, pan and volume on all mixer channels, master volumes, reverb sends/return/type and parameter banks, and output routes. It checks all decoded fields for unexpected changes and the complete raw payload after each restoration. A snapshot is saved in `build/hardware/dsp-before.json`. Link/mono switches and persistent/reset operations are excluded. As with the preamp checker, disconnection or interruption can prevent restoration.
+
+`octa-audio-check` accepts 44100/48000/96000/192000 Hz, `capture`, `playback`, `prepare-capture`, or `prepare-playback`, and an optional `hw:` PCM device. It uses packed 24-bit samples and descriptor channel counts. Streaming checks discard input or play zeros, reject ALSA errors, and require one second of frames to complete in 800..2000 ms, with a four-second transfer deadline. Preparation success is reported separately. This smoke test checks gross timing and transfer completion; channel identity, signal integrity, latency, and long-duration stability need separate tests. The WSL timing checks pass after the host workaround; native Debian hardware checks are still required.
 
 ## Documentation
 

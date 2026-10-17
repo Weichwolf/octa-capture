@@ -48,6 +48,16 @@ dsp = [
 for index, (address, payload) in enumerate(dsp):
     seeds[f'dsp-frame-{index}'] = frame(0x12, address, payload)
     seeds[f'dsp-message-{index}'] = bytes([0x12] + address + payload)
+typed = [
+    [0, 0, 3, 9, 4, 0, 0, 0x80, 0],
+    [0, 1, 2, 8, 8, 0, 0x20, 0, 0],
+    [0, 0, 0, 0, 14, 0, 0x7f, 0xff, 0xff],
+    [0, 1, 3, 1, 1, 0, 0x20, 0, 0],
+    [0, 2, 4, 49, 0, 0, 0, 0, 0],
+    [0, 4, 8, 0, 0, 0, 0, 0, 0],
+]
+for index, content in enumerate(typed):
+    seeds[f'dsp-typed-{index}'] = bytes(content)
 for name, content in seeds.items():
     (corpus / name).write_bytes(content)
 PY

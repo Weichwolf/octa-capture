@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/Midi.hpp"
 
+#include "octa/Dsp.hpp"
+#include "octa/DspControl.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 
@@ -158,6 +160,20 @@ std::expected<Message, MidiError> write_preamp(std::string_view port, PreampChan
     return std::unexpected(MidiError{.code = -EIO, .operation = "preamp readback"});
   }
   return state;
+}
+
+std::expected<Message, MidiError> write_dsp(std::string_view port, const DspChange &change) {
+  const auto frame = encode_dsp_change(change);
+  if (!frame) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "DSP value"}); }
+  auto reply = query_state(port, *frame);
+  if (!reply) { return reply; }
+  const auto state = decode_dsp(*reply);
+  if (!state) { return std::unexpected(MidiError{.code = -EBADMSG, .operation = "DSP state"}); }
+  const auto matches = matches_dsp_change(*state, change);
+  if (!matches || !*matches) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "DSP readback"});
+  }
+  return reply;
 }
 
 }

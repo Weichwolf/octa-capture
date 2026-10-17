@@ -5,7 +5,7 @@
 /doc/local/
 /build/
 /compile_commands.json
-/__pycache__/
+__pycache__/
 /doc/check-*.txt
 /doc/kernel-config.txt
 /doc/tools-inventory.json

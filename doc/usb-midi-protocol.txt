@@ -220,6 +220,16 @@ the pair using its first channel. CSysEx4::SetPan at 0x100020940 and
 CSysEx6::SetVol at 0x100021e72 establish the group/bus ordering.
 Reverb send uses 00 06 channel 0E with six nibbles, input bus A only.
 
+Write bounds: pan 0000..8000, volume/send/return 000000..7FFFFF,
+booleans 0..1. Hardware probes on a linked input pair show that mute,
+solo, volume and reverb send also update the peer; pan remains independent.
+A linked input master volume write also updates its opposite channel.
+Individual notifications describe the addressed field; use the subsequent
+bulk reply to observe coupled device changes. The reference fader's CVrTbl::m_vr at 0x10005c7d0 has
+1025 monotonic coefficients from 0 to 7FFFFF; 200000 is unity. The
+CCtrlLevelBase::SetRange at 0x10002151a uses control positions 0..1024.
+This implementation uses raw coefficients rather than copying that table.
+
 Master bulk fields:
   404..407 input master stereo links, one byte per bus, bit 0
   408..437 input master L/R volumes, six nibbles per channel
@@ -242,13 +252,21 @@ indices at 0B..0F; five time indices at 10..14 (including the off slot).
 Routing address: 00 03 00 pair, pair=0..4, one selection byte.
 CCplDeviceIO::TxRevType at 0x1000271ca writes one byte to 00 04 00 00.
 TxRevPreDly at 0x1000273fa uses 00 04 type 01; TxRevTime at
-0x1000274dc uses 00 04 type 02. Both send one table-index byte.
+0x1000274dc uses 00 04 type 02. Both send one table-index byte. CDlgReverb::InitDlgItems at 0x1000278fc
+sets pre-delay indices 0..12 and time indices 0..49. The Base.lproj
+Reverb.nib menu order is OFF, ECHO, ROOM, SMALL HALL, LARGE HALL (0..4).
+Pre-delay/time writes target active type banks 1..4; incoming bulk state
+also retains the off bank. Patchbay.nib lists nine routing selections:
+Direct Mix A..D (0..3), WAVE OUT pairs 1-2 through 9-10 (4..8).
 The DSP bulk decoder is in src/Dsp.cpp; octa-state exposes these fields.
 src/DspUpdate.cpp applies individual notifications for the mapped channels,
 masters, effects and routes. Unknown selectors and malformed values leave
 state unchanged. Stereo-pair notifications accept either channel of the
 pair; the transmitter uses its first channel. Only input bus A sends and
 the global reverb return are represented. Unmapped master flags are rejected.
+src/DspControl.cpp validates typed writes against these bounds, uses
+canonical selectors, and encodes the DT1. octa-dsp supports dry runs;
+the MIDI backend verifies each write against a fresh decoded bulk reply.
 Readback from the connected device and synthetic boundary tests validate
 the layout; DSP writes and physical effect still need verification.
 
@@ -278,8 +296,18 @@ streaming and verifies wall time. At 48 kHz under WSL, eight-packet input
 URBs complete about every 8 ms; packet lengths are normally 216 bytes
 (six 12-channel frames). The aggregate input rate is approximately 6000
 frames/s rather than 48000, and both capture and playback fail the timed
-check. The USB/IP scheduling path needs further investigation; successful
-URB status alone must not be treated as valid audio.
+check before the host workaround. An independent asynchronous libusb
+capture, with the ALSA module unloaded, reproduces the same 1/8 rate.
+
+The tested usbipd-win revision aa3db8b omits VBoxUSB GET_DEVICE. VirtualBox
+7.2.2 initializes its cached high-speed flag only in that request and uses
+it for isochronous frame scheduling. The targeted Windows metadata query
+in tools/initialize-usbipd-high-speed.ps1 restored correct timing: capture
+and playback at all four supported rates passed octa-audio-check with no
+ALSA errors and approximately 1002..1005 ms per second of frames. The
+Windows driver version is 7.2.2.170484. This is a transport timing result;
+signal integrity, channel identity and long-duration stability remain open.
+See kernel/README.md for the repeatable host workaround.
 
 Evidence and remaining verification
 ----------------------------------

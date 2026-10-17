@@ -11,8 +11,9 @@
 
 # Environment and references
 
-- Development: Debian 13, x86_64, WSL kernel `6.18.54.1-microsoft-standard-WSL2`. The connected device is already bound to `snd-usb-audio`.
+- Development: Debian 13, x86_64, WSL kernel `6.18.54.1-microsoft-standard-WSL2`. The connected device uses our standalone `snd-octa-capture` module.
 - `doc/`: official Windows 1.5.3/macOS 1.5.9 downloads, sources/hashes in `drivers-manifest.json`, checksums in `SHA256SUMS`, findings in `environment.txt`.
+- With usbipd-win `aa3db8b` / VBoxUSB 7.2.2, run the Windows metadata helper after attachment to initialize its high-speed cache (see `kernel/README.md`). This fixed the 1/8 streaming rate; timed capture/playback checks pass at all four rates. Native Debian and signal-quality checks remain required.
 - Findings are dated snapshots: recheck tools, permissions, and running builds before relying on them.
 - `/tmp/setup-octa-capture.sh` installs tools/permissions and prepares matching WSL build files. The kernel build was running when recorded; check its current status. After successful completion, `source /etc/octa-capture-dev.env` provides `KDIR`, `KERNEL_CC`, and `KDIR_NATIVE`. `/tmp` is temporary.
 - Ghidra 12.1.2 is installed as a Snap: `ghidra.analyzeHeadless`. Decompilation of a custom test function passed. LLVM 19, GNU Binutils, and GDB are available.
