@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "../src/PresetDevice.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
@@ -14,14 +15,24 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
 #include <iostream>
 #include <span>
+#include <string>
 #include <string_view>
 #include <sys/poll.h>
 #include <sys/types.h>
+#include <system_error>
 #include <unistd.h>
 #include <utility>
 #include <vector>
+
+extern "C" {
+#include <signal.h>
+#include <stdlib.h>
+}
 
 namespace {
 
@@ -40,6 +51,9 @@ struct FakeIo {
   unsigned int fail_write = 0;
   int open_error = 0;
   int read_error = 0;
+  int memory_signal = 0;
+  bool fail_after_memory = false;
+  unsigned int read_failures = 0;
   bool oversized_read = false;
   bool oversized_write = false;
 };
@@ -329,6 +343,89 @@ bool memory_partial_failure() {
                  "partial memory transfer requires reopening rather than an unsafe retry");
 }
 
+bool memory_cli_case(octa::MemoryAction action, int interruption, bool fail_reply) {
+  io = {};
+  io.memory_signal = interruption;
+  io.fail_after_memory = fail_reply;
+  const auto baseline = bulk_frame();
+  io.replies = {baseline, bulk_frame(1), baseline};
+  auto directory = std::to_array("/tmp/octa-memory-test-XXXXXX");
+  if (mkdtemp(directory.data()) == nullptr) { return false; }
+  const auto path = std::string(directory.data()) + "/recovery.syx";
+  const int result =
+      octa::cli::operate_memory(action, {.port = "hw:fake", .snapshot_path = path.c_str()});
+  std::ifstream file(path, std::ios::binary);
+  std::array<std::uint8_t, octa::bulk_size + 14> bytes{};
+  file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  const bool identical = file.gcount() == static_cast<std::streamsize>(baseline.size()) &&
+                         std::ranges::equal(std::span(bytes).first(baseline.size()), baseline);
+  std::error_code metadata_error;
+  const auto metadata = std::filesystem::status(path, metadata_error);
+  const auto forbidden = std::filesystem::perms::group_all | std::filesystem::perms::others_all;
+  const bool private_file =
+      !metadata_error && (metadata.permissions() & forbidden) == std::filesystem::perms::none;
+  const bool failed = interruption != 0 || fail_reply;
+  const bool recovered = failed && action == octa::MemoryAction::load;
+  const unsigned int connections = recovered ? 2U : 1U;
+  constexpr int interrupted_status = 130;
+  const int failure_status = fail_reply ? 1 : 0;
+  const int expected = interruption != 0 ? interrupted_status : failure_status;
+  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+  const std::array payload = {static_cast<std::uint8_t>(action)};
+  const auto command = octa::encode(octa::Command::data, {0, 0, 0, 1}, payload);
+  std::vector<std::uint8_t> expected_wire;
+  if (query && command) {
+    append_bytes(expected_wire, *query);
+    append_bytes(expected_wire, *command);
+    append_bytes(expected_wire, *query);
+    if (recovered) {
+      append_bytes(expected_wire, baseline);
+      append_bytes(expected_wire, *query);
+    }
+  }
+  const bool exact_transfer = query && command && io.outgoing == expected_wire;
+  const bool removed_file = unlink(path.c_str()) == 0;
+  const bool removed_directory = rmdir(directory.data()) == 0;
+  return require(result == expected && identical && private_file && exact_transfer &&
+                     io.opens == connections && io.closes == io.opens * 2 && removed_file &&
+                     removed_directory,
+                 "memory CLI private snapshot and interruption/error recovery");
+}
+
+bool memory_cli_guard(octa::MemoryAction action) {
+  io = {};
+  const auto baseline = bulk_frame();
+  io.replies = {baseline, baseline};
+  auto directory = std::to_array("/tmp/octa-memory-guard-XXXXXX");
+  if (mkdtemp(directory.data()) == nullptr) { return false; }
+  const auto path = std::string(directory.data()) + "/recovery.syx";
+  {
+    std::ofstream file(path);
+    file << "preserve";
+  }
+  const int collision =
+      octa::cli::operate_memory(action, {.port = "hw:fake", .snapshot_path = path.c_str()});
+  std::ifstream original(path);
+  std::string contents;
+  original >> contents;
+  const auto impossible = std::string(directory.data()) + "/missing/recovery.syx";
+  const int creation_failed =
+      octa::cli::operate_memory(action, {.port = "hw:fake", .snapshot_path = impossible.c_str()});
+  const auto query = octa::request(octa::bulk_address, octa::bulk_size);
+  std::vector<std::uint8_t> expected;
+  if (query) {
+    append_bytes(expected, *query);
+    append_bytes(expected, *query);
+  }
+  const bool removed_file = unlink(path.c_str()) == 0;
+  const bool removed_directory = rmdir(directory.data()) == 0;
+  return require(
+      collision == 1 && creation_failed == 1 && contents == "preserve" && query &&
+          io.outgoing == expected && io.opens == 2 && io.closes == 4 && removed_file &&
+          removed_directory,
+      "memory backup collision and creation failure never send a state-changing command");
+}
+
 bool preset_transfer() {
   io = {};
   constexpr std::size_t whole_chunk = 512;
@@ -519,6 +616,10 @@ extern "C" int snd_rawmidi_close(snd_rawmidi_t * /*rmidi*/) {
 
 extern "C" ssize_t snd_rawmidi_read(snd_rawmidi_t * /*rmidi*/, void *buffer, std::size_t size) {
   if (io.read_error != 0) { return io.read_error; }
+  if (io.read_failures != 0) {
+    --io.read_failures;
+    return -EIO;
+  }
   if (io.oversized_read) { return static_cast<ssize_t>(size + 1); }
   if (io.position == io.incoming.size()) { return -EAGAIN; }
   const auto count = std::min({size, io.read_size, io.incoming.size() - io.position});
@@ -540,6 +641,11 @@ snd_rawmidi_write(snd_rawmidi_t * /*rmidi*/, const void *buffer, std::size_t siz
     const auto result = io.requests.feed(byte);
     if (!result) { continue; }
     const auto &message = *result;
+    if (message.has_value() && message->command == octa::Command::data &&
+        message->address == octa::Address{0, 0, 0, 1}) {
+      if (io.fail_after_memory) { ++io.read_failures; }
+      if (io.memory_signal != 0 && kill(getpid(), io.memory_signal) != 0) { return -errno; }
+    }
     if (message.has_value() && message->command == octa::Command::request &&
         io.reply_position < io.replies.size()) {
       append_bytes(io.incoming, io.replies[io.reply_position++]);
@@ -570,13 +676,21 @@ extern "C" int snd_rawmidi_poll_descriptors_revents(snd_rawmidi_t * /*rawmidi*/,
 
 int main() {
   if (pipe(wake_pipe.data()) != 0) { return 1; }
-  const bool passed = successful_stream() && input_failure(false) && input_failure(true) &&
-                      write_failures() && deadlines() && open_failure() && session_buffering() &&
-                      session_queries() && session_stale_fragment() && session_writes() &&
-                      memory_operations() && memory_rejection() && memory_partial_failure() &&
-                      preset_transfer() && preset_rejection() && preset_readback_failure() &&
-                      preset_partial_failure() && session_uncertain() && session_receive_bounds() &&
-                      impossible_transfers();
+  bool memory_cli_passed = true;
+  for (const auto action : {octa::MemoryAction::store, octa::MemoryAction::load}) {
+    memory_cli_passed = memory_cli_guard(action) && memory_cli_passed;
+    memory_cli_passed = memory_cli_case(action, 0, false) && memory_cli_passed;
+    memory_cli_passed = memory_cli_case(action, 0, true) && memory_cli_passed;
+    memory_cli_passed = memory_cli_case(action, SIGINT, false) && memory_cli_passed;
+    memory_cli_passed = memory_cli_case(action, SIGTERM, false) && memory_cli_passed;
+  }
+  const bool passed = memory_cli_passed && successful_stream() && input_failure(false) &&
+                      input_failure(true) && write_failures() && deadlines() && open_failure() &&
+                      session_buffering() && session_queries() && session_stale_fragment() &&
+                      session_writes() && memory_operations() && memory_rejection() &&
+                      memory_partial_failure() && preset_transfer() && preset_rejection() &&
+                      preset_readback_failure() && preset_partial_failure() &&
+                      session_uncertain() && session_receive_bounds() && impossible_transfers();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;

@@ -95,7 +95,7 @@ add_test(NAME meters COMMAND meters_test)
 add_executable(midi_test test/Midi.cpp)
 target_link_libraries(midi_test PRIVATE octa_midi)
 add_test(NAME midi COMMAND midi_test)
-add_executable(midi_transport_test test/MidiTransport.cpp)
+add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
 set_tests_properties(protocol preamp control dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense meters midi midi-transport PROPERTIES TIMEOUT 20

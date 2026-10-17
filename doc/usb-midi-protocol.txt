@@ -291,8 +291,14 @@ no observed acknowledgement or completion indication in TxSaveLoad or its
 callers. Invalid action values are rejected before any MIDI I/O. Partial
 transfer leaves the session uncertain and prevents further queries until
 reopened. Fragmented transfers, notifications and failure paths are tested
-with fake ALSA; persistent memory commands remain hardware-unverified and
-are not exposed by a CLI yet.
+with fake ALSA. octa-preset memory-store|memory-load NEW-RECOVERY.syx
+[hw:CTRL-port] saves a private raw snapshot before sending either command.
+An existing/unwritable backup path prevents command transmission. Failed or
+gracefully interrupted loads attempt exact raw restoration on a new CTRL
+connection. Store errors report unknown persistence status; the previous
+stored preset cannot be reconstructed from a runtime backup. CLI success
+reports command transmission and a bulk reply, not verified persistence.
+Persistent memory commands remain hardware-unverified.
 No persistent memory command has been executed. Disk .octa
 presets use a separate Ver100 format; see preset-format.txt for its layout
 and codec. Current-state export is read-only. Offline import preparation

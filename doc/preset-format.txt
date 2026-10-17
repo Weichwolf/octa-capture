@@ -148,5 +148,15 @@ full target and restores the original raw state independently. These
 checks pass on the attached WSL device with strict and release binaries.
 SIGINT and SIGTERM after transmission also restored the full raw state
 in a separate WSL hardware check. Native Debian remains unverified.
-Device Store/Load Memory is separate: the session API sends its reference
-commands, but those operations have no CLI or hardware verification yet.
+Device Store/Load Memory is separate:
+  octa-preset memory-store NEW-RECOVERY.syx [hw:CTRL-port]
+  octa-preset memory-load NEW-RECOVERY.syx [hw:CTRL-port]
+Both save the complete current raw state before sending the memory command.
+The recovery path must be new and writable; otherwise no command is sent.
+Load failure or graceful interruption attempts verified runtime recovery on
+a fresh connection. Store failure/interruption reports unknown persistence
+status: a runtime snapshot cannot undo an overwritten persistent preset.
+The commands query current state after transmission; that reply does not
+prove persistence or load completion. Forced termination/disconnection can
+prevent recovery, and an unobserved delayed load could outlast recovery.
+These workflows pass fake-ALSA fault/signal tests; hardware remains unverified.

@@ -77,6 +77,14 @@ def main():
         rejected = run(binary, ['restore', fixtures / 'preset-export-bulk.syx', 'invalid'], expected=1)
         require(b'invalid or outside known control bounds' in rejected.stderr,
                 'Invalid recovery was not rejected before device access')
+    with tempfile.TemporaryDirectory(prefix='octa-memory-cli-test-') as directory:
+        snapshot = Path(directory) / 'recovery.syx'
+        for mode in ('memory-store', 'memory-load'):
+            run(binary, [mode], expected=2)
+            run(binary, [mode, snapshot, 'invalid', 'extra'], expected=2)
+            result = run(binary, [mode, snapshot, 'invalid'], expected=1)
+            require(b'hardware MIDI port' in result.stderr and not snapshot.exists(),
+                    'Invalid memory port accessed the backup path')
     for mode in ('normalize', 'inspect'):
         with open('/dev/full', 'wb') as full:
             result = run(binary, [mode, fixtures / 'preset-ver100-windows-0.octa'], expected=1, stdout=full)
