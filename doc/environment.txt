@@ -1,0 +1,104 @@
+OCTA-CAPTURE: development environment, 2026-10-17
+Initial inspection before setup; tool and permission findings below are historical.
+
+Goal
+====
+The driver must work locally under WSL2 with the connected OCTA-CAPTURE and
+later on native Debian. Audio over USB/IP has not been tested yet. This
+inventory does not implement a driver.
+
+Downloads
+=========
+Official Roland product page:
+https://www.roland.com/global/support/by_product/octa-capture/updates_drivers/
+Windows 10/11: 1.5.3, octa_w1011d_v153DL.zip (6,709,970 bytes).
+macOS Sonoma 14 or later: 1.5.9, octa_mac14drv_m159.tgz (2,347,347 bytes).
+Both archives were fully read and checked for archive errors.
+Sources, timestamps, sizes, and SHA-256 hashes: drivers-manifest.json.
+Verification from doc/: sha256sum -c SHA256SUMS
+File lists: *.contents.txt; download pages: roland-*-download.html.
+The archives contain proprietary binary drivers, not Linux source code.
+
+System and existing support
+===========================
+Debian 13 (trixie), x86_64, WSL2.
+Running kernel: 6.18.54.1-microsoft-standard-WSL2.
+USB 0582:0120, 480 Mbit/s, through vhci_hcd / USB/IP.
+Interfaces 0 through 4 are already bound to snd-usb-audio.
+/dev/snd/controlC0, pcmC0D0c, pcmC0D0p, and midiC0D0 exist.
+This proves detection, not working recording or playback.
+
+Linux already contains an entry for 0582:0120 with fixed 44.1-kHz audio
+formats and MIDI; interfaces 3 and 4 are ignored in that entry.
+Source of the inspected upstream code (not proof of the exact source
+revision of the running WSL kernel):
+https://github.com/torvalds/linux/blob/master/sound/usb/quirks-table.h
+Investigate this support and missing functionality before designing an
+entirely new driver.
+
+Tools and build checks at initial inspection
+===========================================
+Available: GCC/G++, make, binutils, git, curl, Python 3, cmake, ninja,
+pkg-config, GDB, usbutils, udev, and kmod.
+ALSA and libudev development packages were installed; compiling, linking,
+and executing a small ALSA/libudev C program succeeded.
+The libusb runtime library was available; its development package was missing.
+Missing tools included alsa-utils, strace, tshark/dumpcap, acl,
+unzip/libarchive-tools/cabextract/innoextract, bison/flex/bc/libelf-dev/dwarves.
+Detailed snapshot: tools-inventory.json.
+
+Kernel build blockers at initial inspection
+==========================================
+/lib/modules/6.18.54.1-microsoft-standard-WSL2/build pointed to
+/usr/src/linux-headers-6.18.54.1-microsoft-standard-WSL2.
+That directory contained incomplete include files: no Makefile,
+Module.symvers, generated configuration, or modpost.
+Consequently, make -C ... kernelrelease failed.
+CONFIG_MODVERSIONS=y: modules_prepare alone does not provide Module.symvers.
+CONFIG_MODULE_SIG is disabled; modules_disabled=0.
+The running kernel configuration is saved in kernel-config.txt.
+Microsoft tag linux-msft-wsl-6.18.54.1 was verified using git ls-remote:
+d504d40ab83839cb61942a812a99d183c42227b9.
+https://github.com/microsoft/WSL2-Linux-Kernel
+
+Permission blockers at initial inspection
+========================================
+User cosmo belonged to sudo and plugdev, among other groups, but not audio.
+Effective process capabilities: 0.
+/dev/bus/usb/001/002: root:root, 0664; O_RDWR failed with EACCES.
+/dev/snd/controlC0: root:audio, 0660; O_RDWR failed with EACCES.
+sudo -n -l required a password; automatic root execution was unavailable.
+The kernel log was readable using dmesg.
+debugfs was mounted but could not be traversed by cosmo.
+usbmon was available as a module (CONFIG_USB_MON=m), not yet loaded.
+CONFIG_SND_PROC_FS is disabled, so /proc/asound does not exist.
+ALSA snd_card_next returned no card; snd_ctl_open("hw:0") failed.
+Recheck after correcting permissions; no audio streams were started.
+usbmon documentation: https://docs.kernel.org/usb/usbmon.html
+
+Setup script
+============
+/tmp/setup-octa-capture.sh
+Run: sudo bash /tmp/setup-octa-capture.sh --user cosmo
+
+Installs required packages and Debian kernel headers. Creates the
+octacapture group, audio group membership, OCTA-CAPTURE-specific udev rules,
+and usbmon access. User ACLs allow access from existing shells; group
+membership takes effect after logging in again. USB capture access covers
+all USB buses. It does not configure unrestricted passwordless sudo.
+
+Under WSL, the script also downloads the exact Microsoft kernel source
+revision and builds it using the running configuration to generate matching
+build files and Module.symvers. This can take time and several GB of disk
+space. The build symlink is updated; the running kernel, installed driver
+modules, and device firmware are not replaced. A subsequent test module
+load is needed to verify ABI compatibility in practice.
+
+After successful setup, /etc/octa-capture-dev.env provides KDIR,
+KERNEL_CC, and KDIR_NATIVE. Native Debian uses its own kernel version and
+headers. Modules built for the Debian target are not loaded into WSL.
+
+The script had not been run as root at the time of the initial inspection.
+Shell syntax and ShellCheck passed. Package installation, permission changes,
+and the kernel build must be verified after setup. Raw inspection output:
+check-*.txt. Later setup activity is not reflected in this initial snapshot.

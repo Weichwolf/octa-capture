@@ -1,0 +1,94 @@
+Windows GUI inspection under Wine, 2026-10-17
+============================================
+
+Result
+------
+The original 64-bit OCTA-CAPTURE Control Panel starts under Wine and draws
+its preamp/compressor interface. It displays "The device could not be found."
+The Driver menu and About dialog are accessible. The Direct Mixer view did
+not open in this disconnected state. No hardware control or audio streaming
+was verified. This is an observation of the unmodified GUI, not a functional
+Windows driver running under Linux.
+
+Environment and launch
+----------------------
+Wine 10.0 (Debian 10.0~repack-6), a separate win64 prefix, and Xvfb with a
+1600x1000, 24-bit screen. No changes were made to the device firmware or
+its Linux driver binding. Source archive: octa_w1011d_v153DL.zip, version
+1.5.3; see drivers-manifest.json for provenance and checksums.
+
+Files were extracted to /tmp/octa-capture-windows-gui. The following commands
+reproduce the launch after extraction (choose an unused display number):
+
+  # Start Xvfb in a separate terminal:
+  Xvfb :97 -screen 0 1600x1000x24 -nolisten tcp -ac
+  # In the application terminal:
+  mkdir -m 0700 -p /tmp/octa-capture-wine
+  export DISPLAY=:97 WINEARCH=win64 WINEPREFIX=/tmp/octa-capture-wine
+  /usr/lib/wine/wine64 wineboot.exe -u
+  cd /tmp/octa-capture-windows-gui/Files
+  /usr/lib/wine/wine64 RDDP1110.EXE
+
+The RDCP1110.CPL control-panel entry was also launched using control.exe;
+it brought the same main interface forward rather than exposing a separate
+settings window in this test. No claim is made about additional dialogs
+available when the Windows driver recognizes a device.
+
+Observed layout
+---------------
+The main window measures 978x408 pixels in this Wine configuration, excluding
+window-manager decorations. Native Windows font rendering and dimensions
+have not been compared.
+
+- A slim Driver menu bar above a metallic header.
+- AUTO-SENS button at the top left; OCTA-CAPTURE branding in the header;
+  DIRECT MIXER button with a downward arrow at the top right.
+- Eight vertical channel strips, grouped into four stereo pairs.
+- Preamp controls: SENS rotary knob, +48 phantom power, LO-CUT, PHASE;
+  Hi-Z is shown for channels 1 and 2.
+- Per-channel compressor section: BYPASS, input/output level meters with
+  clip indicators, transfer graph, and GATE, THRESHOLD, GAIN, ATTACK,
+  RELEASE, and RATIO rotary controls.
+- LINK button for each channel pair; channel numbers at the bottom.
+- A centered disconnected-device message overlays part of the controls.
+
+The Driver menu contains Always on top, Show README (disabled in this test),
+About Driver & Control Panel..., and Exit (Alt+F4).
+
+The About dialog measures 483x114 pixels. It shows the product name,
+Roland copyright, an OK button, an audio-port warning checkbox, and an
+ASIO attribution.
+
+Local screenshots
+-----------------
+Stored under doc/local/windows-gui/ and excluded from Git:
+
+  preamp-compressor.png  Main interface with disconnected-device message.
+  driver-menu.png        Driver menu popup.
+  about.png              About dialog.
+
+These screenshots are visual references, not original project GUI assets.
+Use them to guide our own implementation; do not publish manufacturer
+assets as GPL-licensed project artwork. Direct Mixer and device-dependent
+dialogs still require further observation.
+
+Windows driver compatibility checks
+-----------------------------------
+The vendor INF registers RDWM1110.SYS with ServiceType=1
+(SERVICE_KERNEL_DRIVER). Its import table requires ntoskrnl.exe, USBD.SYS,
+and portcls.sys, including PcInitializeAdapterDriver, PcNewPort, and
+PcRegisterSubdevice. No portcls implementation was found in the installed
+Wine 10.0 library directories. This is a concrete blocker to loading the
+original Roland driver in the current Wine environment; an installer
+completing would not demonstrate a working driver.
+
+RDDP1110.EXE imports CreateFileW and DeviceIoControl. Its precise device
+discovery and control interface has not yet been traced. A working Linux
+ALSA driver would not automatically provide the Windows driver interface
+expected by the vendor GUI. A dedicated compatibility bridge could be
+investigated separately if running the original GUI becomes a goal.
+
+Wine does include USB support; do not generalize these findings into a
+claim that Wine cannot access USB devices or run any driver-related code.
+Reference for the tested Wine version:
+https://github.com/wine-mirror/wine/blob/wine-10.0/dlls/wineusb.sys/wineusb.c

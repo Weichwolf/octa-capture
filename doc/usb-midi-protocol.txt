@@ -1,0 +1,138 @@
+OCTA-CAPTURE USB/MIDI protocol
+=============================
+
+Device: Roland UA-1010, USB VID:PID 0582:0120.
+Reference binaries: Windows 1.5.3 and macOS 1.5.9, identified in
+drivers-manifest.json. Addresses below refer to the macOS x86_64 slices.
+Status: static analysis unless explicitly marked as a hardware observation.
+No device-control write has yet been verified on hardware.
+
+USB interfaces (observed from the connected device descriptors)
+--------------------------------------------------------------
+All five interfaces are vendor-specific; bcdDevice=0200. The device is
+connected at 480 Mbit/s through USB/IP in the development environment.
+
+  Interface  Endpoint(s)       Transfer type / purpose
+  0          05 OUT           asynchronous isochronous audio output
+  1          85 IN            isochronous input with implicit feedback usage
+  2          06 OUT / 86 IN   MIDI; bulk at alternate 0, interrupt at alternate 1
+  3          82 IN            interrupt, 8-byte maximum packet at alternate 1
+  4          81 IN            interrupt, 8-byte maximum packet at alternate 1
+
+The precise meaning of interfaces 3 and 4 is not yet established. Do not
+label them as control endpoints without a trace or code evidence.
+Audio alternate settings 1,2,3,4 advertise 44100,48000,96000,192000 Hz.
+Descriptors advertise 10 output/12 input channels at the first three rates
+and four channels in each direction at 192000 Hz. These descriptor channel
+counts include any transport channels; not all are proven user audio channels.
+The existing snd-usb-audio quirk only exposes 44100 Hz, S32_LE, 10 output
+and 12 input channels. MIDI currently exposes one ALSA raw-MIDI subdevice.
+
+Control transport
+-----------------
+The macOS GUI establishes CoreMIDI connections to OCTA-CAPTURE endpoints
+named CTRL, separate from the regular musical MIDI endpoint. It sends
+Roland SysEx through that connection. This is established by
+CCplMidiClient::EstablishConnection at 0x100003f46 and CCplDeviceIO methods.
+
+The macOS MIDI driver uses USB MIDI framing with cable numbers. Its input
+and output cable mapping tables are identity maps 0..15. The cable number
+corresponding to CTRL is not yet confirmed. Sending control SysEx through
+the only currently exposed ALSA MIDI port is therefore not yet justified;
+that port may be the external DIN MIDI connection.
+
+SysEx envelope
+--------------
+Byte positions (hexadecimal byte values, zero-based offsets):
+
+  0       F0                 SysEx start
+  1       41                 Roland manufacturer ID
+  2       10                 device ID used by this GUI
+  3..5    00 00 4D           model ID
+  6       11 or 12           data request (RQ1) or data set (DT1)
+  7..10   aa bb cc dd         four 7-bit address bytes
+  11..N   payload            7-bit data; RQ1 uses four size bytes
+  N+1     checksum
+  N+2     F7                 SysEx end
+
+Checksum = (-sum(address bytes + payload bytes)) modulo 128.
+Header bytes through offset 6 and the terminating F7 are excluded.
+All address, payload, and checksum bytes are MIDI data bytes (0..127).
+The four address/size bytes represent base-128 digits, most significant first.
+
+Bulk state request
+------------------
+CCplDeviceIO::RqBlk at 0x10000a302 requests address 01 00 00 00 and size
+00 00 08 7A (=1146 payload bytes). The complete request is:
+
+  F0 41 10 00 00 4D 11 01 00 00 00 00 00 08 7A 7D F7
+
+CCplDev::SetBlk at 0x100009434 validates a DT1 response with 1146 payload
+bytes, checksum at offset 0x485, and F7 at offset 0x486 (1159 total bytes).
+Its decoder includes four direct-mixer buses, eight preamp/compressor
+channels, reverb, and output routing. Complete field mapping is pending.
+
+Preamp/compressor individual updates
+------------------------------------
+Address: 00 05 ch parameter; ch is zero-based 0..7. Single data byte.
+The original transmitter masks the channel to four bits; the receiver
+checks that it is below eight for per-channel controls.
+
+  Parameter  Meaning                 Reference transmitter
+  00         phantom power           0x1000132a8
+  01         phase/polarity           0x10001375e
+  02         Hi-Z                     0x10001389c
+  03         low-cut                  0x100013d52
+  04         sensitivity              0x100014844
+  05         preamp stereo link       0x100011a46
+  06         compressor enable        0x1000152be
+  07         gate threshold           0x1000160fc
+  08         compressor threshold     0x10001633a
+  09         attack                   0x1000167a6
+  0A         release                  0x1000169dc
+  0B         ratio                    0x100016570
+  0C         compressor gain          0x100016c1a
+
+For example, sensitivity channel 0, encoded value 0x14:
+  F0 41 10 00 00 4D 12 00 05 00 04 14 63 F7
+This is an encoding example, not a hardware-verified gain change.
+
+Some display values are table indices rather than their numerical units.
+Recovered GUI tables contain 101 sensitivity entries (0.0..50.0), nine
+compressor ratios, 26 attack entries, and 46 release entries. Knob position,
+display value, encoded state, and physical gain must remain distinct until
+their conversion functions have been checked.
+
+Direct mixer encodings
+-----------------------
+CSysEx4::SetPan at 0x100020940:
+  address = 00 (06+bus) ((source_group<<4)|channel) 04
+  payload = four nibbles of a 16-bit pan value, most significant first.
+
+CSysEx6::SetVol at 0x100021e72:
+  address = 00 (06+bus) ((source_group<<4)|channel) 08
+  payload = six nibbles of a 24-bit volume value, most significant first.
+
+The receiver and UI use four mixer buses and input/playback source groups.
+Valid channel counts, volume scales, mute/solo/link interactions, and all
+master/send/return address fields still require complete mapping.
+
+Reverb and persistence
+----------------------
+CCplDeviceIO::TxRevType at 0x1000271ca writes one byte to 00 04 00 00.
+TxRevPreDly and TxRevTime provide additional reverb parameter messages.
+TxSaveLoad at 0x10002a946 writes one command byte to 00 00 00 01.
+Command meanings must be recovered from callers before using persistence
+operations. No initialization, save, or restore operation has been executed.
+
+Evidence and remaining verification
+----------------------------------
+Named macOS GUI methods were decompiled in Ghidra 12.1.2; selected original
+decompilations and binary resources are ignored under doc/local/.
+tools/ghidra/ExportSelectedFunctions.java exports selected functions from
+a Ghidra project using an address<TAB>label input file.
+
+Next requirements: prove the CTRL USB cable mapping; capture a bulk read
+and reconcile it with the decoded GUI state; map all parameter bounds,
+sample-rate/clock behavior, messages, and file formats; verify independent
+encoders/decoders against original frames and real device responses.

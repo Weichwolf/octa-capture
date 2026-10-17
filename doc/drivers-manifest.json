@@ -1,0 +1,26 @@
+[
+  {
+    "platform": "windows",
+    "version": "1.5.3",
+    "filename": "octa_w1011d_v153DL.zip",
+    "bytes": 6709970,
+    "sha256": "7e70baa68b1589e9e45e90b7f94313ffa41e618dfb59556c90ea7b43499ab5c0",
+    "source_page": "https://www.roland.com/global/support/by_product/octa-capture/updates_drivers/a3a79a1c-d17d-475c-b29c-03bc4f075818/",
+    "download_url": "https://static.roland.com/assets/media/zip/octa_w1011d_v153DL.zip",
+    "resolved_url": "https://static.roland.com/assets/media/zip/octa_w1011d_v153DL.zip",
+    "retrieved_at_utc": "2026-10-17T13:15:20.510842+00:00",
+    "archive_check": "passed"
+  },
+  {
+    "platform": "macos",
+    "version": "1.5.9",
+    "filename": "octa_mac14drv_m159.tgz",
+    "bytes": 2347347,
+    "sha256": "dadfc0eb98e1e09dff6a01f4c56e29ac69ca43628610fc6af5bcb95f618eca90",
+    "source_page": "https://www.roland.com/global/support/by_product/octa-capture/updates_drivers/35e8f4f9-9cd4-472c-8f82-ae73b8f63691/",
+    "download_url": "https://static.roland.com/assets/media/tgz/octa_mac14drv_m159.tgz",
+    "resolved_url": "https://static.roland.com/assets/media/tgz/octa_mac14drv_m159.tgz",
+    "retrieved_at_utc": "2026-10-17T13:15:22.383440+00:00",
+    "archive_check": "passed"
+  }
+]

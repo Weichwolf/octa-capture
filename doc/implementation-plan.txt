@@ -1,0 +1,45 @@
+Implementation requirements and evidence
+========================================
+
+Scope: full independent implementation of OCTA-CAPTURE Windows driver
+functionality and GUI for native Debian and the local WSL2 environment.
+macOS binaries are an additional protocol and behavior reference.
+
+The following requirements remain open until verified individually:
+
+1. Audio/MIDI: all supported rates, channel counts, sample packing,
+   feedback, clock sources, stream start/stop, and synchronization.
+2. Device controls: preamp, phantom power, Hi-Z, polarity, low-cut,
+   auto-sensitivity, stereo linking, compressor parameters and presets.
+3. Direct mixer: all buses, input/playback/master controls, pan, sends,
+   returns, mute/solo/link, multiple-monitor mode, and output routing.
+4. Effects and routing: reverb, patchbay, sample-rate-dependent limits,
+   device expansion, initialization, backup/restore, and file persistence.
+5. GUI: original geometry, control behavior, parameter formatting, all
+   views/dialogs/menus, keyboard interactions, and disconnected states.
+   Use independently authored assets for distributed UI artwork.
+6. Local HTTP interface: authenticated control API, loopback binding,
+   Host/Origin validation, local assets, and validated device operations.
+7. GTK4/WebKitGTK wrapper: same UI with restricted native message bridge.
+8. Reproducible build, installation, tests, GPL-2.0-only notices, and English
+   repository content. Keep vendor downloads and derived code local.
+9. Real hardware verification on WSL2 and native Debian, distinguishing
+   observations, static-analysis findings, hypotheses, and simulations.
+
+Current evidence
+----------------
+- Original Windows GUI starts under Wine. Preamp/compressor, Driver menu,
+  and About dialog observed; hardware access is not verified.
+- Device enumerates as an ALSA capture/playback card. Existing kernel
+  quirk advertises 44.1 kHz only; streaming has not yet been tested.
+- Windows resource extraction and macOS package extraction succeeded.
+- All 37 extracted Windows PNG resources are byte-identical to named
+  macOS GUI PNG resources. Shared resources prove shared artwork, not
+  full protocol equivalence or verified Linux behavior.
+- macOS x86_64 audio, MIDI, and GUI slices retain useful function symbols.
+- A matching WSL kernel build is already running. Do not start a duplicate
+  build; inspect its live process and artifacts before module work.
+
+Next: recover GUI parameter conversions and device messages from the named
+macOS functions; cross-check with Windows classes/resources and actual USB
+descriptors. Establish read-only device state access before enabling writes.

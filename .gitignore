@@ -1,0 +1,11 @@
+# Proprietary manufacturer downloads and local visual references.
+/doc/*.zip
+/doc/*.tgz
+/doc/roland-*-download.html
+/doc/local/
+/build/
+/compile_commands.json
+/__pycache__/
+/doc/check-*.txt
+/doc/kernel-config.txt
+/doc/tools-inventory.json
