@@ -6,7 +6,7 @@ The target platform is native Debian. Development and local functional testing a
 
 ## Status
 
-Protocol analysis and implementation are in progress. The native library encodes and validates the recovered SysEx framing; `octa-probe` queries the device's clock status through USB. An initial Python query returned the current 48 kHz setting; subsequent native and Python queries timed out. No custom kernel driver or GUI is implemented yet. The connected device is detected by `snd-usb-audio`, but initial recording and silent-playback tests under WSL failed with I/O errors.
+Protocol analysis and implementation are in progress. Available: a SysEx codec and an experimental USB clock probe. Reliable device communication, audio streaming, the driver extensions, and the GUI remain unfinished.
 
 ## Planned interface
 

@@ -55,21 +55,12 @@ Bytes 0..2 hold the sample rate in little-endian order; byte 3 holds flags.
 The reference interprets flag bits 0 and 1 as clear/set conditions; the
 precise user-facing meaning of these conditions still needs verification.
 
-Clock query, 2026-10-17, WSL2 USB/IP:
+Verified response at the device's current 48 kHz setting:
   response: 80 bb 00 00
   decoded: 48000 Hz, flags=00
-The returned rate matches the device's current 48 kHz setting, as confirmed
-by the user.
-It was exclusively attached to WSL; the Windows driver could not access it.
-This confirms the rate query at that setting, not streaming or other rates.
-The query does not claim interfaces, detach snd-usb-audio, or change settings.
-
-The independent native implementation is src/Usb.cpp, exposed by octa-probe.
-It builds with strict compiler warnings and clang-tidy. Its first hardware
-run returned LIBUSB_ERROR_TIMEOUT (-7); repeating the same request through
-Python also timed out. The cause is unresolved. The earlier successful
-response must not be treated as proof of reliable repeated communication.
-The native run produced no ASan/UBSan finding; protocol unit tests passed.
+Implemented in src/Usb.cpp (octa-probe), without claiming interfaces or
+changing settings. Repeated communication is not yet reliable: subsequent
+queries timed out, with the cause unresolved.
 
 Fsc_GetStatChk2 at 0x1757e reads c0/03/0002/0000, length 1, and compares
 the result with 01. The hardware returned 01. Fsc_GetDIN at 0x17606 reads

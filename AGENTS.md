@@ -20,6 +20,7 @@
 
 - Apply strict quality gates modeled on `~/Git/outshine`: warnings are errors, clang-format, clang-tidy with zero findings and a 120-line function limit, strict compiler/linker flags, and ASan/UBSan. Run TSan separately for concurrent code. Never weaken checks or add baselines to hide findings. Kernel code uses Kbuild and kernel-specific analysis/sanitizers; do not pass userspace sanitizer/linker flags into Kbuild.
 - Distinguish protocol observations, hypotheses, and verified behavior; record relevant findings in `doc/`.
+- Keep documentation concise: protocol facts, usage, and material limitations. Do not maintain a diary or record routine work and individual test runs.
 - Keep USB/MIDI framing, addresses, encodings, and evidence in `doc/usb-midi-protocol.txt` as analysis advances.
 - Commit and push each verified increment to `upstream`; exclude proprietary downloads, extracted assets, and decompilation output.
 - Build kernel modules against matching build files, including `Module.symvers`. Do not load native Debian target modules into WSL.
