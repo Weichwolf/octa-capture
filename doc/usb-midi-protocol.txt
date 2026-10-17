@@ -19,8 +19,11 @@ connected at 480 Mbit/s through USB/IP in the development environment.
   3          82 IN            interrupt, 8-byte maximum packet at alternate 1
   4          81 IN            interrupt, 8-byte maximum packet at alternate 1
 
-The precise meaning of interfaces 3 and 4 is not yet established. Do not
-label them as control endpoints without a trace or code evidence.
+Interface 3 is the reference driver's status polling interface: CuDevPoll::Open
+selects alternate 1 and reads its interrupt pipe. Eight-byte packets are
+hardware-verified, with the rate in little-endian bytes 3..5 and alternating
+packet byte 0 (00/01). Other status fields still need mapping. Interface 4's
+meaning is not yet established.
 Audio alternate settings 1,2,3,4 advertise 44100,48000,96000,192000 Hz.
 Descriptors advertise 10 output/12 input channels at the first three rates
 and four channels in each direction at 192000 Hz. These descriptor channel
@@ -66,13 +69,20 @@ Fsc_GetStatChk2 at 0x1757e reads c0/03/0002/0000, length 1, and compares
 the result with 01. The hardware returned 01. Fsc_GetDIN at 0x17606 reads
 c0/05/0000/0000, length 1; that query timed out in the initial test.
 
-SendFsC at 0x177c8 sends the following clock-change request:
+SendFsC at 0x177c8 negotiates a rate with:
   bmRequestType=40, bRequest=03, wValue=0008, wIndex=0000, wLength=0004
   payload: 01 rate_low rate_middle rate_high
 It then polls Fsc_GetStatChk1, checking flags and the requested rate.
-The standalone module uses this sequence. Stream preparation requests for
-44.1, 96, and 192 kHz returned an error while the clock remained at its
-current 48 kHz setting; working rate changes are not established.
+On the tested device, this does not change the clock when the requested
+rate differs. Fsc_SetFs at 0x1768e uses the same setup packet with:
+  payload: 40 rate_low rate_middle rate_high
+This changes the rate. Bit 0 remains set during transition (about 0.55 s
+in the local test), then clears; the readiness query returns 01.
+The standalone module uses 40 for rate changes, polls for the requested
+rate and clear flags, then checks readiness before selecting audio alternate
+settings. It rejects status flag bit 1 rather than overriding that condition.
+ALSA stream preparation and independent USB readback have passed at all four
+supported rates under WSL. This does not establish working audio streaming.
 
 SysEx envelope
 --------------
@@ -206,9 +216,9 @@ Audio packing and initial hardware tests
 ---------------------------------------
 The macOS CPortProps::BytesPerUsbFrame at 0x13856 multiplies sample counts
 by channel count and three bytes per sample. This agrees with the device's
-three-byte/24-bit format descriptors. The Linux fixed quirk currently
-advertises S32_LE instead. Correcting that discrepancy requires a driver
-change and a real streaming test; it does not by itself prove a complete fix.
+three-byte/24-bit format descriptors. The stock Linux fixed quirk advertises
+S32_LE instead; the standalone module uses descriptor-based S24_3LE.
+Correct packing and successful preparation do not establish valid streaming.
 
 Initial tests on the existing unmodified WSL driver:
   arecord -q -D hw:0,0 -f S32_LE -c 12 -r 44100 -d 1 -t raw /dev/null

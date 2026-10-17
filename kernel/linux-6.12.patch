@@ -120,7 +120,7 @@ changing the clock or starting alternate settings.
 +},
 --- /dev/null
 +++ b/sound/usb/octa.c
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,108 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/* Roland OCTA-CAPTURE vendor clock control. */
 +
@@ -198,10 +198,13 @@ changing the clock or starting alternate settings.
 +	err = octa_get_rate(chip, &current_rate, &flags);
 +	if (err < 0)
 +		return err;
-+	if (current_rate == rate && !(flags & 3))
++	if (flags & 2)
++		return -EIO;
++	if (current_rate == rate && !(flags & 1))
 +		return octa_wait_ready(chip);
 +
-+	data[0] = 1;
++	/* 0x40 changes the clock; 0x01 only negotiates the current rate. */
++	data[0] = current_rate == rate ? 1 : 0x40;
 +	data[1] = rate;
 +	data[2] = rate >> 8;
 +	data[3] = rate >> 16;

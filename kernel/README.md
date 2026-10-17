@@ -2,7 +2,7 @@
 
 The driver is built as **`snd-octa-capture.ko`**, using an isolated copy of ALSA's USB audio implementation. Debian's kernel and its source tree remain untouched. The module matches only `0582:0120`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` module to coexist for other devices. It uses the kernel's existing MIDI helper.
 
-The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. Hardware validation and DKMS packaging remain pending.
+The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. CTRL MIDI communication and ALSA stream preparation with independent clock readback have passed at 44.1/48/96/192 kHz under WSL. Working audio streaming, native Debian hardware tests, and DKMS packaging remain pending.
 
 Use source matching the target kernel and its prepared build files, including `Module.symvers`:
 
