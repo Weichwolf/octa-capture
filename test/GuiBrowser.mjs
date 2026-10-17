@@ -49,6 +49,11 @@ try {
   assert.equal(exposed, '');
   await browser.screenshot(path.join(directory, 'preamp.png'));
   await until(async () => (await api('/api/meters')).meters?.age_ms < 1000, 'actual input meters');
+  await until(async () => {
+    const pcm = (await api('/api/meters')).meters?.pcm;
+    return pcm?.enabled && pcm.error === 0 && pcm.capture.fresh && pcm.playback.fresh &&
+      pcm.received_age_ms < 500;
+  }, 'actual kernel capture and playback PCM meters');
   if (write) {
     const sensitivity = '#preamp-view .preamp-strip:first-child .sensitivity';
     const original = before.preamps[0].sensitivity_index;
@@ -64,11 +69,19 @@ try {
     await hardware(state => state.preamps[0].compressor.attack_index === 25, 'nonlinear attack endpoint');
     assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(attack)}).getAttribute("aria-valuetext")`), '100 ms');
     await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'attack', value: before.preamps[0].compressor.attack_index});
+    const outputMeter = '.preamp-strip:first-child .meter.out';
+    await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'compressor', value: 1});
+    await until(() => browser.evaluate(`!document.querySelector(${JSON.stringify(outputMeter)}).matches('.unavailable, .stale')`), 'enabled compressor shows actual USB capture meter');
+    await browser.click('[aria-label="Input 1 compressor bypass"]');
+    await hardware(state => !state.preamps[0].compressor.enabled, 'compressor bypass readback');
+    await until(() => browser.evaluate(`document.querySelector(${JSON.stringify(outputMeter)}).classList.contains('unavailable')`), 'bypassed compressor hides OUT meter');
+    await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'compressor', value: Number(before.preamps[0].compressor.enabled)});
     console.log('PASS preamp controls: actual keyboard/pointer events and device readback');
   }
   await browser.click('#view-switch');
   assert.equal(await browser.evaluate('document.querySelector("#mixer-view").hidden'), false);
   assert.equal(await browser.evaluate('document.querySelectorAll(".mixer-strip").length'), 20);
+  await until(() => browser.evaluate('document.querySelectorAll(".level-lane:not(.stale)").length === 20'), 'all input and playback mixer meters use fresh PCM');
   await browser.screenshot(path.join(directory, 'mixer.png'));
   if (write) {
     await browser.key('[aria-label="input 1 / PAN"]', 'ArrowRight');

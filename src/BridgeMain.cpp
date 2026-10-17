@@ -3,6 +3,8 @@
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
+#include "octa/PcmMeterControl.hpp"
+#include "octa/PcmMeters.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 #include "octa/StateJson.hpp"
@@ -14,6 +16,7 @@
 #include <cstdint>
 #include <expected>
 #include <iostream>
+#include <optional>
 #include <span>
 #include <sstream>
 #include <string>
@@ -21,6 +24,7 @@
 #include <sys/poll.h>
 #include <type_traits>
 #include <unistd.h>
+#include <utility>
 #include <variant>
 
 extern "C" {
@@ -138,9 +142,30 @@ bool input(octa::MidiSession &session, std::string &pending, std::span<const cha
   return std::cout.good();
 }
 
-bool serve(octa::MidiSession &session) {
+void pcm_notification(std::optional<octa::PcmMeterControl> &control) {
+  if (!control) { return; }
+  const auto meters = control->read();
+  if (!meters) {
+    std::cerr << meters.error().operation << ": ALSA error " << meters.error().code << '\n';
+    control.reset();
+    return;
+  }
+  if (!meters->enabled) {
+    const auto enabled = control->enable(true);
+    if (!enabled) {
+      control.reset();
+      return;
+    }
+  }
+  std::cout << R"({"event":"pcm-meters","pcm":)";
+  octa::write_pcm_meters_json(std::cout, *meters);
+  std::cout << "}\n" << std::flush;
+}
+
+bool serve(octa::MidiSession &session, std::optional<octa::PcmMeterControl> &control) {
   std::string pending;
   std::array<char, octa::bridge_line_limit> bytes{};
+  auto next_pcm = std::chrono::steady_clock::now();
   while (interrupted == 0 && std::cout.good()) {
     struct pollfd descriptor{.fd = STDIN_FILENO, .events = POLLIN, .revents = 0};
     const int ready = poll(&descriptor, 1, 0);
@@ -161,6 +186,11 @@ bool serve(octa::MidiSession &session) {
       error_reply(0, message.error());
       return false;
     }
+    if (std::chrono::steady_clock::now() >= next_pcm) {
+      pcm_notification(control);
+      constexpr auto interval = std::chrono::milliseconds(30);
+      next_pcm = std::chrono::steady_clock::now() + interval;
+    }
   }
   return std::cout.good();
 }
@@ -179,6 +209,12 @@ int main(int argc, char **argv) {
     error_reply(0, session.error());
     return 1;
   }
+  // Strip only the raw-MIDI selectors, preserving a numeric or named CARD.
+  const auto separator = port.find(',');
+  std::optional<octa::PcmMeterControl> control;
+  // Older modules can still provide every MIDI control without PCM meters.
+  auto candidate = octa::PcmMeterControl::open(port.substr(0, separator));
+  if (candidate && candidate->enable(true)) { control.emplace(std::move(*candidate)); }
   std::cout << R"({"event":"ready"})" << '\n' << std::flush;
-  return serve(*session) ? 0 : 1;
+  return serve(*session, control) ? 0 : 1;
 }

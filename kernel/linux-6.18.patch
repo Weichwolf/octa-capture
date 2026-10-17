@@ -1,38 +1,77 @@
-Subject: [PATCH] Standalone OCTA-CAPTURE audio, MIDI and read-only status
+Subject: [PATCH] Standalone OCTA-CAPTURE audio, MIDI, status and PCM meters
 
-Use descriptor formats, vendor clock setup and both MIDI cables.
-Expose the bounded status pipe through a read-only ALSA control,
-without userspace interface detachment or audio-path changes.
+Adapt private ALSA sources; shared device code is supplied by prepare-alsa.sh.
 
 ---
 --- a/sound/usb/Makefile
 +++ b/sound/usb/Makefile
-@@ -5,6 +5,8 @@
- 
- snd-usb-audio-y := 	card.o \
- 			clock.o \
+@@ -5,6 +5,10 @@
+-
+-snd-usb-audio-y := 	card.o \
+-			clock.o \
+-			endpoint.o \
+-			fcp.o \
+-			format.o \
++
++snd-usb-audio-y := 	card.o \
++			clock.o \
++			octa-peaks.o \
++			octa-monitor.o \
 +			octa.o \
 +			octa-status.o \
- 			endpoint.o \
- 			fcp.o \
- 			format.o \
++			endpoint.o \
++			fcp.o \
++			format.o \
 --- a/sound/usb/card.c
 +++ b/sound/usb/card.c
 @@ -55,9 +55,10 @@
- #include "power.h"
- #include "stream.h"
- #include "media.h"
-+#include "octa.h"
- 
- MODULE_AUTHOR("Takashi Iwai <tiwai@suse.de>");
+-#include "power.h"
+-#include "stream.h"
+-#include "media.h"
+-
+-MODULE_AUTHOR("Takashi Iwai <tiwai@suse.de>");
 -MODULE_DESCRIPTION("USB Audio");
+-MODULE_LICENSE("GPL");
+-
+-static int index[SNDRV_CARDS] = SNDRV_DEFAULT_IDX;	/* Index 0-MAX */
++#include "power.h"
++#include "stream.h"
++#include "media.h"
++#include "octa.h"
++
++MODULE_AUTHOR("Takashi Iwai <tiwai@suse.de>");
 +MODULE_DESCRIPTION("Roland OCTA-CAPTURE audio and MIDI");
- MODULE_LICENSE("GPL");
- 
- static int index[SNDRV_CARDS] = SNDRV_DEFAULT_IDX;	/* Index 0-MAX */
-@@ -811,3 +812,9 @@
++MODULE_LICENSE("GPL");
++
++static int index[SNDRV_CARDS] = SNDRV_DEFAULT_IDX;	/* Index 0-MAX */
+@@ -604,7 +605,9 @@
+-{
+-	struct snd_usb_audio *chip = card->private_data;
+-
+-	snd_usb_endpoint_free_all(chip);
+-	snd_usb_midi_v2_free_all(chip);
+-
+-	mutex_destroy(&chip->mutex);
++{
++	struct snd_usb_audio *chip = card->private_data;
++
++	snd_usb_octa_capture_pcm_shutdown(chip);
++	snd_usb_endpoint_free_all(chip);
++	snd_usb_octa_capture_free_pcm(chip);
++	snd_usb_midi_v2_free_all(chip);
++
++	mutex_destroy(&chip->mutex);
+@@ -807,6 +810,12 @@
+-	usb_audio_make_longname(dev, chip, quirk);
+-
+-	snd_usb_audio_create_proc(chip);
+-
 -	*rchip = chip;
 -	return 0;
++	usb_audio_make_longname(dev, chip, quirk);
++
++	snd_usb_audio_create_proc(chip);
++
 +	err = snd_usb_octa_capture_add_controls(chip);
 +	if (err < 0) {
 +		snd_card_free(card);
@@ -41,70 +80,189 @@ without userspace interface detachment or audio-path changes.
 +
 +	*rchip = chip;
 +	return 0;
- }
-@@ -1319,12 +1326,9 @@
- 	return err;
- }
- 
+@@ -1102,6 +1111,7 @@
+-		struct snd_usb_endpoint *ep;
+-		struct usb_mixer_interface *mixer;
+-
+-		/* wait until all pending tasks done;
+-		 * they are protected by snd_usb_lock_shutdown()
+-		 */
++		struct snd_usb_endpoint *ep;
++		struct usb_mixer_interface *mixer;
++
++		snd_usb_octa_capture_pcm_shutdown(chip);
++		/* wait until all pending tasks done;
++		 * they are protected by snd_usb_lock_shutdown()
++		 */
+@@ -1239,6 +1249,7 @@
+-		return 0;
+-
+-	if (!chip->num_suspended_intf++) {
+-		list_for_each_entry(as, &chip->pcm_list, list)
+-			snd_usb_pcm_suspend(as);
+-		list_for_each_entry(ep, &chip->ep_list, list)
++		return 0;
++
++	if (!chip->num_suspended_intf++) {
++		snd_usb_octa_capture_pcm_suspend(chip, PMSG_IS_AUTO(message));
++		list_for_each_entry(as, &chip->pcm_list, list)
++			snd_usb_pcm_suspend(as);
++		list_for_each_entry(ep, &chip->ep_list, list)
+@@ -1313,18 +1324,17 @@
+-		chip->system_suspend = 0;
+-	}
+-	chip->num_suspended_intf--;
+-
+-err_out:
+-	atomic_dec(&chip->active); /* allow autopm after this point */
+-	return err;
+-}
+-
 -static const struct usb_device_id usb_audio_ids [] = {
 -#include "quirks-table.h"
 -    { .match_flags = (USB_DEVICE_ID_MATCH_INT_CLASS | USB_DEVICE_ID_MATCH_INT_SUBCLASS),
 -      .bInterfaceClass = USB_CLASS_AUDIO,
 -      .bInterfaceSubClass = USB_SUBCLASS_AUDIOCONTROL },
 -    { }						/* Terminating entry */
+-};
+-MODULE_DEVICE_TABLE(usb, usb_audio_ids);
+-
++		chip->system_suspend = 0;
++	}
++	chip->num_suspended_intf--;
++	if (!chip->num_suspended_intf)
++		snd_usb_octa_capture_pcm_resume(chip);
++
++err_out:
++	atomic_dec(&chip->active); /* allow autopm after this point */
++	return err;
++}
++
 +static const struct usb_device_id usb_audio_ids[] = {
 +#include "octa-id.h"
 +	{ } /* Terminating entry */
- };
- MODULE_DEVICE_TABLE(usb, usb_audio_ids);
- 
-@@ -1333,7 +1337,7 @@
-  */
- 
- static struct usb_driver usb_audio_driver = {
++};
++MODULE_DEVICE_TABLE(usb, usb_audio_ids);
++
+@@ -1333,7 +1343,7 @@
+- */
+-
+-static struct usb_driver usb_audio_driver = {
 -	.name =		"snd-usb-audio",
+-	.probe =	usb_audio_probe,
+-	.disconnect =	usb_audio_disconnect,
+-	.suspend =	usb_audio_suspend,
++ */
++
++static struct usb_driver usb_audio_driver = {
 +	.name =		"snd-octa-capture",
- 	.probe =	usb_audio_probe,
- 	.disconnect =	usb_audio_disconnect,
- 	.suspend =	usb_audio_suspend,
++	.probe =	usb_audio_probe,
++	.disconnect =	usb_audio_disconnect,
++	.suspend =	usb_audio_suspend,
 --- a/sound/usb/clock.c
 +++ b/sound/usb/clock.c
 @@ -19,6 +19,7 @@
- #include "card.h"
- #include "helper.h"
- #include "clock.h"
+-#include "card.h"
+-#include "helper.h"
+-#include "clock.h"
+-#include "quirks.h"
+-
+-union uac23_clock_source_desc {
++#include "card.h"
++#include "helper.h"
++#include "clock.h"
 +#include "octa.h"
- #include "quirks.h"
- 
- union uac23_clock_source_desc {
++#include "quirks.h"
++
++union uac23_clock_source_desc {
 @@ -664,6 +665,9 @@
- 	usb_audio_dbg(chip, "%d:%d Set sample rate %d, clock %d\n",
- 		      fmt->iface, fmt->altsetting, rate, fmt->clock);
- 
+-	usb_audio_dbg(chip, "%d:%d Set sample rate %d, clock %d\n",
+-		      fmt->iface, fmt->altsetting, rate, fmt->clock);
+-
+-	switch (fmt->protocol) {
+-	case UAC_VERSION_1:
+-	default:
++	usb_audio_dbg(chip, "%d:%d Set sample rate %d, clock %d\n",
++		      fmt->iface, fmt->altsetting, rate, fmt->clock);
++
 +	if (chip->usb_id == USB_ID(0x0582, 0x0120))
 +		return snd_usb_octa_capture_set_rate(chip, rate);
 +
- 	switch (fmt->protocol) {
- 	case UAC_VERSION_1:
- 	default:
++	switch (fmt->protocol) {
++	case UAC_VERSION_1:
++	default:
 --- a/sound/usb/endpoint.c
 +++ b/sound/usb/endpoint.c
-@@ -1487,7 +1487,8 @@
- 	/* Some UAC1 devices (e.g. Yamaha THR10) need the host interface
- 	 * to be set up before parameter setups
- 	 */
+@@ -14,6 +14,7 @@
+-#include <sound/pcm_params.h>
+-
+-#include "usbaudio.h"
+-#include "helper.h"
+-#include "card.h"
+-#include "endpoint.h"
++#include <sound/pcm_params.h>
++
++#include "usbaudio.h"
++#include "octa.h"
++#include "helper.h"
++#include "card.h"
++#include "endpoint.h"
+@@ -246,6 +247,7 @@
+-static void retire_outbound_urb(struct snd_usb_endpoint *ep,
+-				struct snd_urb_ctx *urb_ctx)
+-{
+-	call_retire_callback(ep, urb_ctx->urb);
+-}
+-
++static void retire_outbound_urb(struct snd_usb_endpoint *ep,
++				struct snd_urb_ctx *urb_ctx)
++{
++	snd_usb_octa_capture_pcm_retire(ep, urb_ctx);
++	call_retire_callback(ep, urb_ctx->urb);
++}
++
+@@ -268,6 +270,7 @@
+-	if (sync_sink)
+-		snd_usb_handle_sync_urb(sync_sink, ep, urb);
+-
+-	call_retire_callback(ep, urb);
+-}
+-
++	if (sync_sink)
++		snd_usb_handle_sync_urb(sync_sink, ep, urb);
++
++	snd_usb_octa_capture_pcm_retire(ep, urb_ctx);
++	call_retire_callback(ep, urb);
++}
++
+@@ -1487,7 +1490,8 @@
+-	/* Some UAC1 devices (e.g. Yamaha THR10) need the host interface
+-	 * to be set up before parameter setups
+-	 */
 -	iface_first = ep->cur_audiofmt->protocol == UAC_VERSION_1;
+-	/* Workaround for devices that require the interface setup at first like UAC1 */
+-	if (chip->quirk_flags & QUIRK_FLAG_SET_IFACE_FIRST)
+-		iface_first = true;
++	/* Some UAC1 devices (e.g. Yamaha THR10) need the host interface
++	 * to be set up before parameter setups
++	 */
 +	iface_first = ep->cur_audiofmt->protocol == UAC_VERSION_1 &&
 +		chip->usb_id != USB_ID(0x0582, 0x0120);
- 	/* Workaround for devices that require the interface setup at first like UAC1 */
- 	if (chip->quirk_flags & QUIRK_FLAG_SET_IFACE_FIRST)
- 		iface_first = true;
++	/* Workaround for devices that require the interface setup at first like UAC1 */
++	if (chip->quirk_flags & QUIRK_FLAG_SET_IFACE_FIRST)
++		iface_first = true;
 --- a/sound/usb/stream.c
 +++ b/sound/usb/stream.c
 @@ -1243,6 +1243,13 @@
- 				return err;
- 		}
- 
+-				return err;
+-		}
+-
+-		set_iface_first = false;
+-		if (protocol == UAC_VERSION_1 ||
+-		    (chip->quirk_flags & QUIRK_FLAG_SET_IFACE_FIRST))
++				return err;
++		}
++
 +		/*
 +		 * OCTA-CAPTURE has a device-wide vendor clock. Do not change
 +		 * its rate or select streaming interfaces while enumerating.
@@ -112,6 +270,123 @@ without userspace interface detachment or audio-path changes.
 +		if (chip->usb_id == USB_ID(0x0582, 0x0120))
 +			continue;
 +
- 		set_iface_first = false;
- 		if (protocol == UAC_VERSION_1 ||
- 		    (chip->quirk_flags & QUIRK_FLAG_SET_IFACE_FIRST))
++		set_iface_first = false;
++		if (protocol == UAC_VERSION_1 ||
++		    (chip->quirk_flags & QUIRK_FLAG_SET_IFACE_FIRST))
+--- a/sound/usb/pcm.c
++++ b/sound/usb/pcm.c
+@@ -15,6 +15,7 @@
+-#include <sound/pcm_params.h>
+-
+-#include "usbaudio.h"
+-#include "card.h"
+-#include "quirks.h"
+-#include "endpoint.h"
++#include <sound/pcm_params.h>
++
++#include "usbaudio.h"
++#include "octa.h"
++#include "card.h"
++#include "quirks.h"
++#include "endpoint.h"
+@@ -1253,7 +1254,7 @@
+-	    as->chip->lowlatency)
+-		runtime->hw.info |= SNDRV_PCM_INFO_SYNC_APPLPTR;
+-	runtime->private_data = subs;
+-	subs->pcm_substream = substream;
+-	/* runtime PM is also done there */
+-
+-	/* initialize DSD/DOP context */
++	    as->chip->lowlatency)
++		runtime->hw.info |= SNDRV_PCM_INFO_SYNC_APPLPTR;
++	runtime->private_data = subs;
++	WRITE_ONCE(subs->pcm_substream, substream);
++	/* runtime PM is also done there */
++
++	/* initialize DSD/DOP context */
+@@ -1261,12 +1262,14 @@
+-	subs->dsd_dop.channel = 0;
+-	subs->dsd_dop.marker = 1;
+-
+-	ret = setup_hw_info(runtime, subs);
+-	if (ret < 0)
+-		goto err_open;
+-	ret = snd_usb_autoresume(subs->stream->chip);
+-	if (ret < 0)
+-		goto err_open;
+-	ret = snd_media_stream_init(subs, as->pcm, direction);
+-	if (ret < 0)
+-		goto err_resume;
++	subs->dsd_dop.channel = 0;
++	subs->dsd_dop.marker = 1;
++
++	ret = snd_usb_autoresume(subs->stream->chip);
++	if (ret < 0)
++		goto err_open;
++	/* Release idle meter endpoints before computing PCM constraints. */
++	snd_usb_octa_capture_pcm_yield(chip);
++	ret = setup_hw_info(runtime, subs);
++	if (ret < 0)
++		goto err_resume;
++	ret = snd_media_stream_init(subs, as->pcm, direction);
++	if (ret < 0)
++		goto err_resume;
+@@ -1276,6 +1279,7 @@
+-err_resume:
+-	snd_usb_autosuspend(subs->stream->chip);
+-err_open:
+-	scoped_guard(mutex, &chip->mutex) {
+-		subs->opened = 0;
+-	}
++err_resume:
++	snd_usb_autosuspend(subs->stream->chip);
++err_open:
++	WRITE_ONCE(subs->pcm_substream, NULL);
++	scoped_guard(mutex, &chip->mutex) {
++		subs->opened = 0;
++	}
+@@ -1302,7 +1306,7 @@
+-			return ret;
+-	}
+-
+-	subs->pcm_substream = NULL;
+-	snd_usb_autosuspend(subs->stream->chip);
+-	scoped_guard(mutex, &chip->mutex) {
+-		subs->opened = 0;
++			return ret;
++	}
++
++	WRITE_ONCE(subs->pcm_substream, NULL);
++	snd_usb_autosuspend(subs->stream->chip);
++	scoped_guard(mutex, &chip->mutex) {
++		subs->opened = 0;
+--- a/sound/usb/usbaudio.h
++++ b/sound/usb/usbaudio.h
+@@ -16,6 +16,7 @@
+- *
+- */
+-
+-struct media_device;
+-struct media_intf_devnode;
+-
++ *
++ */
++
++struct octa_pcm_meter;
++struct media_device;
++struct media_intf_devnode;
++
+@@ -31,6 +32,7 @@
+-};
+-
+-struct snd_usb_audio {
+-	int index;
+-	struct usb_device *dev;
+-	struct snd_card *card;
++};
++
++struct snd_usb_audio {
++	struct octa_pcm_meter *octa_pcm_meter;
++	int index;
++	struct usb_device *dev;
++	struct snd_card *card;

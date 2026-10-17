@@ -2,6 +2,7 @@
 """Check browser control bounds and the serialized subprocess transport offline."""
 
 from concurrent.futures import ThreadPoolExecutor
+import copy
 from pathlib import Path
 import sys
 import time
@@ -93,6 +94,30 @@ class Transport(unittest.TestCase):
             peer.change({'kind': 'preamp', 'channel': 7, 'parameter': 'hi-z', 'value': 1})
         with self.assertRaises(InvalidControl):
             peer.request('state\n1 preamp', [])
+
+    def test_pcm_frames_and_invalid_fields(self):
+        peer = Bridge(Path('/nonexistent/backend'))
+        direction = {'rate': 48000, 'channels': 12, 'age_ms': 0, 'sequence': 1,
+                     'fresh': True, 'peaks': [0x7fffff00] + [0] * 11}
+        frame = {'enabled': True, 'idle_stream': True, 'error': 0,
+                 'capture': direction,
+                 'playback': {**direction, 'channels': 10, 'peaks': [0] * 10}}
+        peer._update_pcm(frame)
+        received = peer.meters()
+        self.assertEqual(received['pcm']['capture']['peaks'][0], 0x7fffff00)
+        self.assertGreaterEqual(received['pcm']['received_age_ms'], 0)
+        for key, value in (('rate', 1), ('channels', 13), ('age_ms', True), ('sequence', -1),
+                           ('fresh', False), ('peaks', [0] * 11), ('peaks', [True] * 12),
+                           ('peaks', [0x80000000] * 12), ('peaks', [1] * 12)):
+            invalid = copy.deepcopy(frame)
+            invalid['capture'][key] = value
+            with self.subTest(key=key), self.assertRaises(DeviceError):
+                peer._update_pcm(invalid)
+        # Stale kernel data is retained, never relabeled as a fresh sample.
+        stale = copy.deepcopy(frame)
+        stale['capture'].update(fresh=False, age_ms=501)
+        peer._update_pcm(stale)
+        self.assertFalse(peer.meters()['pcm']['capture']['fresh'])
 
 
 if __name__ == '__main__':

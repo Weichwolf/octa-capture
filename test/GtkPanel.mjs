@@ -32,6 +32,10 @@ export async function checkPanel(write) {
     `Complete panel fits the GTK viewport: ${JSON.stringify({panel:panel.toJSON(), width:innerWidth, height:innerHeight})}`);
   const initial = (await api('/api/state')).state;
   await until(async () => (await api('/api/meters')).meters?.age_ms < 1000, 'live device meters');
+  await until(async () => {
+    const pcm = (await api('/api/meters')).meters?.pcm;
+    return pcm?.enabled && pcm.capture.fresh && pcm.playback.fresh && pcm.received_age_ms < 500;
+  }, 'live kernel PCM meters');
   if (write) {
     const sensitivity = initial.preamps[0].sensitivity_index;
     const delta = sensitivity < 100 ? 1 : -1;
@@ -44,6 +48,8 @@ export async function checkPanel(write) {
   document.querySelector('#view-switch').click();
   check(!document.querySelector('#mixer-view').hidden, 'Direct Mixer opened');
   check(document.querySelectorAll('.mixer-strip').length === 20, 'Twenty mixer strips');
+  await until(() => document.querySelectorAll('.level-lane:not(.stale)').length === 20,
+    'all input/playback PCM meter lanes');
   for (const id of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about']) {
     const dialog = document.querySelector(`#${id}`);
     dialog.showModal(); check(dialog.open, `${id} opened`); dialog.close();

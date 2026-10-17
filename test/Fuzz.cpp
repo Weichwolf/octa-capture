@@ -6,6 +6,7 @@
 #include "octa/DspControl.hpp"
 #include "octa/Initialization.hpp"
 #include "octa/Meters.hpp"
+#include "octa/PcmMeters.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Preset.hpp"
 #include "octa/PresetState.hpp"
@@ -33,6 +34,17 @@ void device_status(std::span<const std::uint8_t> bytes) {
   require(status->sample_rate_hz != 0);
   require(status->clock_active == (bytes[7] != 0));
   require((status->clock_source == octa::ClockSource::external) == ((bytes[6] & 1U) != 0));
+}
+
+void pcm_status(std::span<const std::uint8_t> bytes) {
+  const auto meters = octa::decode_pcm_meters(bytes);
+  if (!meters) { return; }
+  require(bytes.size() == octa::pcm_meter_bytes);
+  for (const auto *direction : {&meters->capture, &meters->playback}) {
+    require(direction->channels <= direction->peaks.size());
+    require(!direction->fresh || direction->age_ms <= octa::pcm_meter_stale_ms);
+    for (const auto peak : direction->peaks) { require(peak <= octa::pcm_meter_peak_max); }
+  }
 }
 
 void round_trip(const octa::Message &message) {
@@ -436,6 +448,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
     require(octa::encode_initialization(target).has_value() == (bytes.front() <= 4));
   }
   device_status(bytes);
+  pcm_status(bytes);
   frames(bytes);
   structured(bytes);
   typed_controls(bytes);

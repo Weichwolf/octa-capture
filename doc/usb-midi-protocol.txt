@@ -605,9 +605,13 @@ kernel/pcm-peaks.h validates complete interleaved packets before accumulating
 peaks. tools/verify-pcm-peaks.py executes both original Windows routines and
 the macOS routine on synthetic vectors and compares the compiled scanner;
 tools/fuzz-pcm-peaks.sh fuzzes its bounds with sanitizers, without USB I/O.
-This establishes the calculation, not calibrated signal response. Kernel
-stream hooks, idle monitoring and the GUI PCM-meter connection are still
-integration work; the loaded module currently exposes only device status.
+The standalone module now observes actual input/output URBs and supplies these
+peaks through validated ALSA CARD controls. A leased idle engine captures and
+plays zeros at the current rate, yielding before normal PCM constraints are
+computed. The GUI uses capture peaks for compressor OUT and mixer INPUT, and
+playback peaks for WAVE OUT; stale/rate-mismatched data is not displayed.
+See doc/pcm-meters.md for the ABI and quiet hardware handover checks. Calculation
+and transport checks do not establish calibrated physical signal response.
 
 Input level meters
 ------------------

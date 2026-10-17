@@ -61,9 +61,14 @@ KASAN/UBSAN and malformed USB/fault-injection tests remain required.
 
 The portable `kernel/pcm-peaks.h` scanner is also compiled as kernel C with
 W=1/-Werror and Sparse, and exercised offline by strict userspace tests,
-original-driver CPU comparisons and `tools/fuzz-pcm-peaks.sh`. It is not yet
-connected to the loaded module's streaming callbacks. Host fuzzing does not
-replace kernel sanitizer/URB fault testing.
+original-driver CPU comparisons and `tools/fuzz-pcm-peaks.sh`. Streaming callbacks
+now publish actual capture/playback peaks; a leased zero-output idle engine
+yields to normal PCM opens. See [PCM meter controls](../doc/pcm-meters.md) for
+the ABI and hardware checks. The new device sources and PCM/card hooks pass
+Sparse for both kernels. A whole ALSA-tree Sparse run still reports existing
+upstream issues (6.18 endpoint scoped-lock contexts, 6.12 Scarlett Boolean
+expressions). No diagnostics are suppressed. Host fuzzing does not replace
+kernel sanitizer/URB fault testing.
 
 ## WSL USB/IP timing investigation
 

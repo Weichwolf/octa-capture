@@ -15,7 +15,7 @@ find_program(OCTA_CLANG_FORMAT NAMES clang-format-19 clang-format
   PATHS "$ENV{HOME}/.local/opt/octa-llvm19/usr/lib/llvm-19/bin" REQUIRED)
 set(CMAKE_CXX_CLANG_TIDY "${OCTA_CLANG_TIDY};--warnings-as-errors=*")
 
-add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp src/PresetState.cpp src/PresetImport.cpp src/DeviceStatus.cpp src/DirectOut.cpp src/Initialization.cpp src/Bridge.cpp)
+add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp src/PresetState.cpp src/PresetImport.cpp src/DeviceStatus.cpp src/DirectOut.cpp src/Initialization.cpp src/Bridge.cpp src/PcmMeters.cpp)
 target_include_directories(octa_protocol PUBLIC include)
 target_link_libraries(octa_protocol PUBLIC octa_quality)
 
@@ -34,6 +34,10 @@ target_link_libraries(octa-probe PRIVATE octa_usb)
 pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
 add_library(octa_status STATIC src/StatusControl.cpp)
 target_link_libraries(octa_status PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
+add_library(octa_pcm_meters STATIC src/PcmMeterControl.cpp)
+target_link_libraries(octa_pcm_meters PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
+add_executable(octa-pcm-meters src/PcmMeterMain.cpp)
+target_link_libraries(octa-pcm-meters PRIVATE octa_pcm_meters)
 add_executable(octa-status src/StatusMain.cpp)
 target_link_libraries(octa-status PRIVATE octa_status)
 
@@ -50,14 +54,17 @@ add_library(octa_state_json STATIC src/StateJson.cpp)
 target_link_libraries(octa_state_json PUBLIC octa_protocol)
 target_link_libraries(octa-state PRIVATE octa_midi octa_state_json)
 add_executable(octa-bridge src/BridgeMain.cpp)
-target_link_libraries(octa-bridge PRIVATE octa_midi octa_state_json)
+target_link_libraries(octa-bridge PRIVATE octa_midi octa_state_json octa_pcm_meters)
 add_executable(octa-dsp src/DspMain.cpp)
 target_link_libraries(octa-dsp PRIVATE octa_midi)
 add_executable(octa-control src/ControlMain.cpp)
 target_link_libraries(octa-control PRIVATE octa_midi)
 
 if(OCTA_FUZZING)
-  set(octa_fuzz_sources "${CMAKE_SOURCE_DIR}/test/PcmPeakFuzz.cpp" "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp" "${CMAKE_SOURCE_DIR}/test/MidiFuzz.cpp" "${CMAKE_SOURCE_DIR}/test/BridgeFuzz.cpp")
+  set(octa_fuzz_sources "${CMAKE_SOURCE_DIR}/test/PcmMeterFuzz.cpp" "${CMAKE_SOURCE_DIR}/test/PcmPeakFuzz.cpp" "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp" "${CMAKE_SOURCE_DIR}/test/MidiFuzz.cpp" "${CMAKE_SOURCE_DIR}/test/BridgeFuzz.cpp")
+  add_executable(pcm_meter_fuzz test/PcmMeterFuzz.cpp)
+  target_link_libraries(pcm_meter_fuzz PRIVATE octa_protocol)
+  target_link_options(pcm_meter_fuzz PRIVATE -fsanitize=fuzzer)
   add_executable(pcm_peak_fuzz test/PcmPeakFuzz.cpp)
   target_include_directories(pcm_peak_fuzz PRIVATE kernel)
   target_link_libraries(pcm_peak_fuzz PRIVATE octa_quality)
@@ -140,6 +147,12 @@ add_test(NAME auto-sense-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR
 add_executable(auto_sense_test test/AutoSense.cpp)
 target_link_libraries(auto_sense_test PRIVATE octa_protocol)
 add_test(NAME auto-sense COMMAND auto_sense_test)
+add_executable(pcm_meter_control_test test/PcmMeterControl.cpp)
+target_link_libraries(pcm_meter_control_test PRIVATE octa_pcm_meters PkgConfig::ALSA)
+add_test(NAME pcm-meter-control COMMAND pcm_meter_control_test)
+add_executable(pcm_meters_test test/PcmMeters.cpp)
+target_link_libraries(pcm_meters_test PRIVATE octa_protocol)
+add_test(NAME pcm-meters COMMAND pcm_meters_test)
 add_executable(pcm_peaks_test test/PcmPeaks.cpp)
 target_include_directories(pcm_peaks_test PRIVATE kernel)
 target_link_libraries(pcm_peaks_test PRIVATE octa_quality)
@@ -153,10 +166,18 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-parameters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli pcm-peaks meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-parameters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
-set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp")
+set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp"
+  "${CMAKE_SOURCE_DIR}/test/PcmMeters.cpp"
+  "${CMAKE_SOURCE_DIR}/test/PcmMeterControl.cpp"
+  "${CMAKE_SOURCE_DIR}/test/PcmMeterPacket.hpp"
+  "${CMAKE_SOURCE_DIR}/include/octa/PcmMeters.hpp"
+  "${CMAKE_SOURCE_DIR}/include/octa/PcmMeterControl.hpp"
+  "${CMAKE_SOURCE_DIR}/src/PcmMeters.cpp"
+  "${CMAKE_SOURCE_DIR}/src/PcmMeterControl.cpp"
+  "${CMAKE_SOURCE_DIR}/src/PcmMeterMain.cpp")
 
 set(octa_bridge_sources
   "${CMAKE_SOURCE_DIR}/include/octa/Bridge.hpp"

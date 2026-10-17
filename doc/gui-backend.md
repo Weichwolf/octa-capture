@@ -105,6 +105,13 @@ The independently authored web assets use the original parameter values and
 reference-derived behavior, not extracted manufacturer images. Unimplemented
 capabilities stay disabled; absent output meter data is not synthesized.
 
+The bridge additionally emits `pcm-meters` events with validated ALSA capture
+and playback peaks, rate/channel counts, sequences and ages. The Python cache
+retains independent MIDI/PCM receive times. The web panel uses the sources and
+compressor enable gating described in [PCM meters](pcm-meters.md), and blanks
+stale or rate-mismatched data. Older modules without these controls retain MIDI
+operation; their PCM meters remain unavailable.
+
 ## Checks
 
 The strict/release CTest suites include parser bounds, invalid JSON-state output,

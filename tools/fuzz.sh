@@ -17,6 +17,14 @@ from pathlib import Path
 
 corpus = Path('build/fuzz/corpus')
 
+for rate in (44100, 48000, 96000, 192000):
+    pcm = bytearray(b'OCPK\x01\x00\x88\x00' + bytes(128))
+    for offset, value in ((8, 15), (16, rate), (20, rate),
+                          (24, 4 if rate == 192000 else 12),
+                          (28, 4 if rate == 192000 else 10), (48, 0x7fffff00), (96, 256)):
+        pcm[offset:offset + 4] = value.to_bytes(4, 'little')
+    (corpus / f'pcm-meter-{rate}').write_bytes(pcm)
+
 def frame(command, address, payload):
     body = bytes(address) + bytes(payload)
     return bytes.fromhex('f0 41 10 00 00 4d') + bytes([command]) + body + bytes([-sum(body) % 128, 0xf7])

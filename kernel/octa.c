@@ -57,6 +57,29 @@ static int octa_wait_ready(struct snd_usb_audio *chip)
 	return -ETIMEDOUT;
 }
 
+int snd_usb_octa_capture_current_rate(struct snd_usb_audio *chip,
+				      unsigned int *rate)
+{
+	u8 flags, ready;
+	int current_rate, err;
+
+	err = octa_get_rate(chip, &current_rate, &flags);
+	if (err < 0)
+		return err;
+	if (flags & 3)
+		return -EAGAIN;
+	if (current_rate != 44100 && current_rate != 48000 && current_rate != 96000 &&
+	    current_rate != 192000)
+		return -ERANGE;
+	err = octa_read_status(chip, 2, &ready, sizeof(ready));
+	if (err < 0)
+		return err;
+	if (ready != 1)
+		return -EAGAIN;
+	*rate = current_rate;
+	return 0;
+}
+
 int snd_usb_octa_capture_set_rate(struct snd_usb_audio *chip, int rate)
 {
 	u8 data[4], flags;

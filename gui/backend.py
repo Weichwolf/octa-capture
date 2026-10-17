@@ -114,6 +114,8 @@ class Bridge:
         self._serial = 0
         self._meter = None
         self._meter_time = None
+        self._pcm = None
+        self._pcm_time = None
 
     def _read(self, process):
         try:
@@ -130,6 +132,8 @@ class Bridge:
                     self._ready.set()
                 elif response.get('event') == 'meters':
                     self._update_meter(response)
+                elif response.get('event') == 'pcm-meters':
+                    self._update_pcm(response.get('pcm'))
                 else:
                     self._replies.put_nowait(response)
         except (OSError, ValueError, queue.Full, DeviceError) as error:
@@ -173,6 +177,34 @@ class Bridge:
             raise DeviceError('The OCTA-CAPTURE device is not available.')
         self._exchange('meters', [1])
 
+    def _update_pcm(self, pcm):
+        if (type(pcm) is not dict or set(pcm) != {'enabled', 'idle_stream', 'error', 'capture', 'playback'} or
+                type(pcm['enabled']) is not bool or type(pcm['idle_stream']) is not bool or
+                type(pcm['error']) is not int or not 0 <= pcm['error'] <= 4095):
+            raise DeviceError('Invalid PCM meter response.')
+        for name, maximum in (('capture', 12), ('playback', 10)):
+            direction = pcm[name]
+            if (type(direction) is not dict or
+                    set(direction) != {'rate', 'channels', 'age_ms', 'sequence', 'fresh', 'peaks'} or
+                    any(type(direction[key]) is not int or not 0 <= direction[key] <= 0xffffffff
+                        for key in ('rate', 'channels', 'age_ms', 'sequence')) or
+                    type(direction['fresh']) is not bool or type(direction['peaks']) is not list or
+                    len(direction['peaks']) != maximum):
+                raise DeviceError('Invalid PCM stream response.')
+            rate, channels = direction['rate'], direction['channels']
+            unseen = rate == channels == 0 and direction['age_ms'] == 0xffffffff and not direction['fresh']
+            if not unseen and (rate not in (44100, 48000, 96000, 192000) or
+                               channels != (4 if rate == 192000 else maximum) or
+                               direction['fresh'] != (direction['age_ms'] <= 500)):
+                raise DeviceError('Inconsistent PCM stream response.')
+            for index, peak in enumerate(direction['peaks']):
+                if (type(peak) is not int or not 0 <= peak <= 0x7fffff00 or peak % 256 or
+                        (index >= channels and peak != 0)):
+                    raise DeviceError('Invalid PCM peak response.')
+        with self._data_lock:
+            self._pcm = pcm
+            self._pcm_time = time.monotonic()
+
     def _stop(self):
         process = self._process
         if process is None:
@@ -198,6 +230,8 @@ class Bridge:
             with self._data_lock:
                 self._meter = None
                 self._meter_time = None
+                self._pcm = None
+                self._pcm_time = None
 
     def _exchange(self, operation, arguments):
         self._serial = self._serial % 0xffffffff + 1
@@ -229,9 +263,15 @@ class Bridge:
 
     def meters(self):
         with self._data_lock:
-            if self._meter is None:
+            if self._meter is None and self._pcm is None:
                 return None
-            return {**self._meter, 'age_ms': int((time.monotonic() - self._meter_time) * 1000)}
+            result = ({**self._meter, 'age_ms': int((time.monotonic() - self._meter_time) * 1000)}
+                      if self._meter else {'input_levels': [0] * 8, 'input_db': [-96] * 8,
+                                          'age_ms': 0xffffffff})
+            if self._pcm is not None:
+                result['pcm'] = {**self._pcm,
+                                 'received_age_ms': int((time.monotonic() - self._pcm_time) * 1000)}
+            return result
 
     def close(self):
         with self.lock:

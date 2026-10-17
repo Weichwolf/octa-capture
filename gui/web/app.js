@@ -215,13 +215,13 @@ function toggle(label, control, read, className = '') {
 }
 
 function meter(kind, channel) {
-  const node = el('div', `meter ${kind}${kind === 'out' ? ' unavailable' : ''}`);
+  const node = el('div', `meter ${kind}`);
   node.dataset.channel = channel;
   node.append(el('span', 'meter-clip'), el('span', 'meter-fill'), el('span', 'meter-name', kind.toUpperCase()));
   const scale = el('span', 'meter-scale');
   for (const text of ['-2', '-6', '-12', '-24', '-48']) scale.append(el('span', '', text));
   node.append(scale);
-  if (kind === 'out') node.title = 'Compressor output meter data is not available yet.';
+  if (kind === 'out') node.title = 'USB capture peak after the compressor.';
   return node;
 }
 
@@ -352,7 +352,7 @@ function makeMixers() {
       strip.append(pan.node, el('p', 'channel-label', String(channel + 1)),
         fader(value => mixerControl(source, channel, 'volume', value),
           state => mixerValue(state, source, channel, 'volume'), `${source} ${channel + 1} volume`,
-          source === 'input' && channel < 8 ? channel : null));
+          channel));
       channels.append(strip);
     }
     group.append(channels);
@@ -466,12 +466,26 @@ function update(result) {
 }
 
 function updateMeters(meters) {
-  const fresh = meters && meters.age_ms < 1000;
-  for (const node of all('.meter.in, .level-lane')) {
-    const value = fresh ? meters.input_db[Number(node.dataset.channel)] : -96;
+  const midiFresh = meters && meters.age_ms < 1000;
+  const pcm = meters?.pcm;
+  const rateIndex = parseInt(documentState?.state.payload_hex.slice(4, 6), 16);
+  const rate = [44100, 48000, 96000, 192000][rateIndex];
+  for (const node of all('.meter, .level-lane')) {
+    const channel = Number(node.dataset.channel);
+    const isInput = node.classList.contains('in');
+    const isOutput = node.classList.contains('out');
+    const direction = node.closest('.mixer-strip')?.dataset.source === 'playback' ? pcm?.playback : pcm?.capture;
+    const compressor = documentState?.state.preamps[channel]?.compressor.enabled;
+    const available = !isOutput || Boolean(compressor);
+    const fresh = isInput ? midiFresh : Boolean(pcm?.enabled && pcm.received_age_ms < 500 &&
+      direction?.fresh && direction.rate === rate && channel < direction.channels);
+    const raw = fresh && !isInput ? Math.floor(direction.peaks[channel] / 131072) : 0;
+    const value = fresh && available ? (isInput ? meters.input_db[channel] :
+      (raw === 0 ? -96 : 20 * Math.log10(raw / 16383))) : -96;
     node.style.setProperty('--level', `${Math.max(0, Math.min(100, (value + 48) / 48 * 100))}%`);
     node.classList.toggle('clipped', fresh && value >= -0.1);
     node.classList.toggle('stale', !fresh);
+    node.classList.toggle('unavailable', !available);
   }
 }
 

@@ -135,6 +135,7 @@ int snd_usb_octa_capture_add_controls(struct snd_usb_audio *chip)
 	};
 	struct octa_status *status;
 	struct snd_kcontrol *kcontrol;
+	int err;
 
 	if (chip->usb_id != USB_ID(0x0582, 0x0120))
 		return 0;
@@ -150,5 +151,8 @@ int snd_usb_octa_capture_add_controls(struct snd_usb_audio *chip)
 	}
 	kcontrol->private_free = octa_status_free;
 	/* snd_ctl_add owns/frees the control, including its private data. */
-	return snd_ctl_add(chip->card, kcontrol);
+	err = snd_ctl_add(chip->card, kcontrol);
+	if (err < 0)
+		return err;
+	return snd_usb_octa_capture_add_pcm_controls(chip);
 }
