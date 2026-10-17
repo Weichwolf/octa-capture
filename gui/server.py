@@ -29,6 +29,7 @@ ASSETS = {'/': ('index.html', 'text/html; charset=utf-8'),
           '/parameters.js': ('parameters.js', 'text/javascript; charset=utf-8'),
           '/meters.js': ('meters.js', 'text/javascript; charset=utf-8'),
           '/menus.js': ('menus.js', 'text/javascript; charset=utf-8'),
+          '/warnings.js': ('warnings.js', 'text/javascript; charset=utf-8'),
           '/favicon.svg': ('favicon.svg', 'image/svg+xml'),
           '/style.css': ('style.css', 'text/css; charset=utf-8')}
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
@@ -173,6 +174,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, application.meters())
             elif path == '/api/devices':
                 self.reply(200, application.devices())
+            elif path == '/api/preferences':
+                self.reply(200, application.preferences())
             elif path == '/api/preset':
                 self.reply(200, application.export_preset(), 'application/octet-stream',
                            {'Content-Disposition': 'attachment; filename="OCTA-CAPTURE.octa"'})
@@ -226,6 +229,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             operations = {'/api/control': application.change, '/api/action': application.action,
                           '/api/device': application.select_device,
+                          '/api/preferences': application.set_preferences,
                           '/api/auto-sense/start': application.start_auto_sense,
                           '/api/auto-sense/stop': application.stop_auto_sense}
             if path not in operations:

@@ -15,6 +15,7 @@ import time
 from .backend import Bridge, DeviceError, InvalidControl, integer, validate_control
 from .auto_sense import AutoSenseJob
 from .devices import discover
+from .preferences import Preferences
 
 
 class Application:
@@ -38,6 +39,7 @@ class Application:
         self._auto_job = None
         self._auto_thread = None
         self._selected_identity = None
+        self._preferences = Preferences(self.data_dir)
 
     def _open(self):
         if self._closed:
@@ -70,6 +72,7 @@ class Application:
             raise DeviceError('The OCTA-CAPTURE device is not available.')
         return {'connected': True, 'busy': transaction if busy is None else busy, 'state': state,
                 'status': self._status, 'meters': self.bridge.meters(),
+                'preferences': self._preferences.document(),
                 'capabilities': {'auto_sense': True},
                 'auto_sense': self._auto_job.document() if self._auto_job else None}
 
@@ -122,6 +125,14 @@ class Application:
                 document['selected'] = device.identity == self._selected_identity
             devices.append(document)
         return {'devices': devices}
+
+    def preferences(self):
+        self._open()
+        return self._preferences.document()
+
+    def set_preferences(self, body):
+        self._open()
+        return self._preferences.update(body)
 
     def _bind_device(self, device):
         self.bridge.close()

@@ -90,7 +90,12 @@
   </dialog>
   <dialog id="about" aria-labelledby="about-title">
     <h2 id="about-title">About Driver &amp; Control Panel</h2>
-    <div class="dialog-content"><strong>OCTA-CAPTURE Linux Control Panel</strong><p>Independent Linux implementation · GPL-2.0-only</p><p>Roland OCTA-CAPTURE / UA-1010</p></div>
+    <div class="dialog-content"><strong>OCTA-CAPTURE Linux Control Panel</strong><p>Independent Linux implementation · GPL-2.0-only</p><p>Roland OCTA-CAPTURE / UA-1010</p><label><input id="show-port-warning" type="checkbox" checked disabled> Show a warning about audio ports that cannot be used.</label></div>
+    <footer><button data-close>OK</button></footer>
+  </dialog>
+  <dialog id="port-warning" aria-labelledby="port-warning-title">
+    <h2 id="port-warning-title">OCTA-CAPTURE — Audio Ports</h2>
+    <div class="dialog-content"><p>At 192 kHz, only inputs 1–4 and outputs 1–4 are available.<br>Other audio ports cannot be used at this sample rate.</p><label><input id="hide-port-warning" type="checkbox"> Do not show this message again.</label></div>
     <footer><button data-close>OK</button></footer>
   </dialog>
   <dialog id="confirm" aria-labelledby="confirm-title">

@@ -52,6 +52,13 @@ class TestApplication:
         self.calls.append(('device', body))
         return {'connected': True}
 
+    def preferences(self):
+        return {'show_port_warning': True}
+
+    def set_preferences(self, body):
+        self.calls.append(('preferences', body))
+        return body
+
     def export_preset(self):
         return bytes(1639)
 
@@ -151,6 +158,18 @@ class Http(unittest.TestCase):
         self.assertEqual(self.application.calls, [])
         self.assertEqual(self.request('POST', '/api/device', '{"id":"1-1"}')[0], 200)
         self.assertEqual(self.application.calls, [('device', {'id': '1-1'})])
+
+    def test_preferences_require_authentication_and_the_local_origin(self):
+        self.assertEqual(self.request('GET', '/api/preferences', authorized=False)[0], 403)
+        status, _, body = self.request('GET', '/api/preferences')
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)['show_port_warning'])
+        value = '{"show_port_warning":false}'
+        self.assertEqual(self.request('POST', '/api/preferences', value,
+                                      headers={'Origin': 'http://evil.example'})[0], 403)
+        self.assertEqual(self.application.calls, [])
+        self.assertEqual(self.request('POST', '/api/preferences', value)[0], 200)
+        self.assertEqual(self.application.calls, [('preferences', {'show_port_warning': False})])
 
     def test_routes_are_fixed(self):
         for path in ('/../README.md', '/%2e%2e/README.md', '/gui/backend.py', '/package.json'):

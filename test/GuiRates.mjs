@@ -6,6 +6,7 @@ import {until} from './BrowserClient.mjs';
 
 export async function checkRates(browser, api, directory, originalRate) {
   const rates = [44100, 48000, 96000, 192000];
+  const preferences = await api('/api/preferences');
   const change = async rate => {
     const index = rates.indexOf(rate);
     await browser.click('[data-menu="driver"]');
@@ -26,9 +27,26 @@ export async function checkRates(browser, api, directory, originalRate) {
     await browser.click('#settings [data-close]');
   };
   try {
+    await api('/api/preferences', {show_port_warning: true});
+    await until(() => browser.evaluate('document.querySelector("#show-port-warning").checked && !document.querySelector("#show-port-warning").disabled'), 'warning preference synchronized');
     for (const rate of rates) {
       await change(rate);
       const high = rate === 192000;
+      if (high) {
+        await until(() => browser.evaluate('document.querySelector("#port-warning").open'), 'original 192 kHz audio-port warning');
+        assert.match(await browser.evaluate('document.querySelector("#port-warning .dialog-content").textContent'), /inputs 1–4 and outputs 1–4/);
+        await browser.screenshot(path.join(directory, 'port-warning.png'));
+        await browser.click('#hide-port-warning');
+        await until(async () => !(await api('/api/preferences')).show_port_warning, 'warning suppression stored');
+        await browser.click('#port-warning [data-close]');
+        await browser.click('[data-menu="driver"]');
+        await browser.click('#menus button:nth-of-type(4)');
+        assert.equal(await browser.evaluate('document.querySelector("#show-port-warning").checked'), false);
+        await browser.click('#show-port-warning');
+        await until(async () => (await api('/api/preferences')).show_port_warning, 'About warning checkbox stored');
+        await browser.click('#about [data-close]');
+        assert.equal(await browser.evaluate('document.querySelector("#port-warning").open'), false, 'Reenabling does not repeat the warning at the same rate');
+      }
       const expectedChannels = high ? 4 : 8;
       await until(() => browser.evaluate(`document.querySelectorAll('.preamp-strip:not(.unavailable-channel)').length === ${expectedChannels}`), 'preamp channel availability');
       // Inspect both views regardless of the caller's selected view.
@@ -64,7 +82,9 @@ export async function checkRates(browser, api, directory, originalRate) {
       console.log(`PASS browser ${rate} Hz: settings apply, kernel/bulk state, channel/dialog gating and real PCM meters`);
     }
   } finally {
-    await api('/api/action', {action: 'sample-rate', rate: originalRate});
-    await until(async () => parseInt((await api('/api/state')).state.payload_hex.slice(4, 6), 16) === rates.indexOf(originalRate), 'original sample rate restored');
+    try {
+      await api('/api/action', {action: 'sample-rate', rate: originalRate});
+      await until(async () => parseInt((await api('/api/state')).state.payload_hex.slice(4, 6), 16) === rates.indexOf(originalRate), 'original sample rate restored');
+    } finally { await api('/api/preferences', preferences); }
   }
 }

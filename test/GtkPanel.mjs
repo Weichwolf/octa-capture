@@ -57,9 +57,21 @@ export async function checkPanel(write) {
   [...document.querySelectorAll('#menus button')].find(node=>node.textContent === 'Show README').click();
   check(document.querySelector('#readme').open, 'Local README menu opened');
   document.querySelector('#readme [data-close]').click();
-  for (const id of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about', 'readme']) {
+  for (const id of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about', 'readme', 'port-warning']) {
     const dialog = document.querySelector(`#${id}`);
     dialog.showModal(); check(dialog.open, `${id} opened`); dialog.close();
+  }
+  if (write) {
+    const preferences = await api('/api/preferences');
+    try {
+      const about = document.querySelector('#about');
+      about.showModal();
+      await until(() => !document.querySelector('#show-port-warning').disabled, 'GTK warning preference ready');
+      document.querySelector('#show-port-warning').click();
+      await until(async () => (await api('/api/preferences')).show_port_warning !== preferences.show_port_warning,
+        'GTK About warning preference stored');
+      about.close();
+    } finally { await api('/api/preferences', preferences); }
   }
   check((await api('/api/state')).state.payload_hex === initial.payload_hex, 'Complete state preserved');
   check(errors.length === 0, errors.join('; '));

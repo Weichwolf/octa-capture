@@ -3,6 +3,7 @@ import {PRE_DELAY, PREAMP_MAX, VOLUME, GRAPH_MIN_DB, volumeIndex,
   volumeText, parameterText, panToWire, wireToPan, panText, compressorOutput, sensitivityIndex} from './parameters.js';
 import {MeterBallistics, METER_TICK_MS, meterDb, meterY} from './meters.js';
 import {PopupMenus} from './menus.js';
+import {PanelWarnings} from './warnings.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -543,6 +544,7 @@ function update(result) {
   $('#settings-clock').textContent = clock;
   if (pendingRate === null) $('#sample-rate').value = rate;
   syncDialogs(state, rateIndex);
+  panelWarnings.update(rate, result.preferences);
   if (result.meters) updateMeters(result.meters);
 }
 
@@ -931,6 +933,7 @@ async function readMeters() {
 }
 
 makePreamps(); makeMixers(); setupDialogs(); setupEvents(); setConnected(false, 'Connecting to OCTA-CAPTURE…');
+const panelWarnings = new PanelWarnings(api, notify);
 addEventListener('pagehide', () => {
   if (token) {
     void fetch('/api/disconnect', {method: 'POST', keepalive: true,

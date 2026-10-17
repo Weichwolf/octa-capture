@@ -125,13 +125,17 @@ add_test(NAME gui-http COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test
 add_test(NAME gui-auto-sense COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiAutoSense.py")
 add_test(NAME gui-navigation COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiNavigation.py")
 add_test(NAME gui-devices COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiDevices.py")
+add_test(NAME gui-preferences COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiPreferences.py")
+add_test(NAME gui-warnings COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs")
 add_test(NAME gui-meters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs")
 add_test(NAME gui-parameters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiParameters.mjs")
 add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   --config "${CMAKE_SOURCE_DIR}/gui/web/.eslintrc.json"
   "${CMAKE_SOURCE_DIR}/gui/web/app.js" "${CMAKE_SOURCE_DIR}/gui/web/parameters.js"
   "${CMAKE_SOURCE_DIR}/gui/web/meters.js" "${CMAKE_SOURCE_DIR}/gui/web/menus.js"
-  "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs")
+  "${CMAKE_SOURCE_DIR}/gui/web/warnings.js"
+  "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs")
 set_tests_properties(gui-javascript PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 add_executable(dsp_test test/Dsp.cpp)
 target_link_libraries(dsp_test PRIVATE octa_protocol)
@@ -177,7 +181,7 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli panel-command panel-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-devices gui-parameters gui-meters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli panel-command panel-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-devices gui-preferences gui-warnings gui-parameters gui-meters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp"

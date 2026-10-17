@@ -14,8 +14,9 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   its complete IOCTL/property, USB and power-management behavior is not yet traced.
 - macOS x86_64: control-panel transmitters, state decoders, preset operations,
   audio USB/clock/stream paths and MIDI routing have selected decompilation and
-  offline reference execution. The separate Driver Setup application and remaining
-  platform/property paths still require analysis.
+  offline reference execution. The separate Driver Setup parameter get/set/default
+  paths are traced: buffer level, recording margin and timing use CoreAudio host
+  properties. Remaining platform/property paths still require analysis.
 - Windows x86 and macOS arm64 have not received an independent behavior comparison.
   Shared artwork does not establish shared control logic.
 - `tools/ghidra/ExportReferenceInventory.java` exports function and call-site TSVs
@@ -54,13 +55,14 @@ it does not imply calibrated audio response or native Debian validation.
 | Windows sound/ASIO rate matching | Windows checkbox 1147 and handler | Host policy, not established as a device command. Trace and define the corresponding Linux behavior. |
 | VS EXPAND/two-unit synchronization | Windows checkbox 1173/handler and readme | Detection, validation, stream synchronization and routing incomplete; second-unit hardware validation unavailable here. |
 | Disconnect, suspend/resume and errors | Both native driver lifecycles | Session/rollback fault tests and actual GUI recovery after module unload/reload pass. Selected serial identities are resolved before live operations. Physical hotplug, USB/URB faults, power management and kernel sanitizer tests remain. |
-| Signal-flow/About/warnings/preferences | Both menus, dialogs and local resources | Local HTTP panel and independently authored assets implemented with secondary dialogs and a local usage README. GTK4/WebKitGTK embedding, native Save, external-navigation blocking and Exit also tested under WSL/Xvfb. Complete visual/behavior parity and preferences remain. |
+| Signal-flow/About/warnings/preferences | Both menus, dialogs and local resources | Local HTTP panel, secondary dialogs and local README implemented. Persistent port-warning preference, inverse About/warning checkboxes and all 160 original warning transitions tested; browser hardware rate tests exercise them. GTK4/WebKitGTK embedding, native Save, external-navigation blocking and Exit pass under WSL/Xvfb. Complete visual/behavior parity and Always on top remain. |
 
 ## Specific unresolved distinctions
 
 Windows dialog 266 contains a placeholder 192 kHz warning saying 2-in/2-out,
 but its localized string uses runtime channel-count arguments. The Linux USB
-transport currently exposes four capture/playback channels at 192 kHz. Determine
+transport exposes four capture/playback channels at 192 kHz, and macOS
+`CuWarnDlg::OnInitDialog` (`0x100028b16`) explicitly formats four/four. Determine
 the actual Windows port map and physical signal assignments; neither the template
 nor a successful four-channel transfer proves them.
 

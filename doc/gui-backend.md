@@ -76,6 +76,8 @@ before device writes. A regular browser keeps its normal sandbox enabled.
 | `GET /api/meters` | Latest actual input frame, including staleness |
 | `GET /api/devices` | Present OCTA-CAPTURE cards and selected identity; works while disconnected |
 | `POST /api/device` | Select a discovered identity and reopen its CTRL session |
+| `GET /api/preferences` | Read control-panel preferences without opening a device |
+| `POST /api/preferences` | Store the validated audio-port warning preference |
 | `POST /api/control` | Validated scalar control and fresh device readback |
 | `POST /api/action` | Validated initialization, routing, memory or rate action |
 | `POST /api/auto-sense/start` | Start selected-input calibration with a private recovery snapshot |
@@ -202,6 +204,20 @@ finally block after successful unload.
 
 Driver → Show README opens an independently written local usage guide. It loads
 no external content and is available in both the browser and GTK host.
+
+The original 192 kHz audio-port warning appears once on entering that rate,
+including an initial connection at 192 kHz. Other open dialogs defer it. The
+warning uses the original macOS counts, four inputs/four outputs. About's Show
+warning checkbox and the warning's Do not show again checkbox are inverse views
+of one preference. Reenabling it at the same rate does not repeat the warning.
+All 160 transition cases match original `CDispFreq::CheckFreq` (`0x100032042`)
+execution; `tools/verify-port-warning.py MAC-GUI` reproduces the reference check.
+The browser hardware rate checker exercises the actual warning and both checkboxes.
+
+`{"show_port_warning":true}` is the complete preference schema. It is stored
+atomically as private `preferences.json` under the configured data directory;
+invalid input is rejected before file creation. It works without a device and
+does not change audio settings. Storage failure keeps the prior file and value.
 `tools/verify-gui-parameters.py MAC-GUI WINDOWS-GUI [--cpu]` compares all fader
 and compressor tables; `--cpu` additionally executes original macOS inverse-fader
 and compressor-graph functions with Unicorn. Manufacturer inputs remain local.
