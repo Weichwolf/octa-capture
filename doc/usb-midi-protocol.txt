@@ -279,11 +279,15 @@ TxSaveLoad at 0x10002a946 writes one command byte to 00 00 00 01.
 The confirmed callers at 0x10002a328 (Store Memory) and 0x10002a2ea
 (Load Memory) send 00 and 01 respectively, after a confirmation dialog.
 These persistent device operations are not exposed or hardware-tested yet.
-No initialization, save, or restore operation has been executed. Disk .octa
+No persistent memory command has been executed. Disk .octa
 presets use a separate Ver100 format; see preset-format.txt for its layout
 and codec. Current-state export is read-only. Offline import preparation
 produces the same 1146-byte DT1 payload as the original Load/Set/Tx path;
-live preset restore and readback are not implemented yet.
+live import requires exact full readback. A private raw snapshot is saved
+before writing; failed/interrupted application attempts restoration using
+a fresh CTRL connection. Raw restoration preserves fields absent from the
+file format. Current-preset, pan and attack imports and full restoration
+passed on WSL hardware. See preset-format.txt for commands and limits.
 
 Input level meters
 ------------------

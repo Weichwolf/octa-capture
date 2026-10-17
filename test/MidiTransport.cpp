@@ -3,6 +3,8 @@
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
 #include "octa/Preamp.hpp"
+#include "octa/Preset.hpp"
+#include "octa/PresetState.hpp"
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
@@ -272,6 +274,115 @@ bool session_writes() {
                  "typed writes validate before transmission and verify readback on one connection");
 }
 
+bool preset_transfer() {
+  io = {};
+  constexpr std::size_t whole_chunk = 512;
+  io.read_size = whole_chunk;
+  auto original = octa::decode(bulk_frame());
+  if (!original) { return false; }
+  constexpr std::size_t mono = 0x60;
+  constexpr std::size_t unmapped_flag = 0x442;
+  original->payload[mono] = 1;
+  original->payload[unmapped_flag] = 1;
+  const auto restored_frame = octa::encode(original->command, original->address, original->payload);
+  const auto target = octa::preset_to_bulk({}, *original);
+  if (!restored_frame || !target) { return false; }
+  const auto imported_frame = octa::encode(target->command, target->address, target->payload);
+  if (!imported_frame) { return false; }
+  auto reply = level_frame();
+  append_bytes(reply, *imported_frame);
+  io.replies = {reply, *restored_frame};
+  unsigned int notifications = 0;
+  {
+    auto session = octa::MidiSession::open("hw:fake");
+    if (!session || !session->set_input_meters(true)) { return false; }
+    const auto imported =
+        session->write_preset({}, *original, [&](const octa::Message &) { ++notifications; });
+    const auto restored = session->write_bulk_state(*original);
+    if (!require(imported && *imported == *target && restored && *restored == *original &&
+                     notifications == 1 && io.opens == 1,
+                 "full preset write/readback while meters run, then raw recovery preserves omitted "
+                 "flags")) {
+      return false;
+    }
+  }
+  const auto request = octa::request(octa::bulk_address, octa::bulk_size);
+  if (!request) { return false; }
+  auto expected = switch_frame(true);
+  append_bytes(expected, *imported_frame);
+  append_bytes(expected, *request);
+  append_bytes(expected, *restored_frame);
+  append_bytes(expected, *request);
+  append_bytes(expected, switch_frame(false));
+  return require(io.outgoing == expected && io.closes == 2,
+                 "each complete bulk write is followed by a fresh RQ1 on the same connection");
+}
+
+bool preset_rejection() {
+  io = {};
+  io.incoming = level_frame();
+  auto original = octa::decode(bulk_frame());
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!original || !session) { return false; }
+  octa::Preset invalid{};
+  invalid.output_routes.front() = 9;
+  const auto profile = session->write_preset(invalid, *original);
+  constexpr std::size_t first_volume = 0x120;
+  original->payload[first_volume] = 8; // 0x800000 is above the known write maximum.
+  const auto raw = session->write_bulk_state(*original);
+  return require(!profile && profile.error().code == -EINVAL && !raw &&
+                     raw.error().code == -EINVAL && io.writes == 0 && io.position == 0,
+                 "invalid full-state values rejected before any MIDI read/write or listener call");
+}
+
+bool preset_readback_failure() {
+  io = {};
+  io.replies = {bulk_frame(), bulk_frame()};
+  const auto original = octa::decode(bulk_frame());
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!original || !session) { return false; }
+  octa::Preset changed{};
+  changed.mixers.front().input.front().channels.front().pan = 1;
+  const auto mismatch = session->write_preset(changed, *original);
+  const auto restored = session->write_bulk_state(*original);
+  return require(!mismatch && mismatch.error().code == -EIO &&
+                     mismatch.error().operation == "bulk readback" && restored &&
+                     *restored == *original && io.opens == 1,
+                 "complete bulk mismatch is an error, and a verified recovery can follow");
+}
+
+bool preset_partial_failure() {
+  io = {};
+  io.fail_write = 2;
+  const auto original = octa::decode(bulk_frame());
+  if (!original) { return false; }
+  {
+    auto session = octa::MidiSession::open("hw:fake");
+    if (!session) { return false; }
+    const auto failed = session->write_bulk_state(*original);
+    const auto writes = io.writes;
+    const auto blocked = session->write_bulk_state(*original);
+    if (!require(
+            !failed && failed.error().code == -EIO && !blocked && blocked.error().code == -EPROTO &&
+                io.writes == writes,
+            "partial bulk write fails and prevents another transaction on the uncertain session")) {
+      return false;
+    }
+  }
+  io.fail_write = 0;
+  io.replies = {bulk_frame()};
+  {
+    auto reopened = octa::MidiSession::open("hw:fake");
+    if (!reopened) { return false; }
+    const auto recovered = reopened->write_bulk_state(*original);
+    if (!require(recovered && *recovered == *original,
+                 "a new session recovers after a partial SysEx prefix using a complete frame")) {
+      return false;
+    }
+  }
+  return require(io.opens == 2 && io.closes == 4, "failed and recovery handles are all closed");
+}
+
 bool session_uncertain() {
   io = {};
   auto malformed = bulk_frame();
@@ -407,7 +518,9 @@ int main() {
   const bool passed = successful_stream() && input_failure(false) && input_failure(true) &&
                       write_failures() && deadlines() && open_failure() && session_buffering() &&
                       session_queries() && session_stale_fragment() && session_writes() &&
-                      session_uncertain() && session_receive_bounds() && impossible_transfers();
+                      preset_transfer() && preset_rejection() && preset_readback_failure() &&
+                      preset_partial_failure() && session_uncertain() && session_receive_bounds() &&
+                      impossible_transfers();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;

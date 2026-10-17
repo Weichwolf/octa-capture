@@ -5,6 +5,8 @@
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
+#include "octa/Preset.hpp"
+#include "octa/PresetState.hpp"
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
@@ -379,6 +381,34 @@ std::expected<Message, MidiError> MidiSession::write_dsp(const DspChange &change
     return std::unexpected(MidiError{.code = -EIO, .operation = "DSP readback"});
   }
   return reply;
+}
+
+std::expected<Message, MidiError> MidiSession::write_bulk_state(const Message &target,
+                                                                const MessageListener &listener) {
+  const auto validated = validate_bulk_write(target);
+  if (!validated) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "bulk write bounds"});
+  }
+  const auto frame = encode(target.command, target.address, target.payload);
+  if (!frame) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "bulk write frame"});
+  }
+  auto reply = query(*frame, listener);
+  if (!reply) { return reply; }
+  if (*reply != target) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "bulk readback"});
+  }
+  return reply;
+}
+
+std::expected<Message, MidiError> MidiSession::write_preset(const Preset &preset,
+                                                            const Message &current,
+                                                            const MessageListener &listener) {
+  const auto target = preset_to_bulk(preset, current);
+  if (!target) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "preset write bounds"});
+  }
+  return write_bulk_state(*target, listener);
 }
 
 std::expected<Message, MidiError> read_bulk_state(std::string_view port) {

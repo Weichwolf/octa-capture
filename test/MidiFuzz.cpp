@@ -2,6 +2,7 @@
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Midi.hpp"
+#include "octa/PresetState.hpp"
 #include "octa/Protocol.hpp"
 
 #include <algorithm>
@@ -55,6 +56,14 @@ void exercise_session() {
     require(reply->command == octa::Command::data && reply->address == octa::bulk_address &&
             reply->payload.size() == octa::bulk_size);
     check_message(*reply);
+    const auto valid_bulk = octa::validate_bulk_write(*reply);
+    const auto writes = io.writes;
+    const auto bulk_written = session->write_bulk_state(*reply, &check_message);
+    if (!valid_bulk) {
+      require(!bulk_written && bulk_written.error().code == -EINVAL && writes == io.writes);
+    } else if (bulk_written) {
+      require(*bulk_written == *reply);
+    }
   }
   const octa::RouteChange change = {.pair = io.bytes.empty() ? std::uint8_t{0} : io.bytes.front(),
                                     .selection =

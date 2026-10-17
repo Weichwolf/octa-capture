@@ -24,4 +24,9 @@ enum class PresetStateError : std::uint8_t { message, data, range };
 [[nodiscard]] std::expected<Message, PresetStateError> preset_to_bulk(const Preset &preset,
                                                                       const Message &current);
 
+// Validation without device access, including every effective preset control.
+[[nodiscard]] std::expected<void, PresetStateError> validate_preset(const Preset &preset);
+// Bounds-check a full raw snapshot before writing it, retaining mono/opaque bits.
+[[nodiscard]] std::expected<void, PresetStateError> validate_bulk_write(const Message &state);
+
 }

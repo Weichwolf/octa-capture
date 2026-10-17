@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "PresetDevice.hpp"
 #include "octa/Midi.hpp"
 #include "octa/Preset.hpp"
 #include "octa/PresetState.hpp"
@@ -13,6 +14,7 @@
 #include <iostream>
 #include <span>
 #include <string_view>
+#include <utility>
 
 namespace {
 
@@ -65,19 +67,22 @@ int export_current(std::string_view port) {
   return finish_output();
 }
 
-int prepare_file(const octa::Preset &preset, const char *bulk_path) {
-  std::ifstream input(bulk_path, std::ios::binary);
+std::expected<octa::Message, std::string_view> load_bulk_file(const char *path) {
+  std::ifstream input(path, std::ios::binary);
   constexpr std::size_t frame_size = octa::bulk_size + 13;
   std::array<std::uint8_t, frame_size + 1> bytes{};
   input.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
   const auto count = input.gcount();
-  if (input.bad() || count < 0) {
-    std::cerr << "Could not read current bulk frame.\n";
-    return 1;
-  }
-  const auto current = octa::decode(std::span(bytes).first(static_cast<std::size_t>(count)));
+  if (input.bad() || count < 0) { return std::unexpected("Could not read raw bulk frame."); }
+  auto current = octa::decode(std::span(bytes).first(static_cast<std::size_t>(count)));
+  if (!current) { return std::unexpected("Invalid raw bulk frame."); }
+  return std::move(*current);
+}
+
+int prepare_file(const octa::Preset &preset, const char *bulk_path) {
+  const auto current = load_bulk_file(bulk_path);
   if (!current) {
-    std::cerr << "Invalid current bulk frame.\n";
+    std::cerr << current.error() << '\n';
     return 1;
   }
   const auto target = octa::preset_to_bulk(preset, *current);
@@ -93,6 +98,12 @@ int prepare_file(const octa::Preset &preset, const char *bulk_path) {
   std::cout.write(reinterpret_cast<const char *>(wire->data()),
                   static_cast<std::streamsize>(wire->size()));
   return finish_output();
+}
+
+bool valid_arguments(std::string_view mode, int count) {
+  if (mode == "apply") { return count == 4 || count == 5; }
+  if (mode == "prepare") { return count == 4; }
+  return count == 3;
 }
 
 void print_summary(const octa::Preset &preset) {
@@ -113,12 +124,23 @@ int main(int argc, char **argv) {
     const std::string_view port = argc == 3 ? argv[2] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
     return export_current(port);
   }
-  const bool file_mode = mode == "inspect" || mode == "normalize" || mode == "prepare";
-  const int required_arguments = mode == "prepare" ? 4 : 3;
-  if (argc != required_arguments || !file_mode) {
+  if (mode == "restore" && (argc == 3 || argc == 4)) {
+    const auto snapshot = load_bulk_file(argv[2]);
+    if (!snapshot) {
+      std::cerr << snapshot.error() << '\n';
+      return 1;
+    }
+    const std::string_view port = argc == 4 ? argv[3] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
+    return octa::cli::restore_snapshot(*snapshot, port);
+  }
+  const bool file_mode =
+      mode == "inspect" || mode == "normalize" || mode == "prepare" || mode == "apply";
+  if (!valid_arguments(mode, argc) || !file_mode) {
     std::cerr << "Usage: octa-preset inspect|normalize FILE\n"
                  "       octa-preset export [hw:CTRL-port] > settings.octa\n"
                  "       octa-preset prepare FILE CURRENT.syx > prepared.syx (offline)\n"
+                 "       octa-preset apply FILE NEW-RECOVERY.syx [hw:CTRL-port]\n"
+                 "       octa-preset restore RECOVERY.syx [hw:CTRL-port]\n"
                  "normalize and export write binary Ver100 files to stdout.\n";
     return 2;
   }
@@ -128,6 +150,10 @@ int main(int argc, char **argv) {
     return 1;
   }
   if (mode == "prepare") { return prepare_file(*preset, argv[3]); }
+  if (mode == "apply") {
+    const std::string_view port = argc == 5 ? argv[4] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
+    return octa::cli::apply_preset(*preset, {.port = port, .snapshot_path = argv[3]});
+  }
   if (mode == "inspect") {
     print_summary(*preset);
   } else {

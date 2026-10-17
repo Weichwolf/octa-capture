@@ -69,6 +69,14 @@ def main():
     for arguments in ([], ['inspect'], ['unknown', fixtures], ['inspect', fixtures, 'extra'], ['export', 'invalid', 'extra']):
         run(binary, arguments, expected=2)
     run(binary, ['export', 'invalid'], expected=1)
+    with tempfile.TemporaryDirectory(prefix='octa-preset-apply-test-') as directory:
+        snapshot = Path(directory) / 'recovery.syx'
+        rejected = run(binary, ['apply', fixtures / 'preset-ver100-windows-1.octa', snapshot, 'invalid'], expected=1)
+        require(b'outside known control bounds' in rejected.stderr and not snapshot.exists(),
+                'Invalid preset was not rejected before device/backup access')
+        rejected = run(binary, ['restore', fixtures / 'preset-export-bulk.syx', 'invalid'], expected=1)
+        require(b'invalid or outside known control bounds' in rejected.stderr,
+                'Invalid recovery was not rejected before device access')
     for mode in ('normalize', 'inspect'):
         with open('/dev/full', 'wb') as full:
             result = run(binary, [mode, fixtures / 'preset-ver100-windows-0.octa'], expected=1, stdout=full)

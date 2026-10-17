@@ -4,6 +4,7 @@
 #include "octa/DspControl.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Preamp.hpp"
+#include "octa/Preset.hpp"
 #include "octa/Protocol.hpp"
 
 #include <chrono>
@@ -49,6 +50,14 @@ public:
   write_preamp(PreampChange change, const MessageListener &listener = {});
   [[nodiscard]] std::expected<Message, MidiError> write_dsp(const DspChange &change,
                                                             const MessageListener &listener = {});
+
+  // Validate before MIDI I/O; require an exact fresh bulk readback. Raw writes
+  // preserve snapshot fields omitted from .octa files for complete recovery.
+  [[nodiscard]] std::expected<Message, MidiError>
+  write_bulk_state(const Message &target, const MessageListener &listener = {});
+  // Read current on this same connection and keep a recovery snapshot first.
+  [[nodiscard]] std::expected<Message, MidiError>
+  write_preset(const Preset &preset, const Message &current, const MessageListener &listener = {});
 
 private:
   struct Impl;

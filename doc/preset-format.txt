@@ -40,8 +40,8 @@ Preset.hpp/Preset.cpp retain every file DWORD at full width, including
 inactive slots. The decoder requires the exact size and version, rejects
 trailing data, and normalizes flags on re-encoding. Decoding does not
 validate device control bounds. Offline import preparation validates effective control bounds before
-returning a target bulk message. Live transmission/readback/recovery are
-not implemented yet.
+returning a target bulk message. Live application and raw recovery also
+validate bounds before writing and require exact complete bulk readback.
 
 octa-preset inspect FILE prints a summary. octa-preset normalize FILE writes
 a canonical binary file to stdout. Neither command opens a device. octa-preset export [hw:CTRL-port] queries
@@ -85,7 +85,7 @@ The tool verifies the exact executable hash and the bulk checksum. It loads
 only the specified original binary into emulated memory and bounds execution
 by instruction count and time. It performs no device I/O. Manufacturer
 binaries and hardware snapshots remain local; the committed fixtures contain
-synthetic parameters only. Live preset application remains unimplemented.
+synthetic parameters only. Live application is checked separately below.
 
 Offline import preparation
 --------------------------
@@ -122,4 +122,30 @@ To regenerate the reference using the existing synthetic current bulk:
     --import-preset test/data/preset-import-profile.octa
 The complete prepared frame, including its checksum, matches this reference
 byte-for-byte. A hardware-derived state/preset pair also matched offline.
-No prepared import frame has been sent to hardware by these tests.
+These offline reference comparisons do not exercise hardware.
+
+Live application and recovery
+-----------------------------
+octa-preset apply FILE NEW-RECOVERY.syx [hw:CTRL-port] reads the current
+state, creates a new recovery file exclusively (0600, fsync before device
+write), sends the prepared DT1 and queries the complete bulk state. An
+existing recovery path is rejected without changing parameters. Exact
+Message equality is required, including fields absent from .octa files.
+
+On failure after a write attempt, or SIGINT/SIGTERM during application,
+the command closes its connection and attempts verified raw recovery on
+a fresh connection. octa-preset restore RECOVERY.syx [hw:CTRL-port] can
+repeat that operation manually. Raw recovery preserves mono and opaque
+fields that preset application resets according to the original driver.
+Forced termination, power loss or disconnection can prevent recovery;
+retain the recovery file and check the command's result. File fsync does
+not guarantee directory-entry persistence across a system crash.
+
+tools/check-preset-import.py is read-only by default. --write checks an
+existing recovery-file collision, current-preset application, a one-unit
+pan change and a one-unit compressor-attack change. Each case checks the
+full target and restores the original raw state independently. These
+checks pass on the attached WSL device with strict and release binaries.
+SIGINT and SIGTERM after transmission also restored the full raw state
+in a separate WSL hardware check. Native Debian remains unverified.
+Device Store/Load Memory is separate and remains unimplemented.

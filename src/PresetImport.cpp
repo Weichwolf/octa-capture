@@ -234,4 +234,16 @@ std::expected<Message, PresetStateError> preset_to_bulk(const Preset &preset,
   return result;
 }
 
+std::expected<void, PresetStateError> validate_preset(const Preset &preset) {
+  std::array<std::uint8_t, bulk_size> payload{};
+  if (!populate(payload, preset)) { return std::unexpected(PresetStateError::range); }
+  return {};
+}
+
+std::expected<void, PresetStateError> validate_bulk_write(const Message &state) {
+  const auto preset = preset_from_bulk(state);
+  if (!preset) { return std::unexpected(preset.error()); }
+  return validate_preset(*preset);
+}
+
 }

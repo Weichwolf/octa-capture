@@ -24,7 +24,7 @@ pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
 add_library(octa_usb STATIC src/Usb.cpp)
 target_include_directories(octa_usb PUBLIC include)
 target_link_libraries(octa_usb PUBLIC octa_quality PRIVATE PkgConfig::LIBUSB)
-add_executable(octa-preset src/PresetMain.cpp)
+add_executable(octa-preset src/PresetMain.cpp src/PresetDevice.cpp)
 target_link_libraries(octa-preset PRIVATE octa_midi)
 add_executable(octa-probe src/Probe.cpp)
 target_link_libraries(octa-probe PRIVATE octa_usb)
@@ -130,6 +130,8 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/src/PresetState.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetImport.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetMain.cpp"
+    "${CMAKE_SOURCE_DIR}/src/PresetDevice.cpp"
+    "${CMAKE_SOURCE_DIR}/src/PresetDevice.hpp"
     "${CMAKE_SOURCE_DIR}/src/DspMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
@@ -180,6 +182,8 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/src/PresetState.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetImport.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetMain.cpp"
+    "${CMAKE_SOURCE_DIR}/src/PresetDevice.cpp"
+    "${CMAKE_SOURCE_DIR}/src/PresetDevice.hpp"
     "${CMAKE_SOURCE_DIR}/src/DspMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"
@@ -220,6 +224,7 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/src/PresetState.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetImport.cpp"
     "${CMAKE_SOURCE_DIR}/src/PresetMain.cpp"
+    "${CMAKE_SOURCE_DIR}/src/PresetDevice.cpp"
     "${CMAKE_SOURCE_DIR}/src/DspMain.cpp"
     "${CMAKE_SOURCE_DIR}/src/AudioCheck.cpp"
     "${CMAKE_SOURCE_DIR}/src/Usb.cpp"

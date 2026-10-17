@@ -197,7 +197,12 @@ void preset_files(std::span<const std::uint8_t> bytes) {
 
 void check_preset_export(const octa::Message &message) {
   const auto exported = octa::preset_from_bulk(message);
-  if (!exported) { return; }
+  const auto writable = octa::validate_bulk_write(message);
+  if (!exported) {
+    require(!writable && writable.error() == exported.error());
+    return;
+  }
+  require(writable.has_value() == octa::validate_preset(*exported).has_value());
   require(message.command == octa::Command::data && message.address == octa::bulk_address &&
           message.payload.size() == octa::bulk_size);
   const auto encoded = octa::encode_preset(*exported);
@@ -206,7 +211,9 @@ void check_preset_export(const octa::Message &message) {
 }
 
 void check_preset_import(const octa::Preset &preset, const octa::Message &current) {
+  const auto validated = octa::validate_preset(preset);
   const auto target = octa::preset_to_bulk(preset, current);
+  require(validated.has_value() == target.has_value());
   if (!target) { return; }
   require(target->command == octa::Command::data && target->address == octa::bulk_address &&
           target->payload.size() == octa::bulk_size);
@@ -219,6 +226,7 @@ void check_preset_import(const octa::Preset &preset, const octa::Message &curren
           target->payload[1] == current.payload[1] && target->payload[2] == current.payload[2] &&
           target->payload[3] == (current.payload[3] & 1U) &&
           target->payload[4] == (current.payload[2] == 3 ? 0 : current.payload[4]));
+  require(octa::validate_bulk_write(*target).has_value());
   const auto exported = octa::preset_from_bulk(*target);
   require(exported.has_value());
   if (!exported) { return; }
