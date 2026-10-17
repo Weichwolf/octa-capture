@@ -8,7 +8,7 @@ The target platform is native Debian. Development and local functional testing a
 
 Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, a bulk-state reader for preamps, four direct mixers, reverb and output routing, and validated preamp/compressor and DSP writes with readback through the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL. Timed audio capture/playback checks pass at all four rates under WSL after a [USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation). Signal integrity and the remaining controls still need completion and hardware verification; driver work takes priority over the GUI.
 
-The driver will be a [standalone kernel module](kernel/README.md); Debian users will not need to patch or rebuild their kernel.
+The [standalone kernel module](kernel/README.md) also exposes a read-only ALSA device-status control. Debian users do not need to patch or rebuild their kernel.
 
 ## Planned interface
 
@@ -26,7 +26,7 @@ source /etc/octa-capture-dev.env
 
 The script currently exists only in `/tmp` and is not part of the repository. The WSL kernel build takes time and several GB of disk space. Modules must match the kernel version of each test system.
 
-The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, and `shellcheck`, and `python3`.
+The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, `alsa-utils`, `shellcheck`, and `python3`.
 
 ```bash
 make test       # strict warnings, clang-tidy, ASan/UBSan, and protocol tests
@@ -57,6 +57,7 @@ python3 tools/check-dsp.py            # read-only check; --write changes/restore
 python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
 python3 tools/check-auto-sense.py     # read-only; --write checks finish/cancel and signal recovery
 python3 tools/check-routing-presets.py  # read-only; --write checks both presets and restores state
+python3 tools/check-status.py --stress  # read-only kernel status, requires the updated module
 ./build/strict/octa-audio-check 48000 prepare-capture  # configure/prepare without streaming
 ./build/strict/octa-audio-check 48000 capture          # transfer one second and check timing
 ```

@@ -27,8 +27,24 @@ boolean, bytes 3..5 to the 24-bit rate, byte 6 to a raw setting byte and
 byte 7 to another boolean. GetAllStat (0xa6c2) seeks phase 0 followed by
 phase 1 with a nonzero rate. The user-facing meanings of bytes 1, 2, 6, 7
 still need tracing; neither boolean is established as the clock source.
-This status pipe is not exposed by the Linux backend yet. Interface 4's
-meaning is not yet established.
+The private module exposes phase-1 packets through the read-only, volatile
+ALSA CARD control "OCTA-CAPTURE Status" (8 bytes). Its mutex serializes
+status readers; the normal USB-audio shutdown/autoresume guard protects
+transfers. It validates interface 3/alternate 1/interrupt IN 82 descriptors,
+uses heap-backed USB buffers and checks exact lengths, phase bytes and a
+nonzero rate. Each call attempts at most four interrupt reads, each with a
+250 ms timeout, seeking phase 0 then phase 1. Interface selection/PM may
+add latency. It does not detach interfaces or change audio/CTRL settings.
+Interface 4's meaning is not yet established.
+WSL hardware reads report the matching rate at 44.1/48/96/192 kHz, with
+capture/playback timing checks still passing. Four concurrent status
+readers also passed alongside 48 kHz duplex audio, meters and shared CTRL
+queries/writes; the full raw device state was preserved. ALSA rejects writes
+to this control. Both 6.12 and 6.18 module builds pass Kbuild W=1/-Werror;
+the new status source passes Sparse with warnings as errors. Suspend,
+disconnect, malformed-device/fault-injection and native Debian hardware
+checks remain required; this is not kernel-fuzzing evidence.
+
 Audio alternate settings 1,2,3,4 advertise 44100,48000,96000,192000 Hz.
 Descriptors advertise 10 output/12 input channels at the first three rates
 and four channels in each direction at 192000 Hz. This matches the record/

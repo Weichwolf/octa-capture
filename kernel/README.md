@@ -22,6 +22,39 @@ On native Debian, build files normally come from `linux-headers-$(uname -r)`; so
 
 `kernel/*.patch` files modify only the private module copy. Imported Linux files retain their original copyright and license notices; original additions use GPL-2.0-only.
 
+## Device status
+
+The private module provides an eight-byte, read-only, volatile ALSA CARD
+control. Regular users with ALSA access can read it without libusb interface
+detachment or disrupting audio/CTRL MIDI:
+
+```bash
+amixer -c OCTACAPTURE cget 'iface=CARD,name=OCTA-CAPTURE Status'
+python3 tools/check-status.py
+python3 tools/check-status.py --stress  # four concurrent readers for two seconds
+```
+
+The checker requires `amixer` from `alsa-utils`, validates packet boundaries
+and verifies that ALSA rejects a write. Byte 0 is phase 1; bytes 3–5 contain
+the little-endian sample rate. Other bytes remain raw until their meanings
+are established. The driver seeks phase 0 followed by phase 1 with a
+nonzero rate, using at most four interrupt reads with 250 ms timeouts each.
+A private mutex serializes readers; the standard USB-audio power/shutdown
+guard and heap-backed buffers cover the transfer lifetime.
+
+Status reads passed at all four rates under WSL, including concurrent
+48 kHz duplex audio and CTRL/meter traffic. Module builds pass for both
+supported kernel series. After installing `sparse`, the new source can be
+checked separately with the matching compiler/build directory:
+
+```bash
+make -C "$KDIR" M="$PWD/build/module-build" CC="$KERNEL_CC" \
+  W=1 KCFLAGS=-Werror C=2 CF=-Wsparse-error octa-status.o
+```
+
+This static check passes for 6.12 and 6.18. Native hardware, suspend/unplug,
+KASAN/UBSAN and malformed USB/fault-injection tests remain required.
+
 ## WSL USB/IP timing investigation
 
 An independent libusb test with this module unloaded reproduces the 1/8
