@@ -38,6 +38,17 @@ The desktop host keeps the WebKit sandbox enabled, uses an ephemeral session,
 blocks external navigation and handles settings downloads with a native Save
 dialog. It runs as a regular user and uses the same device/backend checks.
 
+Install the GUI/tools outside the checkout after `make release`:
+
+```bash
+cmake --install build/release --prefix "$HOME/.local"
+~/.local/bin/octa-capture          # GTK desktop window
+~/.local/bin/octa-capture-http --open
+```
+
+For system installation, see the [Debian/DKMS packages](kernel/README.md#dkms-package).
+The package includes both launchers, device tools and a desktop menu entry.
+
 ## Development
 
 The local setup script installs development/analysis tools, configures device permissions, and prepares WSL and native Debian build targets:
@@ -51,6 +62,10 @@ source /etc/octa-capture-dev.env
 The script currently exists only in `/tmp` and is not part of the repository. The WSL kernel build takes time and several GB of disk space. Modules must match the kernel version of each test system.
 
 The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, `alsa-utils`, `shellcheck`, `python3`, `nodejs`, `node-undici`, and `eslint`. Browser integration checks additionally use `chromium`.
+
+`VERSION` is the shared userspace/package version. CPack produces the userspace
+Debian package and a source archive; private build files and manufacturer inputs
+are excluded.
 
 ```bash
 make test       # strict warnings, clang-tidy, ASan/UBSan, and protocol tests

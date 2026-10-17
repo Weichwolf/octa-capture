@@ -15,7 +15,7 @@ lint: configure shell-lint
 	cmake --build build/$(PRESET) --target lint
 
 shell-lint:
-	shellcheck tools/*.sh
+	shellcheck tools/*.sh packaging/dkms*.in
 
 format:
 	cmake --preset $(PRESET)

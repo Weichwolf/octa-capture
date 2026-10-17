@@ -1,0 +1,10 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+if [ "$1" = configure ]; then
+    /usr/lib/dkms/common.postinst snd-octa-capture '@VERSION@' \
+        /usr/share/doc/octa-capture-dkms '' "${2-}"
+    if command -v udevadm >/dev/null 2>&1 && udevadm control --ping >/dev/null 2>&1; then
+        udevadm control --reload-rules
+    fi
+fi

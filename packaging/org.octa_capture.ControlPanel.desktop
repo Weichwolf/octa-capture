@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+[Desktop Entry]
+Type=Application
+Name=OCTA-CAPTURE
+Comment=Control OCTA-CAPTURE preamps, compressors and direct mixers
+Exec=octa-capture
+Icon=octa-capture
+Terminal=false
+StartupNotify=true
+Categories=AudioVideo;Audio;Mixer;

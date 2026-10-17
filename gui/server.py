@@ -260,10 +260,10 @@ class Handler(BaseHTTPRequestHandler):
         self.failure(405, 'Cross-origin access is not supported.')
 
 
-def main():
+def main(*, default_bin_dir=None):
     root = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--bin-dir', type=Path, default=root / 'build/release')
+    parser.add_argument('--bin-dir', type=Path, default=default_bin_dir or root / 'build/release')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--midi-port', default='hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1')
     parser.add_argument('--data-dir', type=Path,

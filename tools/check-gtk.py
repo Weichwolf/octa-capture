@@ -12,7 +12,11 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+location_parser = argparse.ArgumentParser(add_help=False)
+location_parser.add_argument('--installed-prefix', type=Path)
+installed_prefix = location_parser.parse_known_args()[0].installed_prefix
+application_root = installed_prefix.resolve() / 'libexec/octa-capture' if installed_prefix else ROOT
+sys.path.insert(0, str(application_root))
 from gui.application import Application
 from gui.desktop import Desktop
 from gui.server import LocalServer
@@ -128,7 +132,9 @@ def run(command):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--bin-dir', type=Path, default=ROOT / 'build/release')
+    parser.add_argument('--installed-prefix', type=Path, help='test installed Python modules, assets and executables')
+    parser.add_argument('--bin-dir', type=Path,
+                        default=installed_prefix.resolve() / 'bin' if installed_prefix else ROOT / 'build/release')
     parser.add_argument('--write', action='store_true', help='change one sensitivity value and restore the full raw state')
     args = parser.parse_args()
     parent = ROOT / 'build/gui'

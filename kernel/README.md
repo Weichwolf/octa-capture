@@ -2,7 +2,7 @@
 
 The driver is built as **`snd-octa-capture.ko`**, using an isolated copy of ALSA's USB audio implementation. Debian's kernel and its source tree remain untouched. The module matches only `0582:0120`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` module to coexist for other devices. It uses the kernel's existing MIDI helper.
 
-The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. CTRL MIDI communication and ALSA stream preparation with independent clock readback have passed at 44.1/48/96/192 kHz under WSL. Timed single-direction streaming checks pass at all four rates under WSL after the host workaround below. Native Debian hardware tests, signal/channel verification, long-duration streaming and DKMS packaging remain pending.
+The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. CTRL MIDI communication and ALSA stream preparation with independent clock readback have passed at 44.1/48/96/192 kHz under WSL. Timed single-direction streaming checks pass at all four rates under WSL after the host workaround below. Native Debian hardware tests, signal/channel verification and long-duration streaming remain pending.
 
 Use source matching the target kernel and its prepared build files, including `Module.symvers`:
 
@@ -21,6 +21,39 @@ sudo ./tools/install-module.sh build/module-build/snd-octa-capture.ko
 On native Debian, build files normally come from `linux-headers-$(uname -r)`; source comes from the corresponding `linux-source` package. The full kernel build in the WSL setup supplies its missing build files; normal Debian installation needs only the module build. The installer configures module loading order so the dedicated driver takes precedence while `snd-usb-audio` remains available for other devices.
 
 `kernel/*.patch` files modify only the private module copy. Imported Linux files retain their original copyright and license notices; original additions use GPL-2.0-only.
+
+## DKMS package
+
+Build a source package for one supported kernel series using its Linux source
+tree. The resulting package contains the prepared ALSA sources and our changes;
+end users need installed kernel headers, DKMS and the kernel compiler.
+
+```bash
+make release
+cpack --config build/release/CPackConfig.cmake -B build/packages/runtime
+cpack --config build/release/CPackSourceConfig.cmake -B build/packages/source
+python3 tools/package-dkms.py /path/to/linux-6.12-source build/packages/driver
+
+# On the native Debian target with a matching-series kernel:
+sudo apt install "linux-headers-$(uname -r)"
+sudo apt install ./build/packages/runtime/*.deb ./build/packages/driver/*.deb
+```
+
+Reconnect the unit after installation, then run `octa-capture` or
+`octa-capture-http --open` as a regular user. The module package installs its
+loading priority and device-specific audio-group/uaccess rules. DKMS rebuilds
+only the external module when matching-series headers change. Each source package
+is restricted to its prepared kernel series; `SOURCE-KERNEL` records its ALSA
+baseline and `BUILD-SERIES` defines the supported headers. Other series are skipped.
+Source generation and module builds also support the WSL 6.18 adapter.
+
+The Debian 6.12.113 DKMS build and signing passed in an unprivileged development
+tree with matching headers. The WSL 6.18 DKMS artifact also passed actual module
+loading and browser/device checks at all four rates with complete raw restoration.
+The userspace Debian package passed installed-layout,
+actual browser/device and GTK/native-Save checks after extraction. Native Debian
+package installation/removal and hardware checks remain required. Original ALSA
+copyright/license notices and full module sources are retained in the DKMS package.
 
 ## Device status
 

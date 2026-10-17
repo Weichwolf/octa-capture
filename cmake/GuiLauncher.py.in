@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Installed OCTA-CAPTURE launcher; paths are independent of the working directory."""
+
+from pathlib import Path
+import sys
+
+binary_directory = Path(__file__).resolve().parent
+application_directory = (binary_directory / '@OCTA_GUI_RELATIVE@').resolve()
+sys.path.insert(0, str(application_directory))
+from @OCTA_GUI_MODULE@ import main
+
+if __name__ == '__main__':
+    sys.exit(main(default_bin_dir=binary_directory))

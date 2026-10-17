@@ -262,3 +262,11 @@ GSK_RENDERER=cairo GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- pyth
 snapshot. Screenshots and recovery files remain private under `build/gui/`.
 These are WSL/Xvfb desktop integration checks, not native Debian audio or physical
 signal-quality verification. The remaining feature gaps still apply to both hosts.
+
+`cmake --install build/release --prefix PREFIX` installs the runtime independently
+of the checkout, with `PREFIX/bin/octa-capture` and `octa-capture-http`. Native
+tools share that directory; Python/web assets live under `libexec/octa-capture`.
+Both launchers resolve their paths relative to the installation. The offline
+`gui-install` check uses a prefix with spaces and an unrelated working directory.
+To run the GTK hardware checker against extracted package files, add
+`--installed-prefix PATH/TO/usr` to `tools/check-gtk.py`.

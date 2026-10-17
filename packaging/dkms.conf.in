@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# shellcheck shell=bash
+PACKAGE_NAME="snd-octa-capture"
+PACKAGE_VERSION="@VERSION@"
+BUILT_MODULE_NAME[0]="snd-octa-capture"
+DEST_MODULE_LOCATION[0]="/updates/octa-capture"
+AUTOINSTALL="yes"
+BUILD_EXCLUSIVE_KERNEL="^@SERIES_REGEX@[.]"
+MAKE[0]="bash ./dkms-build.sh \"${kernel_source_dir:-/lib/modules/${kernelver:-}/build}\""
+# DKMS consumes these fields after sourcing this file; require a complete record.
+: "${PACKAGE_NAME:?}" "${PACKAGE_VERSION:?}" "${BUILT_MODULE_NAME[0]:?}" \
+  "${DEST_MODULE_LOCATION[0]:?}" "${AUTOINSTALL:?}" "${BUILD_EXCLUSIVE_KERNEL:?}" "${MAKE[0]:?}"

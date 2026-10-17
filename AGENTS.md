@@ -28,6 +28,7 @@
 - Keep documentation concise: protocol facts, usage, and material limitations. Do not maintain a diary or record routine work and individual test runs.
 - Keep USB/MIDI framing, addresses, encodings, and evidence in `doc/usb-midi-protocol.txt` as analysis advances.
 - Commit and push each verified increment to `upstream`; exclude proprietary downloads, extracted assets, and decompilation output.
+- `VERSION` drives CMake/CPack. Installed GUI entry points are `octa-capture`/`octa-capture-http`; `tools/package-dkms.py` bundles a supported ALSA snapshot as a standalone DKMS source package. Kernel/package instructions are in `kernel/README.md`.
 - Build kernel modules against matching build files, including `Module.symvers`. Do not load native Debian target modules into WSL.
 - Verify audio/MIDI, sample rates, and device controls separately on WSL and native Debian. USB/IP may affect results.
 - Manufacturer archives and extracted manufacturer files are local references and must not be committed. Use our own implementation and GUI assets.
