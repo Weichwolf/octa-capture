@@ -6,7 +6,7 @@ The target platform is native Debian. Development and local functional testing a
 
 ## Status
 
-Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, a bulk-state reader for preamps, four direct mixers, reverb and output routing, and validated preamp/compressor and DSP writes with readback through the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL. Timed audio capture/playback checks pass at all four rates under WSL after a [USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation). Signal integrity and the remaining controls still need completion and hardware verification; driver work takes priority over the GUI.
+Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, a bulk-state reader for preamps, four direct mixers, reverb and output routing, and validated preamp/compressor and DSP writes with readback through the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL. Timed audio capture/playback checks pass at all four rates under WSL after a [USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation). GUI integration is proceeding on the verified backend; signal integrity and the remaining driver controls still need completion and hardware verification.
 
 The [standalone kernel module](kernel/README.md) also exposes a read-only ALSA device-status control. Debian users do not need to patch or rebuild their kernel.
 
@@ -75,6 +75,8 @@ Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. 
 `octa-status` reads the kernel-owned ALSA status control through a validated, read-only C++ API. It reports rate, reference clock-source/display state and the unchanged raw packet; external-clock transitions remain hardware-unverified.
 
 Device controls use the exclusive CTRL MIDI port. `MidiSession` shares it between meters, bulk queries, typed writes and Auto-Sens; it is confined to one thread and requires reopening after an unresolved query. `octa-meters` emits raw levels and reference dB values as JSON lines. `octa-session-check` checks shared meter/query traffic without changing the final bulk state.
+
+The [persistent GUI bridge](doc/gui-backend.md) shares one C++ device session between meter events and serialized control requests. `tools/check-bridge.py --write` checks its live control/readback and recovery path. HTTP and GUI integration are in progress.
 
 `octa-dsp` controls mixer buses A–D, masters, reverb and individual output routes. Channels and output pairs start at 1; values are decimal wire indices/coefficients. `--dry-run` opens no device. Writes validate control bounds and verify readback; see the [protocol reference](doc/usb-midi-protocol.txt).
 

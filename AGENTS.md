@@ -4,7 +4,7 @@
 - Roland OCTA-CAPTURE / UA-1010, USB `0582:0120`. Linux support must work on native Debian **and** in this WSL2 development environment using USB/IP.
 - Investigate and extend existing ALSA support in `snd-usb-audio` first. Device detection does not prove working audio streaming.
 - Deliver a standalone `snd-octa-capture` module for Debian; users must not patch or rebuild their kernel. ALSA source changes belong only in the private module copy.
-- Finish and test the driver and device protocol before resuming GUI development.
+- Current user priority: deliver the working HTML GUI on the verified device backend while continuing the remaining driver/reference audit. Keep unverified functions explicit; do not postpone all GUI work until every hardware limitation is resolved.
 - Reproduce the Windows GUI's appearance and behavior as closely as possible, including secondary dialogs. Start with HTML/CSS/JavaScript served over local HTTP; later embed the same interface in GTK4/WebKitGTK.
 - Separate the GUI, device backend, and time-critical audio streaming. Audio belongs in the driver; validate state changes in the backend. Run the GUI/backend as a regular user.
 - Bind HTTP to loopback; protect control requests with a token and Host/Origin checks. Load only local web content. A GTK message bridge can later replace HTTP.

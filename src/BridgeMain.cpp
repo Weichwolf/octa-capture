@@ -1,0 +1,184 @@
+// SPDX-License-Identifier: GPL-2.0-only
+#include "octa/Bridge.hpp"
+#include "octa/DspControl.hpp"
+#include "octa/Meters.hpp"
+#include "octa/Midi.hpp"
+#include "octa/Preamp.hpp"
+#include "octa/Protocol.hpp"
+#include "octa/StateJson.hpp"
+
+#include <array>
+#include <cerrno>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
+#include <iostream>
+#include <span>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <sys/poll.h>
+#include <type_traits>
+#include <unistd.h>
+#include <variant>
+
+extern "C" {
+#include <signal.h>
+}
+
+namespace {
+
+volatile sig_atomic_t interrupted = 0;
+
+void interrupt(int /* signal */) {
+  interrupted = 1;
+}
+
+bool install_handlers() {
+  struct sigaction action{};
+  action.sa_handler = &interrupt;
+  if (sigemptyset(&action.sa_mask) != 0 || sigaction(SIGINT, &action, nullptr) != 0 ||
+      sigaction(SIGTERM, &action, nullptr) != 0) {
+    return false;
+  }
+  action.sa_handler = SIG_IGN;
+  return sigaction(SIGPIPE, &action, nullptr) == 0;
+}
+
+void error_reply(std::uint32_t serial, octa::MidiError error) {
+  std::cerr << error.operation << ": ALSA error " << error.code << '\n';
+  std::cout << R"({"id":)" << serial << R"(,"ok":false,"code":)" << error.code
+            << R"(,"error":"Device command failed."})" << '\n'
+            << std::flush;
+}
+
+void notification(const octa::Message &message) {
+  const auto meters = octa::decode_input_meters(message);
+  if (!meters) { return; }
+  std::cout << R"({"event":"meters","input_levels":[)";
+  for (const auto &level : *meters) {
+    if (&level != &meters->front()) { std::cout << ','; }
+    std::cout << level;
+  }
+  std::cout << R"(],"input_db":[)";
+  for (const auto &level : *meters) {
+    if (&level != &meters->front()) { std::cout << ','; }
+    const auto decibels = octa::input_meter_db(level);
+    if (decibels) {
+      std::cout << *decibels;
+    } else {
+      std::cout << "null";
+    }
+  }
+  std::cout << "]}\n" << std::flush;
+}
+
+std::expected<octa::Message, octa::MidiError> execute(octa::MidiSession &session,
+                                                      const octa::BridgeCommand &command) {
+  return std::visit(
+      [&session](const auto &change) -> std::expected<octa::Message, octa::MidiError> {
+        using Change = std::remove_cvref_t<decltype(change)>;
+        if constexpr (std::is_same_v<Change, octa::StateQuery>) {
+          return session.read_bulk_state(notification);
+        } else if constexpr (std::is_same_v<Change, octa::PreampChange>) {
+          return session.write_preamp(change, notification);
+        } else if constexpr (std::is_same_v<Change, octa::DspChange>) {
+          return session.write_dsp(change, notification);
+        } else {
+          return std::unexpected(octa::MidiError{.code = -EINVAL, .operation = "bridge command"});
+        }
+      },
+      command);
+}
+
+bool dispatch(octa::MidiSession &session, const octa::BridgeRequest &request) {
+  if (const auto *meters = std::get_if<octa::MeterSwitch>(&request.command)) {
+    const auto result = session.set_input_meters(meters->enabled);
+    if (!result) {
+      error_reply(request.serial, result.error());
+      return false;
+    }
+    std::cout << R"({"id":)" << request.serial << R"(,"ok":true})" << '\n' << std::flush;
+    return std::cout.good();
+  }
+  const auto result = execute(session, request.command);
+  if (!result) {
+    error_reply(request.serial, result.error());
+    return false;
+  }
+  std::ostringstream state;
+  if (!octa::write_state_json(state, *result)) {
+    error_reply(request.serial, {.code = -EBADMSG, .operation = "invalid bridge state"});
+    return false;
+  }
+  std::cout << R"({"id":)" << request.serial << R"(,"ok":true,"state":)" << state.view() << "}\n"
+            << std::flush;
+  return std::cout.good();
+}
+
+bool input(octa::MidiSession &session, std::string &pending, std::span<const char> bytes) {
+  for (const char byte : bytes) {
+    if (byte == '\n') {
+      const auto request = octa::parse_bridge_request(pending);
+      pending.clear();
+      if (!request) {
+        error_reply(0, {.code = -EINVAL, .operation = "invalid bridge request"});
+      } else if (!dispatch(session, *request)) {
+        return false;
+      }
+    } else {
+      if (pending.size() == octa::bridge_line_limit) {
+        error_reply(0, {.code = -EMSGSIZE, .operation = "bridge request limit"});
+        return false;
+      }
+      pending += byte;
+    }
+  }
+  return std::cout.good();
+}
+
+bool serve(octa::MidiSession &session) {
+  std::string pending;
+  std::array<char, octa::bridge_line_limit> bytes{};
+  while (interrupted == 0 && std::cout.good()) {
+    struct pollfd descriptor{.fd = STDIN_FILENO, .events = POLLIN, .revents = 0};
+    const int ready = poll(&descriptor, 1, 0);
+    if (ready < 0) { return errno == EINTR; }
+    if (ready > 0) {
+      if ((descriptor.revents & (POLLERR | POLLNVAL)) != 0) { return false; }
+      const auto count = read(STDIN_FILENO, bytes.data(), bytes.size());
+      if (count == 0) { return pending.empty(); }
+      if (count < 0) { return errno == EINTR; }
+      if (!input(session, pending, std::span(bytes).first(static_cast<std::size_t>(count)))) {
+        return false;
+      }
+    }
+    const auto message = session.receive(std::chrono::milliseconds(5));
+    if (message) {
+      notification(*message);
+    } else if (message.error().code != -ETIMEDOUT && interrupted == 0) {
+      error_reply(0, message.error());
+      return false;
+    }
+  }
+  return std::cout.good();
+}
+
+}
+
+int main(int argc, char **argv) {
+  if (argc > 2) {
+    std::cerr << "Usage: octa-bridge [hw:CTRL-port]\n";
+    return 2;
+  }
+  if (!install_handlers()) { return 1; }
+  const std::string_view port = argc == 2 ? argv[1] : "hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1";
+  auto session = octa::MidiSession::open(port);
+  if (!session) {
+    error_reply(0, session.error());
+    return 1;
+  }
+  std::cout << R"({"event":"ready"})" << '\n' << std::flush;
+  return serve(*session) ? 0 : 1;
+}

@@ -15,7 +15,7 @@ find_program(OCTA_CLANG_FORMAT NAMES clang-format-19 clang-format
   PATHS "$ENV{HOME}/.local/opt/octa-llvm19/usr/lib/llvm-19/bin" REQUIRED)
 set(CMAKE_CXX_CLANG_TIDY "${OCTA_CLANG_TIDY};--warnings-as-errors=*")
 
-add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp src/PresetState.cpp src/PresetImport.cpp src/DeviceStatus.cpp src/DirectOut.cpp src/Initialization.cpp)
+add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp src/PresetState.cpp src/PresetImport.cpp src/DeviceStatus.cpp src/DirectOut.cpp src/Initialization.cpp src/Bridge.cpp)
 target_include_directories(octa_protocol PUBLIC include)
 target_link_libraries(octa_protocol PUBLIC octa_quality)
 
@@ -46,14 +46,21 @@ target_link_libraries(octa-session-check PRIVATE octa_midi)
 add_executable(octa-meters src/MeterMain.cpp)
 target_link_libraries(octa-meters PRIVATE octa_midi)
 add_executable(octa-state src/State.cpp)
-target_link_libraries(octa-state PRIVATE octa_midi)
+add_library(octa_state_json STATIC src/StateJson.cpp)
+target_link_libraries(octa_state_json PUBLIC octa_protocol)
+target_link_libraries(octa-state PRIVATE octa_midi octa_state_json)
+add_executable(octa-bridge src/BridgeMain.cpp)
+target_link_libraries(octa-bridge PRIVATE octa_midi octa_state_json)
 add_executable(octa-dsp src/DspMain.cpp)
 target_link_libraries(octa-dsp PRIVATE octa_midi)
 add_executable(octa-control src/ControlMain.cpp)
 target_link_libraries(octa-control PRIVATE octa_midi)
 
 if(OCTA_FUZZING)
-  set(octa_fuzz_sources "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp" "${CMAKE_SOURCE_DIR}/test/MidiFuzz.cpp")
+  set(octa_fuzz_sources "${CMAKE_SOURCE_DIR}/test/Fuzz.cpp" "${CMAKE_SOURCE_DIR}/test/MidiFuzz.cpp" "${CMAKE_SOURCE_DIR}/test/BridgeFuzz.cpp")
+  add_executable(bridge_fuzz test/BridgeFuzz.cpp)
+  target_link_libraries(bridge_fuzz PRIVATE octa_protocol)
+  target_link_options(bridge_fuzz PRIVATE -fsanitize=fuzzer)
   add_executable(protocol_fuzz test/Fuzz.cpp)
   target_link_libraries(protocol_fuzz PRIVATE octa_protocol)
   target_link_options(protocol_fuzz PRIVATE -fsanitize=fuzzer)
@@ -86,6 +93,13 @@ add_executable(control_test test/Control.cpp)
 target_link_libraries(control_test PRIVATE octa_protocol)
 add_test(NAME control COMMAND control_test)
 add_test(NAME control-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/ControlCli.py" "$<TARGET_FILE:octa-control>")
+add_executable(bridge_test test/Bridge.cpp)
+target_link_libraries(bridge_test PRIVATE octa_protocol)
+add_test(NAME bridge COMMAND bridge_test)
+add_executable(state_json_test test/StateJson.cpp)
+target_link_libraries(state_json_test PRIVATE octa_state_json)
+add_test(NAME state-json COMMAND state_json_test)
+add_test(NAME gui-backend COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiBackend.py")
 add_executable(dsp_test test/Dsp.cpp)
 target_link_libraries(dsp_test PRIVATE octa_protocol)
 add_test(NAME dsp COMMAND dsp_test)
@@ -120,11 +134,22 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli bridge state-json gui-backend dsp dsp-update dsp-control preset-import preset-state preset preset-cli auto-sense auto-sense-cli meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
+
+set(octa_bridge_sources
+  "${CMAKE_SOURCE_DIR}/include/octa/Bridge.hpp"
+  "${CMAKE_SOURCE_DIR}/include/octa/StateJson.hpp"
+  "${CMAKE_SOURCE_DIR}/src/Bridge.cpp"
+  "${CMAKE_SOURCE_DIR}/src/BridgeMain.cpp"
+  "${CMAKE_SOURCE_DIR}/src/StateJson.cpp"
+  "${CMAKE_SOURCE_DIR}/test/Bridge.cpp"
+  "${CMAKE_SOURCE_DIR}/test/StateJson.cpp")
 
 add_custom_target(format-check
   COMMAND "${OCTA_CLANG_FORMAT}" --dry-run --Werror
+    ${octa_bridge_sources}
+    ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/DeviceStatus.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/DirectOut.hpp"
@@ -191,6 +216,8 @@ add_custom_target(format-check
 
 add_custom_target(format
   COMMAND "${OCTA_CLANG_FORMAT}" -i
+    ${octa_bridge_sources}
+    ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/DeviceStatus.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/DirectOut.hpp"
@@ -257,6 +284,7 @@ add_custom_target(format
 
 add_custom_target(lint
   COMMAND "${OCTA_CLANG_TIDY}" -p "${CMAKE_BINARY_DIR}" --warnings-as-errors=*
+    ${octa_bridge_sources}
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/DeviceStatus.cpp"
     "${CMAKE_SOURCE_DIR}/src/DirectOut.cpp"
