@@ -284,14 +284,19 @@ frames against the original TxPre functions and our C++ encoder offline.
 octa-control writes one DT1 and immediately requests bulk state on the same
 open CTRL connection; success requires the requested value in that reply.
 tools/check-preamps.py additionally checks channel isolation and restores
-each original value. Power and stereo coupling controls are excluded from
-its automatic mutations.
+each original value. It checks eight channels at 44.1/48/96 kHz and four
+at 192 kHz. Phantom power and stereo coupling controls are excluded from
+its mutations. Optional --write --hi-z adds input 1/2 impedance changes;
+it requires their phantom power already off and never changes that power.
 
 Hardware-verified through WSL/USB-IP: low-cut, phase, sensitivity,
 compressor enable, gate, attack, release, threshold, ratio, and gain on all
 eight channels. Each was changed by one index, independently read back,
 and restored; other preamp channels were checked for unexpected changes.
 The complete 1146-byte bulk payload matched the initial state afterward.
+The four active preamps at 192 kHz and Hi-Z on inputs 1/2 at both 48 and
+192 kHz also passed change/readback/restoration checks. The original sample
+rate and complete bulk state were independently restored afterward.
 This verifies these controls, not audio streaming or physical DSP response.
 
 Compressor stereo linking (owner's manual p.45) copies the left channel's

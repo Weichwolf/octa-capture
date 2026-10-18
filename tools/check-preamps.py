@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 
-# CLI name, JSON path, maximum wire index. Power and stereo coupling are excluded.
+# CLI name, JSON path, maximum wire index. Phantom power and stereo coupling are excluded.
 PARAMETERS = (
     ('low-cut', ('low_cut',), 1),
     ('phase', ('phase_inverted',), 1),
@@ -81,25 +81,38 @@ def main():
     parser.add_argument('--bin-dir', type=Path, default=root / 'build/strict')
     parser.add_argument('--port', default='hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1')
     parser.add_argument('--write', action='store_true', help='run reversible hardware changes')
+    parser.add_argument('--hi-z', action='store_true', help='also change and restore input impedance on inputs 1/2; requires --write')
     args = parser.parse_args()
+    if args.hi_z and not args.write:
+        parser.error('--hi-z requires --write.')
     baseline = state(args.bin_dir, args.port)
+    rate_index = bytes.fromhex(baseline['payload_hex'])[2]
+    if rate_index not in range(4):
+        raise RuntimeError('Unknown sample rate; no parameter writes issued')
+    channels = 4 if rate_index == 3 else 8
+    checks = channels * len(PARAMETERS) + (2 if args.hi_z else 0)
     if not args.write:
-        print('Read succeeded. Use --write for 80 reversible parameter checks; excludes phantom, Hi-Z, stereo link.')
+        print(f'Read succeeded. Use --write for {checks} reversible parameter checks; excludes phantom, Hi-Z, stereo link.')
         return
-    if any(baseline['stereo_links']):
+    if any(baseline['stereo_links'][:channels // 2]):
         raise RuntimeError('Automatic channel isolation checks require unlinked preamps')
+    if args.hi_z and any(channel['phantom'] for channel in baseline['preamps'][:2]):
+        raise RuntimeError('Hi-Z checks require phantom power already off on inputs 1/2')
     snapshot = root / 'build/hardware/preamp-before.json'
     snapshot.parent.mkdir(parents=True, exist_ok=True)
     snapshot.write_text(json.dumps(baseline, indent=2) + '\n')
     for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, interrupt)
-    for channel in range(8):
+    for channel in range(channels):
         for parameter, path, maximum in PARAMETERS:
             check_parameter(args, baseline, channel, parameter, path, maximum)
+    if args.hi_z:
+        for channel in range(2):
+            check_parameter(args, baseline, channel, 'hi-z', ('hi_z',), 1)
     final = state(args.bin_dir, args.port)
     if final != baseline:
         raise RuntimeError('Final bulk state differs from the original snapshot')
-    print('PASS: 80 changes/readbacks/restorations; complete bulk state restored.')
+    print(f'PASS: {checks} changes/readbacks/restorations; complete bulk state restored.')
 
 
 if __name__ == '__main__':

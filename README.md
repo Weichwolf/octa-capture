@@ -13,7 +13,7 @@ Nonlinear parameter tables and display math are checked against both original
 Windows and macOS binaries.
 
 **Complete parity is not established.** Device writes/readback, browser controls,
-GTK/native Save and timed audio transfers have passed on the connected WSL
+GTK/native Save/Open and timed audio transfers have passed on the connected WSL
 unit. WSL audio has produced underruns and digital sample discontinuities even
 without reported XRUNs. Native Debian hardware,
 physical signal quality, external clock, DIN loopback, persistent memory and
@@ -81,6 +81,7 @@ a runtime backup cannot undo an overwritten device-memory preset.
 ./build/strict/octa-state             # complete CTRL state
 ./build/strict/octa-status            # kernel-owned clock status
 python3 tools/check-status.py --stress --binary build/strict/octa-status
+python3 tools/check-preamps.py --write       # active channels at the current rate
 ./build/strict/octa-audio-check 48000 capture  # quiet, timed transfer
 python3 tools/check-pcm-meters.py --rates    # quiet meter/PCM lifecycle checks
 python3 tools/check-mixer-audio.py --write --rates --keep-going  # digital DSP/signal checks
