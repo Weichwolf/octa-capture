@@ -16,7 +16,7 @@ find_program(OCTA_CLANG_FORMAT NAMES clang-format-19 clang-format
   PATHS "$ENV{HOME}/.local/opt/octa-llvm19/usr/lib/llvm-19/bin" REQUIRED)
 set(CMAKE_CXX_CLANG_TIDY "${OCTA_CLANG_TIDY};--warnings-as-errors=*")
 
-add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp src/PresetState.cpp src/PresetImport.cpp src/DeviceStatus.cpp src/DirectOut.cpp src/Initialization.cpp src/Bridge.cpp src/PcmMeters.cpp src/PanelCommand.cpp)
+add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp src/PresetState.cpp src/PresetImport.cpp src/DeviceStatus.cpp src/DirectOut.cpp src/Initialization.cpp src/Bridge.cpp src/PcmMeters.cpp src/PanelCommand.cpp src/InputMonitor.cpp)
 target_include_directories(octa_protocol PUBLIC include)
 target_link_libraries(octa_protocol PUBLIC octa_quality)
 
@@ -117,6 +117,9 @@ add_test(NAME control-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/t
 add_executable(panel_command_test test/PanelCommand.cpp)
 target_link_libraries(panel_command_test PRIVATE octa_protocol)
 add_test(NAME panel-command COMMAND panel_command_test)
+add_executable(input_monitor_test test/InputMonitor.cpp)
+target_link_libraries(input_monitor_test PRIVATE octa_protocol)
+add_test(NAME input-monitor COMMAND input_monitor_test)
 add_test(NAME panel-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/PanelCli.py" "$<TARGET_FILE:octa-panel>")
 add_executable(bridge_test test/Bridge.cpp)
 target_link_libraries(bridge_test PRIVATE octa_protocol)
@@ -212,7 +215,7 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
-set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli panel-command panel-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-devices gui-preferences gui-warnings gui-graphs gui-install dkms-build gui-parameters gui-meters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli panel-command input-monitor panel-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-devices gui-preferences gui-warnings gui-graphs gui-install dkms-build gui-parameters gui-meters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp"
@@ -227,6 +230,9 @@ set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp"
   "${CMAKE_SOURCE_DIR}/src/PcmPeakCheck.cpp")
 
 set(octa_bridge_sources
+  "${CMAKE_SOURCE_DIR}/include/octa/InputMonitor.hpp"
+  "${CMAKE_SOURCE_DIR}/src/InputMonitor.cpp"
+  "${CMAKE_SOURCE_DIR}/test/InputMonitor.cpp"
   "${CMAKE_SOURCE_DIR}/include/octa/PanelCommand.hpp"
   "${CMAKE_SOURCE_DIR}/src/PanelCommand.cpp"
   "${CMAKE_SOURCE_DIR}/src/PanelMain.cpp"

@@ -30,6 +30,11 @@ def frame(command, address, payload):
     return bytes.fromhex('f0 41 10 00 00 4d') + bytes([command]) + body + bytes([-sum(body) % 128, 0xf7])
 
 seeds = {
+    'monitor-input': bytes([0, 1, 0x80, 0, 0, 0x20, 0, 0]),
+    'monitor-all': bytes([0, 2, 0x40, 0, 0, 0x7f, 0xff, 0xff]),
+    'monitor-invalid-channel': bytes([12, 1, 0, 0, 0, 0, 0, 0]),
+    'monitor-invalid-pan': bytes([0, 1, 0x80, 1, 0, 0, 0, 0]),
+    'monitor-invalid-volume': bytes([0, 1, 0, 0, 0, 0x80, 0, 0]),
     'initialize-all': frame(0x12, [0, 0, 0, 2], [0]),
     'initialize-patchbay': frame(0x12, [0, 0, 0, 2], [4]),
     'direct-out-bulk': Path('test/data/preset-import-reference.syx').read_bytes(),

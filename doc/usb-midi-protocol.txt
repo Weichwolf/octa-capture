@@ -390,6 +390,41 @@ bulk reply to observe coupled device changes. The reference fader's CVrTbl::m_vr
 CCtrlLevelBase::SetRange at 0x10002151a uses control positions 0..1024.
 This implementation uses raw coefficients rather than copying that table.
 
+Windows direct-monitor composite command (offline reference evidence)
+-------------------------------------------------------------------
+The x64 RDAS1110.DLL IASIO vtable points future() to 0x1800080b0. With its
+host preference enabled, selector 3 forwards the monitor request through
+0x180005860 and IOCTL 0x222144; selector 9 reports availability. The DLL
+resolves a logical input to a device/local input and transmits the five
+ASIOInputMonitor fields in a 28-byte host request. The model-specific kernel
+dispatcher at 0x14000ab60 handles it through 0x140006300, which calls the
+frame builder at 0x140009b70 and its MIDI sender, rather than the generic
+vendor-control fallback in 0x14001f090.
+
+The resulting DT1 has address 00 06 channel 14. The kernel accepts input
+indices 0..11; input -1 becomes the broadcast selector 7F. Its 11-byte payload
+is mute (state==0), four pan nibbles and six volume nibbles. Pan comes from
+the high 16 bits of the host's 31-bit pan value, with 7FFF mapped to 8000;
+volume is the host's 31-bit gain shifted right eight bits. The suggested
+output is not used by this path, so it does not select a patchbay output.
+These are original sender semantics, not verified device-side effects.
+
+encode_input_monitor() implements this bounded codec without device I/O.
+tools/verify-input-monitor.py compares 910 C++ frames against the original
+kernel builder and executes 2,080 ASIO requests through the original DLL,
+device dispatcher and encoder using synthetic initialized contexts and a
+nonidentity logical-input map. Only the final MIDI send, DeviceIoControl
+and IRP completion are replaced with memory-only stubs. It also checks
+disabled monitoring and IOCTL failure. No new live monitoring API is exposed;
+actual effects, broadcast behavior and inputs 10/11 remain hardware-unverified.
+
+The same DLL exposes one current ASIO clock source named Device through
+0x180007310; 0x180007550 accepts only selector 0. CPU execution verifies
+that behavior. It is not a freely selectable INTERNAL/EXTERNAL clock policy.
+Selector/structure definitions were checked against Steinberg's official
+ASIO 2.3.4 SDK, downloaded from:
+https://download.steinberg.net/sdk_downloads/ASIO-SDK_2.3.4_2025-10-15.zip
+
 Mixer A's USB capture return 11/12 allows digital signal checks at 44.1/48/96
 kHz, with all physical outputs isolated on silent Mixer B. The ten playback
 sources and pan points 0000/2000/4000/6000/8000 give linear left/right weights

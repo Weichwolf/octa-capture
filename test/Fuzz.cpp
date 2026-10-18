@@ -5,6 +5,7 @@
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Initialization.hpp"
+#include "octa/InputMonitor.hpp"
 #include "octa/Meters.hpp"
 #include "octa/PcmMeters.hpp"
 #include "octa/Preamp.hpp"
@@ -17,6 +18,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -53,6 +55,46 @@ void round_trip(const octa::Message &message) {
   if (!encoded) { return; }
   const auto decoded = octa::decode(*encoded);
   require(decoded && *decoded == message);
+}
+
+std::uint32_t nibble_value(std::span<const std::uint8_t> bytes) {
+  std::uint32_t value = 0;
+  constexpr unsigned int nibble_bits = 4;
+  constexpr std::uint8_t nibble_limit = 16;
+  for (const auto byte : bytes) {
+    require(byte < nibble_limit);
+    value = (value << nibble_bits) | byte;
+  }
+  return value;
+}
+
+void input_monitor(std::span<const std::uint8_t> bytes) {
+  constexpr std::size_t required = 8;
+  if (bytes.size() < required) { return; }
+  std::uint32_t volume = 0;
+  constexpr unsigned int byte_bits = 8;
+  for (const auto byte : bytes.subspan(4, 4)) { volume = (volume << byte_bits) | byte; }
+  const auto pan =
+      static_cast<std::uint16_t>((static_cast<unsigned int>(bytes[2]) << byte_bits) | bytes[3]);
+  const std::optional<std::uint8_t> channel =
+      (bytes[1] & 2U) != 0 ? std::nullopt : std::optional(bytes[0]);
+  constexpr std::uint32_t maximum_volume = 0x7fffff;
+  const auto frame = octa::encode_input_monitor(
+      {.channel = channel, .enabled = (bytes[1] & 1U) != 0, .pan = pan, .volume = volume});
+  require(frame.has_value() ==
+          ((!channel || *channel < 12) && pan <= 0x8000 && volume <= maximum_volume));
+  if (!frame) { return; }
+  const auto message = octa::decode(*frame);
+  require(message && message->payload.size() == 11);
+  if (message) {
+    const std::span payload(message->payload);
+    constexpr std::uint8_t broadcast = 0x7f;
+    require(message->address[2] == channel.value_or(broadcast));
+    require(payload[0] == static_cast<std::uint8_t>((bytes[1] & 1U) == 0));
+    require(nibble_value(payload.subspan(1, 4)) == pan);
+    require(nibble_value(payload.last(6)) == volume);
+    round_trip(*message);
+  }
 }
 
 void check_preamp(octa::PreampBank &bank, const octa::Message &message) {
@@ -449,6 +491,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
   }
   device_status(bytes);
   pcm_status(bytes);
+  input_monitor(bytes);
   frames(bytes);
   structured(bytes);
   typed_controls(bytes);
