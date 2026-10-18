@@ -77,10 +77,30 @@ and four channels in each direction at 192000 Hz. This matches the record/
 playback specification in the English v1.6 owner's manual, p. 95:
 https://static.roland.com/assets/media/pdf/OCTA-CAPTURE_v1.6_OM.pdf
 Signal/channel mapping still needs hardware verification.
+Original Windows stream builder 0x1400269c0 passes 12 capture/10 playback
+channels at 44.1/48/96 kHz and four/four at 192 kHz, with three bytes/channel.
+Original macOS CPortProps::BytesPerUsbFrame (0x13856) agrees. Isolated CPU
+execution checks all four rates, duplex/capture-only/playback-only Windows
+construction, and both macOS directions; host allocation/setup calls are
+stubbed. tools/verify-stream-layout.py MAC-AUDIO WINDOWS-KERNEL reproduces
+the check using python3-unicorn; optional --descriptors PATH compares cached
+USB descriptors without issuing a control request. This resolves the channel
+count ambiguity in the Windows 192 kHz warning template, not physical routing.
+With --windows-gui WINDOWS-GUI it also executes the warning argument setup:
+handler 0x14002c840 passes literal 4/4 to localized formatter 0x140026100
+(resource 0x80b8), replacing the dialog template's placeholder 2/2.
 The unmodified snd-usb-audio quirk exposes only 44100 Hz, S32_LE, 10 output
 and 12 input channels, with one raw-MIDI subdevice. The standalone module
 instead uses all descriptor rates/channel counts and exposes MIDI plus CTRL;
 see the streaming verification below.
+
+Windows 0x140023670 accounts for capture packets with fewer than
+(floor(rate/8000) >> 1) samples using an accumulator initialized by 0x1400269c0. At
+high speed its numerator is rate - floor(rate/1000), denominator 8000. CPU
+execution checks the threshold, valid packet counts and fallback phase at all
+four rates. Capture paths 0x140022c80/0x140023500 select a replacement buffer
+for these packets. This reference error-concealment policy neither establishes
+Linux behavior nor explains discontinuities inside otherwise valid USB packets.
 
 Control transport
 -----------------

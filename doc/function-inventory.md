@@ -17,6 +17,11 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   offline reference execution. The separate Driver Setup parameter get/set/default
   paths are traced: buffer level, recording margin and timing use CoreAudio host
   properties. Remaining platform/property paths still require analysis.
+- Windows stream construction/channel strides and the channel counts derived
+  from macOS nominal USB-frame geometry agree in isolated CPU execution at all four rates, also matching the
+  cached device descriptors. Windows short-capture-packet accounting is exercised
+  separately. Host allocation/setup dependencies are stubbed; this is not audio
+  signal or kernel fault validation.
 - Windows x86 and macOS arm64 have not received an independent behavior comparison.
   Shared artwork does not establish shared control logic.
 - `tools/ghidra/ExportReferenceInventory.java` exports function and call-site TSVs
@@ -63,11 +68,13 @@ it does not imply calibrated audio response or native Debian validation.
 ## Specific unresolved distinctions
 
 Windows dialog 266 contains a placeholder 192 kHz warning saying 2-in/2-out,
-but its localized string uses runtime channel-count arguments. The Linux USB
-transport exposes four capture/playback channels at 192 kHz, and macOS
-`CuWarnDlg::OnInitDialog` (`0x100028b16`) explicitly formats four/four. Determine
-the actual Windows port map and physical signal assignments; neither the template
-nor a successful four-channel transfer proves them.
+but handler `0x14002c840` passes literal 4/4 to the localized formatter. Its
+original argument instructions are checked by CPU execution. Isolated CPU
+execution of Windows stream builder `0x1400269c0` establishes four capture and
+four playback channels, matching macOS `CPortProps::BytesPerUsbFrame`
+(`0x13856`), `CuWarnDlg::OnInitDialog` (`0x100028b16`) and the USB descriptors.
+The physical signal assignments still need verification; matching channel counts
+do not prove signal routing or integrity.
 
 The Windows resource set also contains generic compressor-preset/16-user-preset
 strings and controls with hidden styles. They require command/call-path evidence
