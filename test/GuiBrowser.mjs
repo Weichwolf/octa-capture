@@ -353,13 +353,13 @@ try {
   if (write) await checkInputMonitor(browser, api, restoreMixer);
   if (matrix) await checkControlMatrix(browser, api);
   if (rates) await checkRates(browser, api, directory, [44100, 48000, 96000, 192000][payload[2]]);
-  if (reload) await checkReconnect(browser, api, launch, run);
+  const expectedErrors = reload ? await checkReconnect(browser, api, launch, run) : {consoleErrors: [], httpErrors: []};
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');
   assert.deepEqual(browser.securityErrors, [], 'Content Security Policy violations');
-  if (playwright && !reload) {
-    assert.deepEqual(browser.consoleErrors, [], 'Playwright console errors');
+  if (playwright) {
+    assert.deepEqual(browser.consoleErrors, expectedErrors.consoleErrors, 'Playwright console errors');
     assert.deepEqual(browser.networkErrors, [], 'Playwright failed requests');
-    assert.deepEqual(browser.httpErrors, [], 'Playwright HTTP errors');
+    assert.deepEqual(browser.httpErrors, expectedErrors.httpErrors, 'Playwright HTTP errors');
   }
   assert.deepEqual((await api('/api/state')).state, before, 'Complete raw state preserved');
   console.log('PASS browser views, dialogs, actual meters, CSP and complete state preservation');

@@ -18,12 +18,15 @@ export class PlaywrightClient {
   }
 
   constructor(browser, context, page) {
-    Object.assign(this, {browser, context, page, exceptions: [], securityErrors: [], consoleErrors: [],
+    Object.assign(this, {browser, context, page, exceptions: [], securityErrors: [], consoleErrors: [], consoleEvents: [],
       networkErrors: [], httpErrors: [], controls: [], selections: [], requests: new Map(), downloads: []});
     page.on('pageerror', error => this.exceptions.push(safe(error)));
     page.on('console', message => {
       if (message.type() !== 'error') return;
       this.consoleErrors.push(safe(message.text()));
+      let pathname = null;
+      try { pathname = new URL(message.location().url).pathname; } catch { /* Non-URL console location. */ }
+      this.consoleEvents.push({text: safe(message.text()), path: pathname});
       if (/Content Security Policy|Refused to/i.test(message.text())) this.securityErrors.push(safe(message.text()));
     });
     page.on('request', request => {

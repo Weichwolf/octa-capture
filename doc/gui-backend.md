@@ -256,9 +256,21 @@ verifies hardware readback and complete raw restoration.
 at `/usr/local/sbin/octa-capture-dev` to unload and reinstall this module. It
 checks the absent-card page/menu, automatic same-unit reconnection, real MIDI/PCM
 meters and full raw preservation. It does not detach/reset USB or install the
-helper. This option is specific to the development setup; physical unplug and
-native Debian lifecycle tests remain separate. Module installation runs in a
-finally block after successful unload.
+helper. This passes on WSL and native Debian; physical unplug, suspend/resume
+and USB faults remain separate. Module installation runs in a finally block
+after successful unload. Playwright requires zero unexpected HTTP, console,
+network, JavaScript or CSP errors. During deliberate absence it specifically
+verifies `/api/state` HTTP 503 replies and their corresponding console records;
+other endpoints/statuses or errors after reconnection fail the test.
+
+Native module-reload clock checks require exclusive access across enumeration.
+`pasuspender` alone did not prevent PulseAudio from opening a newly created
+ALSA card at 44.1 kHz. The isolated native check temporarily stopped the user's
+automatic ALSA discovery with no PulseAudio streams active, then restored its
+original module arguments, complete device state and 48 kHz. This is a host
+rate-selection interaction; ordinary reconnection displays the newly selected
+rate. Stop competing discovery before a clock-preservation test, restore it
+afterward and independently verify the original device rate/state again.
 
 Driver → Show README opens an independently written local usage guide. It loads
 no external content and is available in both the browser and GTK host.
