@@ -188,7 +188,7 @@ tools/check-gui.sh
 tools/check-gui.sh --write
 tools/check-gui.sh --write --rates  # additionally change all four hardware rates
 tools/check-gui.sh --write --matrix  # safe preamp/mixer scalars through browser events
-tools/check-gui.sh --write --reload-module  # WSL development helper required
+tools/check-gui.sh --write --reload-module  # development helper required
 # Actual Playwright runner, isolated from system Node packages:
 npm install --prefix build/playwright-runner --no-save --ignore-scripts --no-audit --no-fund playwright@1.64.1
 tools/check-gui.sh --playwright --write --rates --matrix
@@ -295,8 +295,11 @@ the same Auto-Sens recovery lifecycle applies.
 The native integration checker uses real X11 key events for controls and Ctrl+S,
 validates the native Save download, checks live controls/meters, blocks an
 external navigation and exercises Driver → Exit. It verifies independent full
-state readback after releasing CTRL. For headless checks, install `xvfb`, `xauth`,
-`xdotool`, `dbus`, and `imagemagick`:
+state readback after releasing CTRL. It supports both in-process GTK choosers
+and separate desktop-portal dialogs, verifying the exact returned file path.
+Native keyboard input waits for WebKit focus and a display matching fresh
+device state. For headless checks, install `xvfb`, `xauth`, `xdotool`, `dbus`,
+`imagemagick` and `gir1.2-atspi-2.0`:
 
 ```bash
 GSK_RENDERER=cairo GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- python3 tools/check-gtk.py

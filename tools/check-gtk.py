@@ -39,6 +39,11 @@ class Check(Desktop):
 
     def fail(self, error):
         self.errors.append(str(error))
+        try:
+            subprocess.run(['import', '-window', 'root', str(self.directory / 'failure.png')],
+                           capture_output=True, timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass  # Preserve the original failure if screenshot capture is unavailable.
         self.quit()
 
     def activate(self, app):
@@ -104,6 +109,33 @@ class Check(Desktop):
         self.key('ctrl+o', focus=False)
         return False
 
+    def native_dialog(self, title=None, portal_only=False):
+        pattern = '^' + re.escape(title) + '$' if title else '.'
+        found = subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', pattern],
+                               capture_output=True, text=True, timeout=3)
+        for identifier in found.stdout.splitlines():
+            try:
+                pid = subprocess.check_output(['xdotool', 'getwindowpid', identifier],
+                                              text=True, stderr=subprocess.DEVNULL, timeout=3).strip()
+                process = Path('/proc') / pid
+                if process.stat().st_uid != os.getuid():
+                    continue
+                if portal_only and not (process / 'exe').resolve().name.startswith('xdg-desktop-portal-'):
+                    continue
+                if portal_only:
+                    title = subprocess.check_output(['xdotool', 'getwindowname', identifier],
+                                                    text=True, timeout=3).strip()
+                    geometry = subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', identifier],
+                                                       text=True, timeout=3)
+                    dimensions = dict(line.split('=', 1) for line in geometry.splitlines() if '=' in line)
+                    if (title == 'Save OCTA-CAPTURE settings' or
+                            int(dimensions['WIDTH']) < 200 or int(dimensions['HEIGHT']) < 100):
+                        continue
+                return identifier
+            except (OSError, subprocess.CalledProcessError):
+                continue  # A chooser can disappear between X11 queries.
+        return None
+
     def select_load_file(self):
         for window in self.Gtk.Window.list_toplevels():
             if window == self.window or not window.get_visible() or not window.get_modal() or not window.get_title():
@@ -145,6 +177,42 @@ class Check(Desktop):
             self.phase = 'open-accept'
             self.GLib.timeout_add(150, self.accept_load_file)
             return
+        # Desktop portals own their chooser in a separate process. Exercise its
+        # native location entry rather than modifying the HTML file input.
+        identifier = self.native_dialog(portal_only=True)
+        if identifier:
+            subprocess.run(['xdotool', 'windowfocus', identifier, 'key', '--clearmodifiers', 'ctrl+l', 'ctrl+a'],
+                           check=True, timeout=3)
+            subprocess.run(['xdotool', 'type', '--clearmodifiers', '--delay', '1', '--', str(self.saved)],
+                           check=True, timeout=5)
+            self.native_open_identifier = identifier
+            self.phase = 'portal-file-ready'
+
+    def select_portal_file(self):
+        import gi
+        gi.require_version('Atspi', '2.0')
+        from gi.repository import Atspi
+        pid = int(subprocess.check_output(['xdotool', 'getwindowpid', self.native_open_identifier],
+                                          text=True, timeout=3))
+        desktop = Atspi.get_desktop(0)
+        pending = [desktop.get_child_at_index(index) for index in range(desktop.get_child_count())]
+        pending = [app for app in pending if app.get_process_id() == pid]
+        examined = 0
+        while pending and examined < 5000:
+            node = pending.pop()
+            examined += 1
+            if node is None:
+                continue
+            states = node.get_state_set()
+            if (node.get_role() == Atspi.Role.PUSH_BUTTON and node.get_name() in ('Select', 'Open') and
+                    states.contains(Atspi.StateType.SHOWING) and states.contains(Atspi.StateType.SENSITIVE)):
+                bounds = node.get_component_iface().get_extents(Atspi.CoordType.SCREEN)
+                if bounds.width > 0 and bounds.height > 0:
+                    subprocess.run(['xdotool', 'mousemove', '--sync', str(bounds.x + bounds.width // 2),
+                                    str(bounds.y + bounds.height // 2), 'click', '1'], check=True, timeout=3)
+                    self.phase = 'load-confirm'
+                    return
+            pending.extend(node.get_child_at_index(index) for index in range(node.get_child_count()))
 
     def open_layout_ready(self):
         self.phase = 'open-dialog'
@@ -207,14 +275,17 @@ class Check(Desktop):
         self.GLib.timeout_add(100, self.focus_native_dom)
 
     def focus_native_dom(self):
-        script = "document.querySelector('#view-switch').click();" \
+        script = "if(document.querySelector('#preamp-view').hidden)document.querySelector('#view-switch').click();" \
                  "document.querySelector('.preamp-strip .sensitivity').focus();" \
-                 "document.activeElement.matches('.sensitivity');"
+                 "({focused:document.hasFocus()&&document.activeElement.matches('.sensitivity')," \
+                 "value:Number(document.activeElement.getAttribute('aria-valuenow'))});"
 
         def focused(view, result, _data):
             try:
-                if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
-                    raise RuntimeError('Native control did not receive WebKit focus.')
+                readiness = json.loads(view.evaluate_javascript_finish(result).to_json(0))
+                if not readiness['focused'] or readiness['value'] != self.native_original:
+                    self.GLib.timeout_add(100, self.focus_native_dom)
+                    return
                 self.phase = 'native-change'
                 self.key('Up' if self.native_delta > 0 else 'Down', focus=False)
             except Exception as error:
@@ -259,17 +330,13 @@ class Check(Desktop):
         if self.phase in ('native-change', 'native-restore'):
             self.native_progress()
         if self.phase == 'download':
-            for window in self.Gtk.Window.list_toplevels():
-                if window.get_visible() and window.get_title() == 'Save OCTA-CAPTURE settings':
-                    identifier = subprocess.run(['xdotool', 'search', '--all', '--onlyvisible', '--pid',
-                                                 str(os.getpid()), '--name', '^Save OCTA-CAPTURE settings$'],
-                                                capture_output=True, text=True, check=True, timeout=3).stdout.splitlines()[0]
-                    subprocess.run(['xdotool', 'windowfocus', identifier, 'key', 'ctrl+l', 'ctrl+a'], check=True, timeout=3)
-                    subprocess.run(['xdotool', 'type', '--clearmodifiers', '--delay', '1', '--', str(self.saved)],
-                                   check=True, timeout=5)
-                    subprocess.run(['xdotool', 'key', 'Return'], check=True, timeout=3)
-                    self.phase = 'saving'
-                    break
+            identifier = self.native_dialog('Save OCTA-CAPTURE settings')
+            if identifier:
+                subprocess.run(['xdotool', 'windowfocus', identifier, 'key', 'ctrl+l', 'ctrl+a'], check=True, timeout=3)
+                subprocess.run(['xdotool', 'type', '--clearmodifiers', '--delay', '1', '--', str(self.saved)],
+                               check=True, timeout=5)
+                subprocess.run(['xdotool', 'key', 'Return'], check=True, timeout=3)
+                self.phase = 'saving'
         elif self.phase == 'saving' and self.saved.exists() and self.saved.stat().st_size == 1639:
             if not self.saved.read_bytes().startswith(b'OCTA-CAPTURE Control Panel Data\0Ver100\0'):
                 self.fail('Invalid native settings download.')
@@ -290,6 +357,8 @@ class Check(Desktop):
                                           -1, None, None, None, inspect, None)
         elif self.phase == 'open-dialog':
             self.select_load_file()
+        elif self.phase == 'portal-file-ready':
+            self.select_portal_file()
         elif self.phase in ('load-confirm', 'load-apply') and not self.pending:
             self.poll_load()
         elif self.phase == 'navigation' and not self.pending:
