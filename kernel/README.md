@@ -2,7 +2,7 @@
 
 The driver is built as **`snd-octa-capture.ko`**, using an isolated copy of ALSA's USB audio implementation. Debian's kernel and its source tree remain untouched. The module matches only `0582:0120`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` module to coexist for other devices. It uses the kernel's existing MIDI helper.
 
-The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. CTRL communication, independent clock readback and timed streaming pass at 44.1/48/96/192 kHz under WSL after the host workaround below. Simultaneous capture/zero-playback passes ten minutes per rate with 1024-frame periods and an 8192-frame buffer. Smaller 256-frame periods have produced WSL underruns at 96/192 kHz; their cause is not isolated. Native Debian, physical signal quality and broader latency/stability testing remain required.
+The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. CTRL communication, independent clock readback and timed streaming pass at 44.1/48/96/192 kHz under WSL after the host workaround below. Simultaneous capture/zero-playback passes ten minutes per rate with 1024-frame periods and an 8192-frame buffer. Smaller 256-frame periods have produced WSL underruns at 96/192 kHz. Digital Mixer A return checks also detect intermittent sample discontinuities without an XRUN, so these timing/quiet checks do not establish audio integrity. Native Debian, physical signal quality and broader latency/stability testing remain required.
 
 Use source matching the target kernel and its prepared build files, including `Module.symvers`:
 
@@ -59,10 +59,20 @@ Activation loads the installed module and rebinds only `0582:0120` if generic
 `snd-usb-audio` already owns it. Other USB audio devices stay attached. The loading
 priority handles subsequent boots; installing a modprobe soft dependency alone
 does not replace an already bound generic driver.
+On systemd systems, the package also requests a serialized activation service
+when a newly added OCTA-CAPTURE control node belongs to the generic driver.
+This covers hotplug after generic USB audio was already loaded for another unit.
+Already dedicated and unrelated devices do not request rebinding. The service
+survives replacement of its triggering generic sound card; it is not tied to
+that card's lifetime. Systems without systemd use the manual activation command.
 `python3 test/ModuleActivation.py` checks activation, other-device isolation and
 failure paths in user/mount namespaces using bubblewrap and fake sysfs. It cannot
 write host sysfs or load a real module. Physical binding lifecycle tests remain
 separate.
+`python3 test/ModuleHotplug.py` executes the actual udev matcher against synthetic
+USB/sound hierarchies using umockdev and bubblewrap, with no host device nodes.
+Install the optional test tools with `sudo apt install umockdev bubblewrap udev`.
+Native Debian service/hotplug integration still requires a physical test.
 
 The Debian 6.12.113 DKMS build and signing passed in an unprivileged development
 tree with matching headers. The WSL 6.18 DKMS artifact also passed actual module

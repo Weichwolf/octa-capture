@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0-only
+[Unit]
+Description=Activate the OCTA-CAPTURE standalone driver after %I appears
+
+[Service]
+Type=oneshot
+# Binding replaces the triggering sound card; do not bind this service's lifetime to it.
+ExecStart=/usr/bin/flock --exclusive --timeout 20 /run/octa-capture-activate.lock /usr/sbin/octa-capture-activate
+TimeoutStartSec=45

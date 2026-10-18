@@ -4,6 +4,9 @@ set -eu
 if [ "$1" = configure ]; then
     /usr/lib/dkms/common.postinst snd-octa-capture '@VERSION@' \
         /usr/share/doc/octa-capture-dkms '' "${2-}"
+    if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+        systemctl daemon-reload
+    fi
     if command -v udevadm >/dev/null 2>&1 && udevadm control --ping >/dev/null 2>&1; then
         udevadm control --reload-rules
     fi

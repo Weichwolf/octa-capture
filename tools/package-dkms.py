@@ -52,6 +52,7 @@ def prepare(stage, source, version, series, baseline):
     write(module / 'dkms.conf', template('dkms.conf.in', values))
     write(stage / 'DEBIAN/postinst', template('dkms-postinst.in', values), 0o755)
     write(stage / 'DEBIAN/prerm', template('dkms-prerm.in', values), 0o755)
+    write(stage / 'DEBIAN/postrm', template('dkms-postrm.in', values), 0o755)
     write(stage / 'etc/modprobe.d/octa-capture.conf',
           '# Prefer the dedicated OCTA-CAPTURE driver before generic USB audio.\n'
           'softdep snd-usb-audio pre: snd-octa-capture\n')
@@ -59,6 +60,9 @@ def prepare(stage, source, version, series, baseline):
     rules = stage / 'usr/lib/udev/rules.d/70-octa-capture.rules'
     rules.parent.mkdir(parents=True)
     shutil.copyfile(ROOT / 'packaging/70-octa-capture.rules', rules)
+    service = stage / 'usr/lib/systemd/system/octa-capture-activate@.service'
+    service.parent.mkdir(parents=True)
+    shutil.copyfile(ROOT / 'packaging/octa-capture-activate@.service', service)
     activation = stage / 'usr/sbin/octa-capture-activate'
     activation.parent.mkdir(parents=True)
     shutil.copyfile(ROOT / 'tools/activate-module.sh', activation)
@@ -69,7 +73,7 @@ Architecture: all
 Maintainer: OCTA-CAPTURE contributors
 Section: kernel
 Priority: optional
-Depends: dkms (>= 3.0), kmod, make, gcc
+Depends: dkms (>= 3.0), kmod, make, gcc, util-linux
 Recommends: linux-headers-amd64
 Homepage: https://github.com/Weichwolf/octa-capture
 Description: Standalone OCTA-CAPTURE USB audio and MIDI module
@@ -89,6 +93,8 @@ Builds use the kernel compiler, W=1 and -Werror. Other kernel series are skipped
 Close audio/control applications, then run sudo octa-capture-activate.
 This loads the module and binds only 0582:0120; other USB audio devices remain bound.
 octa-capture-activate --check is read-only and works without root.
+On systemd systems, a device-specific udev rule activates the standalone driver
+after hotplug if the generic USB audio driver claims OCTA-CAPTURE first.
 GUI/device tools are provided by the separate octa-capture package.
 ''')
 
