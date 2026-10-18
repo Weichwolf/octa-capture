@@ -11,13 +11,13 @@
 
 # Environment and references
 
-- Development: Debian 13, x86_64, WSL kernel `6.18.54.1-microsoft-standard-WSL2`. The connected device uses our standalone `snd-octa-capture` module.
+- Development now runs on native Debian 13, kernel `6.12.113+deb13-amd64`, with direct USB. Earlier WSL development used `6.18.54.1-microsoft-standard-WSL2`. Recheck the active module binding; copied WSL build artifacts and process IDs are not valid native runtime evidence.
 - `doc/`: official Windows 1.5.3/macOS 1.5.9 downloads, sources/hashes in `drivers-manifest.json`, checksums in `SHA256SUMS`, findings in `environment.txt`.
 - With usbipd-win `aa3db8b` / VBoxUSB 7.2.2, run the Windows metadata helper after attachment to initialize its high-speed cache (see `kernel/README.md`). This fixed the 1/8 streaming rate; timed capture/playback checks pass at all four rates. Native Debian and signal-quality checks remain required.
 - The module exposes the read-only ALSA CARD control `OCTA-CAPTURE Status` (8 bytes). `octa-status` reads it through the C++ backend; `tools/check-status.py --stress --binary build/strict/octa-status` validates concurrent reads. Keep unmapped status bits raw.
 - Findings are dated snapshots: recheck tools, permissions, and running builds before relying on them.
-- `/tmp/setup-octa-capture.sh` installs tools/permissions and prepares matching WSL build files. The kernel build was running when recorded; check its current status. After successful completion, `source /etc/octa-capture-dev.env` provides `KDIR`, `KERNEL_CC`, and `KDIR_NATIVE`. `/tmp` is temporary.
-- Ghidra 12.1.2 is installed as a Snap: `ghidra.analyzeHeadless`. Decompilation of a custom test function passed. LLVM 19, GNU Binutils, and GDB are available.
+- `tools/setup-native-dev.sh` installs native tools and development permissions after `build/driver-native/snd-octa-capture.ko` is built for the running kernel. It writes `/etc/octa-capture-dev.env` and configures the root helper with that native module path. Never install a WSL module on native Debian.
+- LLVM 19, GNU Binutils, and GDB are available natively. Ghidra 12.1.2 was installed as a Snap in WSL; native Ghidra availability must be checked separately. Manufacturer analysis remains under `doc/local/`.
 - Wine GUI observations: `doc/windows-gui-inspection.txt`; screenshots in ignored `doc/local/windows-gui/`. Main preamp/compressor view, Driver menu, and About dialog captured; Direct Mixer remains unobserved because the GUI reports no device.
 
 # Working practices

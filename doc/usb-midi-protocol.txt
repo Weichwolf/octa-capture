@@ -94,6 +94,13 @@ and 12 input channels, with one raw-MIDI subdevice. The standalone module
 instead uses all descriptor rates/channel counts and exposes MIDI plus CTRL;
 see the streaming verification below.
 
+Original macOS CuIsocPack::Alloc (0x11af6) reads the mutable mMsecPacket table
+at 0x20580. With default device index 0 and high-speed USB, isolated CPU
+execution at every rate in both directions produces 32 ms / 256 microframes
+per transfer and allocates 256 times the selected endpoint packet size.
+Host allocation dependencies and the endpoint descriptor are synthetic in
+this check; this is neither a fixed protocol limit nor a Linux latency target.
+
 Windows 0x140023670 accounts for capture packets with fewer than
 (floor(rate/8000) >> 1) samples using an accumulator initialized by 0x1400269c0. At
 high speed its numerator is rate - floor(rate/1000), denominator 8000. CPU

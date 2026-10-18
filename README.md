@@ -71,6 +71,12 @@ The DKMS package builds only the external module for its supported kernel
 series. [WSL requires the documented USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation)
 on the tested usbipd/VBoxUSB combination.
 
+For native Debian development, first build `build/driver-native/snd-octa-capture.ko`
+against the running 6.12 kernel, then run `sudo ./tools/setup-native-dev.sh`.
+This installs development tools, grants the invoking user device access and
+configures the existing bounded module helper. USB monitor access is limited to
+the connected device's bus and must be renewed after reboot.
+
 ## Verification
 
 Hardware checkers are read-only by default unless their purpose explicitly
