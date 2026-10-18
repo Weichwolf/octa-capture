@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -34,6 +35,7 @@ class Check(Desktop):
         self.deadline = time.monotonic() + 40
         self.pending = False
         self.loads = 0
+        self.open_request = None
 
     def fail(self, error):
         self.errors.append(str(error))
@@ -42,6 +44,7 @@ class Check(Desktop):
     def activate(self, app):
         super().activate(app)
         self.view.connect('load-changed', self.loaded)
+        self.view.connect('run-file-chooser', self.file_chooser)
         self.view.connect('web-process-terminated', lambda _view, reason: self.fail(f'Web process terminated: {reason}'))
         self.GLib.timeout_add(100, self.tick)
 
@@ -80,6 +83,96 @@ class Check(Desktop):
     def start_save(self):
         self.phase = 'download'
         self.key('ctrl+s')
+
+    def start_load(self):
+        prepared = run([self.device.bin_dir / 'octa-preset', 'prepare', self.saved,
+                        self.directory / 'original.syx'])[11:-2]
+        self.import_expected = {prepared}
+        if prepared[2] == 3:
+            retained = bytearray(prepared)
+            retained[4] = bytes.fromhex(self.result['initial']['payload_hex'])[4]
+            self.import_expected.add(bytes(retained))
+        self.phase = 'open-focus'
+        self.deadline = time.monotonic() + 45
+        self.view.grab_focus()
+        self.focus_window()
+        self.GLib.timeout_add(100, self.open_load)
+
+    def open_load(self):
+        self.phase = 'open-dialog'
+        self.key('ctrl+o', focus=False)
+        return False
+
+    def select_load_file(self):
+        for window in self.Gtk.Window.list_toplevels():
+            if window == self.window or not window.get_visible() or not window.get_modal() or not window.get_title():
+                continue
+            title = '^' + re.escape(window.get_title()) + '$'
+            identifier = subprocess.run(['xdotool', 'search', '--all', '--onlyvisible', '--pid',
+                                         str(os.getpid()), '--name', title],
+                                        capture_output=True, text=True, check=True, timeout=3).stdout.splitlines()[0]
+            widgets, rows = [window], []
+            while widgets:
+                widget = widgets.pop()
+                if isinstance(widget, (self.Gtk.Label, self.Gtk.Inscription)) and widget.get_mapped() and widget.get_text() == self.saved.name:
+                    valid, bounds = widget.compute_bounds(window)
+                    if valid:
+                        x = bounds.get_x() + bounds.get_width() / 2
+                        y = bounds.get_y() + bounds.get_height() / 2
+                        if 0 <= x < window.get_width() and 0 <= y < window.get_height():
+                            rows.append((y, x))
+                child = widget.get_first_child()
+                while child:
+                    widgets.append(child)
+                    child = child.get_next_sibling()
+            if not rows:
+                return  # Wait for the native chooser's recent-file model.
+            y, x = min(rows)
+            subprocess.run(['xdotool', 'windowfocus', identifier, 'mousemove', '--window', identifier,
+                            str(int(x)), str(int(y)), 'click', '--repeat', '2', '--delay', '100', '1'],
+                           check=True, timeout=3)
+            self.phase = 'load-confirm'
+            return
+
+    def file_chooser(self, _view, request):
+        self.open_request = request
+        return False  # Keep WebKit's actual native chooser.
+
+    def poll_load(self):
+        self.pending = True
+        script = "const error = document.querySelector('#toast');" \
+                 "if (!error.hidden) return {error:error.textContent};" \
+                 "const confirm = document.querySelector('#confirm');"
+        if self.phase == 'load-confirm':
+            script += "return {confirmed:confirm.open};"
+        else:
+            script += "return {ready:!confirm.open && !document.querySelector('#load-file').disabled};"
+
+        def polled(view, result, _data):
+            self.pending = False
+            try:
+                value = json.loads(view.call_async_javascript_function_finish(result).to_json(0)) or {}
+                if value.get('error'):
+                    raise RuntimeError('Native Open/import failed: ' + value['error'])
+                if value.get('confirmed'):
+                    if self.open_request is None or self.open_request.get_selected_files() != [str(self.saved)]:
+                        raise RuntimeError('The native chooser did not select the newly saved settings file.')
+                    self.phase = 'load-apply'
+                    self.view.evaluate_javascript("document.querySelector('#confirm-yes').click();",
+                                                  -1, None, None, None, None, None)
+                elif value.get('ready'):
+                    actual = bytes.fromhex(self.device.snapshot()['state']['payload_hex'])
+                    if actual not in self.import_expected:
+                        raise RuntimeError('Native Open/import did not match the prepared settings.')
+                    print('PASS native Open chooser, saved settings import and complete hardware readback.', flush=True)
+                    self.start_navigation()
+            except Exception as error:
+                self.fail(error)
+        self.view.call_async_javascript_function(script, -1, None, None, None, None, polled, None)
+
+    def start_navigation(self):
+        self.phase = 'navigation'
+        self.view.load_uri('https://example.invalid/should-be-blocked')
 
     def start_native_control(self):
         self.native_original = self.result['initial']['preamps'][0]['sensitivity_index']
@@ -166,13 +259,16 @@ class Check(Desktop):
                     if not value['connected'] or not value['mixer'] or self.loads != 1:
                         raise RuntimeError(f'Desktop lost its live view after Save: {value}; loads={self.loads}')
                     subprocess.run(['import', '-window', 'root', str(self.directory / 'gtk.png')], check=True, timeout=5)
-                    self.phase = 'navigation'
-                    self.view.load_uri('https://example.invalid/should-be-blocked')
+                    self.start_load() if self.write else self.start_navigation()
                 except Exception as error:
                     self.fail(error)
             self.view.evaluate_javascript('({connected:document.querySelector("#connection-message").hidden,'
                                           'mixer:!document.querySelector("#mixer-view").hidden})',
                                           -1, None, None, None, inspect, None)
+        elif self.phase == 'open-dialog':
+            self.select_load_file()
+        elif self.phase in ('load-confirm', 'load-apply') and not self.pending:
+            self.poll_load()
         elif self.phase == 'navigation' and not self.pending:
             self.pending = True
             self.GLib.timeout_add(500, self.check_navigation)
@@ -199,7 +295,7 @@ def main():
     parser.add_argument('--installed-prefix', type=Path, help='test installed Python modules, assets and executables')
     parser.add_argument('--bin-dir', type=Path,
                         default=installed_prefix.resolve() / 'bin' if installed_prefix else ROOT / 'build/release')
-    parser.add_argument('--write', action='store_true', help='change one sensitivity value and restore the full raw state')
+    parser.add_argument('--write', action='store_true', help='change sensitivity and reimport native Save, then restore the full raw state')
     args = parser.parse_args()
     parent = ROOT / 'build/gui'
     parent.mkdir(parents=True, exist_ok=True)

@@ -1107,6 +1107,79 @@ bool preset_rejection() {
                  "invalid full-state values rejected before any MIDI read/write or listener call");
 }
 
+struct PresetReadbackCase {
+  const octa::Message &original;
+  const octa::Message &raw_target;
+  const octa::Message &reply;
+  bool accepted;
+  bool raw;
+};
+
+bool preset_readback_case(const PresetReadbackCase &test) {
+  io = {};
+  const auto encoded = octa::encode(test.reply.command, test.reply.address, test.reply.payload);
+  if (!encoded) { return false; }
+  io.replies = {*encoded};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  auto sent = octa::preset_to_bulk({}, test.original);
+  if (test.raw && sent) { *sent = test.raw_target; }
+  if (!sent) { return false; }
+  auto expected_wire = octa::encode(sent->command, sent->address, sent->payload);
+  const auto request = octa::request(octa::bulk_address, octa::bulk_size);
+  if (!expected_wire || !request) { return false; }
+  append_bytes(*expected_wire, *request);
+  const auto result = test.raw ? session->write_bulk_state(test.raw_target)
+                               : session->write_preset({}, test.original);
+  const bool outcome =
+      test.accepted ? result && *result == test.reply : !result && result.error().code == -EIO;
+  return require(
+      outcome && io.outgoing == *expected_wire,
+      "192 kHz preset permits only commanded/retained metadata; raw recovery stays exact");
+}
+
+bool preset_192_metadata_readback() {
+  constexpr std::size_t rate_offset = 2;
+  constexpr std::size_t metadata_offset = 4;
+  constexpr std::uint8_t highest_rate = 3;
+  constexpr std::uint8_t retained_metadata = 1;
+  auto original = octa::decode(bulk_frame());
+  if (!original) { return false; }
+  original->payload[rate_offset] = highest_rate;
+  original->payload[metadata_offset] = retained_metadata;
+  const auto target = octa::preset_to_bulk({}, *original);
+  if (!target || !require(target->payload[metadata_offset] == 0,
+                          "192 kHz preset wire prefix still matches the original transmitter")) {
+    return false;
+  }
+  auto exercise = [&](const octa::Message &reply, bool accepted, bool raw) {
+    return preset_readback_case({.original = *original,
+                                 .raw_target = *target,
+                                 .reply = reply,
+                                 .accepted = accepted,
+                                 .raw = raw});
+  };
+  auto reply = *target;
+  if (!exercise(reply, true, false)) { return false; }
+  reply.payload[metadata_offset] = retained_metadata;
+  if (!exercise(reply, true, false) || !exercise(reply, false, true)) { return false; }
+  constexpr std::uint8_t unexpected_metadata = 7;
+  reply.payload[metadata_offset] = unexpected_metadata;
+  if (!exercise(reply, false, false)) { return false; }
+  constexpr std::array<std::size_t, 10> other_fields = {
+      0, 1, 2, 3, 5, 0x1d, 0x80, 0x120, 0x442, octa::bulk_size - 1};
+  for (const auto offset : other_fields) {
+    reply = *target;
+    reply.payload[metadata_offset] = retained_metadata;
+    reply.payload[offset] ^= 1;
+    if (!exercise(reply, false, false)) { return false; }
+  }
+  original->payload[rate_offset] = 0;
+  reply = *target;
+  reply.payload[rate_offset] = 0;
+  return exercise(reply, false, false);
+}
+
 bool preset_readback_failure() {
   io = {};
   io.replies = {bulk_frame(), bulk_frame()};
@@ -1400,9 +1473,9 @@ int main() {
       auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&
       session_queries() && session_stale_fragment() && session_writes() && memory_operations() &&
       memory_rejection() && memory_partial_failure() && preset_transfer() && preset_rejection() &&
-      preset_readback_failure() && preset_partial_failure() && session_uncertain() &&
-      session_receive_bounds() && impossible_transfers() && panel_operations() &&
-      panel_rejection() && panel_failures();
+      preset_192_metadata_readback() && preset_readback_failure() && preset_partial_failure() &&
+      session_uncertain() && session_receive_bounds() && impossible_transfers() &&
+      panel_operations() && panel_rejection() && panel_failures();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;

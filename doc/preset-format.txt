@@ -108,6 +108,13 @@ device properties in the first five payload bytes are retained with the
 original flag canonicalization: bytes 0 and 3 keep bit 0; byte 4 is zero
 when byte 2 equals 3. Current properties are separate from preset contents.
 
+At 192 kHz, the connected device retains its previous bulk-prefix byte 4
+when receiving that zero. Preset verification therefore accepts either the
+complete prepared reply or that same reply with only byte 4 retained from
+the preceding device query. All other bytes must match exactly, and another
+value of byte 4 is rejected. The transmitted frame still matches the original
+driver. Raw snapshot recovery always requires an exact reply, at every rate.
+
 The synthetic preset-import-profile.octa exercises nonzero controls and
 ignored full-width fields. GeneratePresetImport.py reproduces it. The
 preset-import-reference.syx fixture was captured from original LoadCpl

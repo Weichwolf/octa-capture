@@ -279,8 +279,8 @@ Save dialog. WebKitGTK 6.0 receives a filesystem destination path after user
 selection/overwrite confirmation. Exit and window/server shutdown release CTRL;
 the same Auto-Sens recovery lifecycle applies.
 
-The native integration checker uses real X11 key events for Ctrl+S and the Save
-dialog, validates the downloaded preset, checks live controls/meters, blocks an
+The native integration checker uses real X11 key events for controls and Ctrl+S,
+validates the native Save download, checks live controls/meters, blocks an
 external navigation and exercises Driver → Exit. It verifies independent full
 state readback after releasing CTRL. For headless checks, install `xvfb`, `xauth`,
 `xdotool`, `dbus`, and `imagemagick`:
@@ -290,8 +290,12 @@ GSK_RENDERER=cairo GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- pyth
 GSK_RENDERER=cairo GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- python3 tools/check-gtk.py --write
 ```
 
-`--write` changes one sensitivity value and restores a fresh complete raw
-snapshot. Screenshots and recovery files remain private under `build/gui/`.
+`--write` also changes/restores sensitivity and opens the newly saved file with
+Ctrl+O and an actual native-chooser double-click. It checks the exact selected
+path before import confirmation and compares hardware readback with the prepared
+preset, including the documented 192 kHz header behavior. Preset import can reset
+fields omitted by the original file format; the checker finally restores a fresh
+complete raw snapshot. Screenshots and recovery files remain private under `build/gui/`.
 These are WSL/Xvfb desktop integration checks, not native Debian audio or physical
 signal-quality verification. The remaining feature gaps still apply to both hosts.
 

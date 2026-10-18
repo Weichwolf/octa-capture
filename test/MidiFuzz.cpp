@@ -63,6 +63,23 @@ void exercise_auto_sense(octa::MidiSession &session) {
   }
 }
 
+void exercise_preset(octa::MidiSession &session, const octa::Message &current) {
+  const auto preset = octa::preset_from_bulk(current);
+  require(preset.has_value());
+  if (!preset) { return; }
+  const auto valid = octa::preset_to_bulk(*preset, current);
+  const auto writes = io.writes;
+  const auto result = session.write_preset(*preset, current, &check_message);
+  if (!valid) {
+    require(!result && result.error().code == -EINVAL && writes == io.writes);
+  } else if (result) {
+    const auto exported = octa::preset_from_bulk(*result);
+    require(exported && *exported == *preset);
+    constexpr std::size_t rate_offset = 2;
+    require(result->payload[rate_offset] == current.payload[rate_offset]);
+  }
+}
+
 void exercise_session() {
   auto session = octa::MidiSession::open("hw:fuzz");
   require(session.has_value());
@@ -84,6 +101,7 @@ void exercise_session() {
     } else if (bulk_written) {
       require(*bulk_written == *reply);
     }
+    exercise_preset(*session, *reply);
   }
   const octa::RouteChange change = {.pair = io.bytes.empty() ? std::uint8_t{0} : io.bytes.front(),
                                     .selection =

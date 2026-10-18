@@ -42,7 +42,7 @@ python3 tools/desktop-gui.py
 ```
 
 The GTK host keeps the WebKit sandbox enabled, blocks external navigation and
-uses a native Save dialog. Right-click the panel's device name, press Shift+F10
+uses native file dialogs. Right-click the panel's device name, press Shift+F10
 or use Driver Settings to select a discovered unit. Serial identities survive
 ALSA card renumbering, with automatic same-unit reconnection.
 

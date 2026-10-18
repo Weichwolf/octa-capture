@@ -21,9 +21,12 @@ def frame(address, payload):
     return bytes.fromhex('f0 41 10 00 00 4d 12') + body + bytes([-sum(body) % 128, 0xf7])
 
 bulk = frame([1, 0, 0, 0], [0] * 1146)
+highest_rate = [0] * 1146
+highest_rate[2:5] = [3, 0, 1]
 meters = frame([0, 10, 0, 1], [0, 0, 127, 127] * 4)
 seeds = {
     'bulk': bulk,
+    'bulk-192-retained-metadata': frame([1, 0, 0, 0], highest_rate),
     'meters': meters,
     'interleaved': meters + bulk + meters,
     'typed-route': b'\0' + bulk + b'\0',

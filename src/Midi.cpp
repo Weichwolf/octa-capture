@@ -136,6 +136,24 @@ std::expected<std::size_t, MidiError> read_chunk(snd_rawmidi_t *input,
   return count;
 }
 
+template <typename Transact>
+std::expected<Message, MidiError>
+write_bulk_verified(const Message &target, const Message &retained, const Transact &transact) {
+  if (!validate_bulk_write(target)) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "bulk write bounds"});
+  }
+  const auto frame = encode(target.command, target.address, target.payload);
+  if (!frame) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "bulk write frame"});
+  }
+  auto reply = transact(*frame);
+  if (!reply) { return reply; }
+  if (*reply != target && *reply != retained) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "bulk readback"});
+  }
+  return reply;
+}
+
 class ActiveOperation {
 public:
   explicit ActiveOperation(bool &active) : active_(active) { active_ = true; }
@@ -480,20 +498,10 @@ MidiSession::initialize_settings(InitializationTarget target, const MessageListe
 
 std::expected<Message, MidiError> MidiSession::write_bulk_state(const Message &target,
                                                                 const MessageListener &listener) {
-  const auto validated = validate_bulk_write(target);
-  if (!validated) {
-    return std::unexpected(MidiError{.code = -EINVAL, .operation = "bulk write bounds"});
-  }
-  const auto frame = encode(target.command, target.address, target.payload);
-  if (!frame) {
-    return std::unexpected(MidiError{.code = -EINVAL, .operation = "bulk write frame"});
-  }
-  auto reply = query(*frame, listener);
-  if (!reply) { return reply; }
-  if (*reply != target) {
-    return std::unexpected(MidiError{.code = -EIO, .operation = "bulk readback"});
-  }
-  return reply;
+  return write_bulk_verified(
+      target, target, [this, &listener](std::span<const std::uint8_t> frame) {
+        return query(frame, listener);
+      });
 }
 
 std::expected<Message, MidiError> MidiSession::write_preset(const Preset &preset,
@@ -503,7 +511,19 @@ std::expected<Message, MidiError> MidiSession::write_preset(const Preset &preset
   if (!target) {
     return std::unexpected(MidiError{.code = -EINVAL, .operation = "preset write bounds"});
   }
-  return write_bulk_state(*target, listener);
+  auto retained = *target;
+  constexpr std::size_t rate_offset = 2;
+  constexpr std::size_t metadata_offset = 4;
+  constexpr std::uint8_t highest_rate = 3;
+  // The reference sends zero here at 192 kHz; firmware may retain this metadata.
+  // Both complete messages are checked, so every other byte must still match.
+  if (current.payload[rate_offset] == highest_rate) {
+    retained.payload[metadata_offset] = current.payload[metadata_offset];
+  }
+  return write_bulk_verified(
+      *target, retained, [this, &listener](std::span<const std::uint8_t> frame) {
+        return query(frame, listener);
+      });
 }
 
 std::expected<Message, MidiError> read_bulk_state(std::string_view port) {
