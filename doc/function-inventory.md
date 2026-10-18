@@ -30,7 +30,11 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   160 kernel combinations and 482 public ASIO getter cases, including output
   clearing on failure. These host settings do not define Linux buffer policy
   or prove streaming latency.
-- Windows x86 and macOS arm64 have not received an independent behavior comparison.
+- macOS arm64: isolated execution checks all 2,948 legal preamp/compressor
+  transmitter cases against the C++ encoder, plus 2,049 nearest-fader cases and
+  243 compressor graph points against the web implementation. Fader and
+  attack/release/ratio/pre-delay/dB tables also match. Other ARM64 GUI, audio and
+  property paths still need independent comparison; Windows x86 remains unaudited.
   Shared artwork does not establish shared control logic.
 - `tools/ghidra/ExportReferenceInventory.java` exports function and call-site TSVs
   from an analyzed program. Indirect calls remain explicitly unresolved. Outputs,

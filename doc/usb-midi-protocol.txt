@@ -335,6 +335,19 @@ coordinates. These are reference display values, not calibrated DSP
 measurements; complete Windows formatting and typed-input behavior still
 need comparison.
 
+The ARM64 slice independently matches all 1025 fader coefficients, fixed
+attack/release/ratio/pre-delay tables and preamp dB labels. Original ARM64
+CVrTbl::GetIdx (0x1000217B8) matches 2049 nearest-coefficient cases;
+CDispCmp::DBtoPT (0x10001A5CC) matches the same 243 graph points.
+The Windows 111-entry dB table (0x14029CF30) matches both macOS slices,
+including the internal sign spacing in "- 9.0" through "- 1.0". Original
+Windows getters 0x14001AC20/0x14001AC50 confirm all 177 legal gate,
+threshold and gain labels. The GUI preserves this spacing.
+Extract the ARM64 slice with llvm-lipo-19 -thin arm64, then check offline:
+  python3 tools/verify-gui-parameters.py gui-x86_64 RDDP1110.EXE \
+    --mac-arm64 gui-arm64 --cpu
+The emulator loads hash-pinned binaries and never opens a device.
+
 The active compressor context menu is limited to Bypass Off/On All Ch.
 Windows handler 0x14001dd90 calls popup builder 0x140019f10 with submenu 1
 of MENU 132; only command IDs 8021/8022 are handled. The five named presets
@@ -356,6 +369,11 @@ Hi-Z writes are limited to physical inputs 1/2 (owner's manual p.45).
 octa-control --dry-run prints the frame without opening any MIDI device.
 tools/emulate-preamp-controls.py checks all 188 valid min/max endpoint
 frames against the original TxPre functions and our C++ encoder offline.
+--all-values checks all 2948 legal cases; --architecture arm64 selects the
+independently compiled ARM64 transmitters. Both architecture sweeps pass:
+  python3 tools/emulate-preamp-controls.py gui-x86_64 --all-values
+  python3 tools/emulate-preamp-controls.py gui-arm64 --architecture arm64 --all-values
+These compare complete frames, not physical preamp/compressor response.
 octa-control writes one DT1 and immediately requests bulk state on the same
 open CTRL connection; success requires the requested value in that reply.
 tools/check-preamps.py additionally compares the complete decoded and raw

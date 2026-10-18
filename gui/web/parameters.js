@@ -131,7 +131,8 @@ export function parameterText(parameter, index) {
   switch (parameter) {
     case 'sensitivity': return `${(index / 2).toFixed(1)} dB`;
     case 'gate': return index === 0 ? '-INF dB' : `${(index - 70).toFixed(1)} dB`;
-    case 'threshold': case 'gain': return `${(index - 50).toFixed(1)} dB`;
+    case 'threshold': case 'gain':
+      return `${index > 40 && index < 50 ? '- ' + (50 - index).toFixed(1) : (index - 50).toFixed(1)} dB`;
     case 'attack': return `${ATTACK[index]} ms`;
     case 'release': return `${RELEASE[index]} ms`;
     case 'ratio': return RATIO_TEXT[index];

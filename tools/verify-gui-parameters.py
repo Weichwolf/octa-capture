@@ -11,6 +11,10 @@ import runpy
 import struct
 import subprocess
 
+from reference_arm64 import REFERENCE_SHA256 as ARM64_SHA256
+
+WINDOWS_SHA256 = '634c140bc4e49b0d65c70d5156be19573ad3d440ac5ea24e24d3ad59974da406'
+
 
 def require(condition, message):
     if not condition:
@@ -71,7 +75,9 @@ for (let ratio=0;ratio<9;ratio++) for (const threshold of [0,30,50])
   const compressor = {{ratio_index:ratio,threshold_index:threshold,gain_index:gain}};
   curves.push([input,threshold-50,p.RATIO[ratio],gain-50,p.compressorOutput(input,compressor)]);
  }}
-console.log(JSON.stringify({{volume:p.VOLUME,attack:p.ATTACK,release:p.RELEASE,ratio:p.RATIO_TEXT,minimum:p.GRAPH_MIN_DB,
+console.log(JSON.stringify({{volume:p.VOLUME,attack:p.ATTACK,release:p.RELEASE,ratio:p.RATIO_TEXT,ratio_math:p.RATIO,minimum:p.GRAPH_MIN_DB,
+ preamp:Object.fromEntries(['sensitivity','gate','threshold','gain'].map(name=>[name,
+  Array.from({{length:p.PREAMP_MAX[name]+1}},(_,index)=>p.parameterText(name,index).replace(/ dB$/,''))])),
  pre_delay:p.PRE_DELAY.map((_,index)=>p.preDelayText(index)), time:Array.from({{length:50}},(_,index)=>p.reverbTimeText(index)),
  indices:values.map(v=>[v,p.volumeIndex(v)]),curves}}));'''
     output = subprocess.run(['node', '--input-type=module', '-e', code], check=True,
@@ -116,19 +122,104 @@ def execute_math(executable, values):
           f'{len(values["curves"])} compressor graph points')
 
 
+def execute_arm_math(image, values):
+    from unicorn import Uc, UC_ARCH_ARM64, UC_MODE_ARM
+    from unicorn import arm64_const as registers
+    reference = runpy.run_path(str(Path(__file__).with_name('emulate-bulk-preset.py')))
+    cpu = Uc(UC_ARCH_ARM64, UC_MODE_ARM)
+    reference['load_image'](cpu, image)
+    context, stack, stop = 0x71000000, 0x72000000, 0x73000000
+    for address in (context, stack, stop):
+        cpu.mem_map(address, 0x1000)
+    cpu.reg_write(registers.UC_ARM64_REG_CPACR_EL1, 3 << 20)
+    cpu.mem_write(context + 0x20, struct.pack('<ii', 48, 48))
+
+    def execute(address):
+        cpu.reg_write(registers.UC_ARM64_REG_SP, stack + 0x1000)
+        cpu.reg_write(registers.UC_ARM64_REG_LR, stop)
+        cpu.emu_start(address, stop, timeout=1_000_000, count=1000)
+        require(cpu.reg_read(registers.UC_ARM64_REG_PC) == stop, 'ARM64 reference function did not return')
+
+    for value, expected in values['indices']:
+        cpu.reg_write(registers.UC_ARM64_REG_X0, value)
+        execute(0x1000217b8)
+        require(cpu.reg_read(registers.UC_ARM64_REG_X0) & 0xffffffff == expected,
+                f'ARM64 reference fader index differs at {value}')
+    for input_db, threshold, ratio, gain, expected in values['curves']:
+        cpu.mem_write(context + 0x78, struct.pack('<ddd', threshold, ratio, gain))
+        cpu.reg_write(registers.UC_ARM64_REG_X0, context)
+        cpu.reg_write(registers.UC_ARM64_REG_D0, int.from_bytes(struct.pack('<d', input_db), 'little'))
+        execute(0x10001a5cc)
+        position = cpu.reg_read(registers.UC_ARM64_REG_D1)
+        actual = struct.unpack('<d', position.to_bytes(8, 'little'))[0] * values['minimum'] / 48
+        require(math.isclose(actual, expected, rel_tol=0, abs_tol=1e-9),
+                f'ARM64 reference compressor curve differs: {input_db, threshold, ratio, gain, actual, expected}')
+    print(f'PASS original ARM64 CPU math: {len(values["indices"])} fader index cases and '
+          f'{len(values["curves"])} compressor graph points')
+
+
+def execute_windows_decibels(path, values):
+    from unicorn import x86_const as registers
+    helpers = runpy.run_path(str(Path(__file__).with_name('verify-pcm-peaks.py')))
+    cpu = helpers['cpu_image'](path, WINDOWS_SHA256, windows=True)
+    context = helpers['CONTEXT']
+    cases = 0
+    for name, address in (('gate', 0x14001ac50), ('threshold', 0x14001ac20), ('gain', 0x14001ac20)):
+        for index, expected in enumerate(values['preamp'][name]):
+            helpers['write'](cpu, context + 0x118, index)
+            helpers['execute'](cpu, address, (context, 0, 0, 0), windows=True)
+            pointer = cpu.reg_read(registers.UC_X86_REG_RAX)
+            actual = bytes(cpu.mem_read(pointer, 16)).split(b'\0', 1)[0].decode('ascii').strip()
+            require(actual == expected, f'Windows {name} label differs at index {index}: {actual!r}')
+            cases += 1
+    print(f'PASS original Windows CPU text: {cases} gate/threshold/gain labels, including internal sign spacing')
+
+
+def preamp_strings(image, sensitivity, decibels, values):
+    require(mac_strings(image, sensitivity, 101) == values['preamp']['sensitivity'],
+            'Sensitivity display table differs from reference')
+    table = mac_strings(image, decibels, 111)
+    for name, offset in (('gate', 0), ('threshold', 20), ('gain', 20)):
+        expected = values['preamp'][name]
+        require(table[offset:offset + len(expected)] == expected, f'{name} display table differs from reference')
+
+
+def verify_arm64(path, values, execute):
+    image = path.read_bytes()
+    require(hashlib.sha256(image).hexdigest() == ARM64_SHA256, 'Unexpected ARM64 Mac reference')
+    require(read_address(image, 0x10005f830, 4100) == struct.pack('<1025I', *values['volume']),
+            'ARM64 GUI fader coefficients differ from reference')
+    require(list(struct.unpack('<9d', read_address(image, 0x100061218, 72))) == values['ratio_math'],
+            'ARM64 numerical compressor ratios differ from GUI')
+    for name, address, count in (('attack', 0x100060f20, 26), ('release', 0x100060ff0, 46),
+                                 ('ratio', 0x100060ed8, 9), ('pre_delay', 0x1000611b0, 13)):
+        table = mac_strings(image, address, count)
+        require((list(map(float, table)) if name in ('attack', 'release') else table) == values[name],
+                f'ARM64 {name} table differs from GUI')
+    preamp_strings(image, 0x100060838, 0x100060b60, values)
+    print('PASS ARM64 original tables: 1025 fader coefficients, preamp dB, attack/release/ratio and pre-delay')
+    if execute:
+        execute_arm_math(image, values)
+
+
 def main():
     root = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mac', type=Path)
     parser.add_argument('windows', type=Path)
     parser.add_argument('--cpu', action='store_true', help='requires local Unicorn bindings')
+    parser.add_argument('--mac-arm64', type=Path, help='also check the extracted ARM64 architecture slice')
     args = parser.parse_args()
     mac, windows = args.mac.read_bytes(), args.windows.read_bytes()
     require(hashlib.sha256(mac).hexdigest() ==
             '1ada3d6be71a6559ff84e7b21af1c964f0df2ce305c1f45fe0018cc148922092', 'Unexpected Mac reference')
-    require(hashlib.sha256(windows).hexdigest() ==
-            '634c140bc4e49b0d65c70d5156be19573ad3d440ac5ea24e24d3ad59974da406', 'Unexpected Windows reference')
+    require(hashlib.sha256(windows).hexdigest() == WINDOWS_SHA256, 'Unexpected Windows reference')
     values = gui_values(root)
+    require(list(struct.unpack('<9d', read_address(mac, 0x10005e1e0, 72))) == values['ratio_math'],
+            'Numerical compressor ratios differ from reference')
+    preamp_strings(mac, 0x10005d7e0, 0x10005db10, values)
+    require(windows_strings(windows, 0x29b530, 111) == mac_strings(mac, 0x10005db10, 111),
+            'Windows/macOS decibel display tables differ')
     minimum = struct.unpack('<d', read_address(mac, 0x100041840, 8))[0]
     require(minimum == values['minimum'], 'Compressor graph scale differs from reference')
     coefficient_bytes = struct.pack('<1025I', *values['volume'])
@@ -153,7 +244,10 @@ def main():
     require(values['time'] == [f'{(index + 1) * unit:.1f}' for index in range(50)], 'Reverb time text differs')
     print('PASS both original binaries: all 1025 fader coefficients, attack/release/ratio/pre-delay tables and reverb time text')
     if args.cpu:
+        execute_windows_decibels(args.windows, values)
         execute_math(mac, values)
+    if args.mac_arm64:
+        verify_arm64(args.mac_arm64, values, args.cpu)
 
 
 if __name__ == '__main__':

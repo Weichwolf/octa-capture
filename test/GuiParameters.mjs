@@ -38,6 +38,8 @@ assert.equal(reverbTimeText(50), '--');
 for (const [parameter, index, expected] of [
   ['sensitivity', 1, '0.5 dB'], ['gate', 0, '-INF dB'], ['gate', 1, '-69.0 dB'],
   ['gate', 50, '-20.0 dB'], ['threshold', 0, '-50.0 dB'], ['threshold', 50, '0.0 dB'],
+  ['threshold', 40, '-10.0 dB'], ['threshold', 41, '- 9.0 dB'], ['threshold', 49, '- 1.0 dB'],
+  ['gain', 40, '-10.0 dB'], ['gain', 41, '- 9.0 dB'], ['gain', 49, '- 1.0 dB'], ['gain', 50, '0.0 dB'],
   ['gain', 74, '24.0 dB'], ['attack', 0, '0.2 ms'], ['attack', 1, '0.5 ms'],
   ['attack', 25, '100 ms'], ['release', 1, '12 ms'], ['release', 45, '500 ms'],
   ['ratio', 8, '1:INF'], ['ratio', 9, '--'], ['attack', -1, '--'], ['gain', 1.5, '--'],
