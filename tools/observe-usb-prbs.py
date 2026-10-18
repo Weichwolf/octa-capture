@@ -3,7 +3,7 @@
 """Observe bounded PRBS11 discontinuities in OCTA-CAPTURE USB transfers, in RAM only."""
 
 import argparse
-from collections import Counter
+from collections import Counter, OrderedDict, deque
 import ctypes
 import errno
 import fcntl
@@ -22,6 +22,73 @@ ROOT = Path(__file__).resolve().parent.parent
 CAPACITY = 8192
 HEADER_SIZE = 64
 MAX_ERRORS = 100
+MAX_PENDING_URBS = 1024
+TIMING_HISTORY = 2048
+
+
+class Timing:
+    """Bounded host-observed queue timing; no kernel addresses leave this object."""
+
+    def __init__(self):
+        self.pending = OrderedDict()
+        self.history = deque(maxlen=TIMING_HISTORY)
+        self.counts = Counter()
+        self.last_submit = self.last_complete = None
+        self.maximum_pending = 0
+
+    def event(self, identity, event, stamp):
+        if event not in (83, 67, 69):
+            return
+        if self.history and stamp < self.history[-1]['time']:
+            self.counts['nonmonotonic_events'] += 1
+        record = {'time': stamp}
+        if event == 83:
+            self.counts['submits'] += 1
+            if identity in self.pending:
+                self.counts['duplicate_submits'] += 1
+            self.pending[identity] = stamp
+            self.pending.move_to_end(identity)
+            if len(self.pending) > MAX_PENDING_URBS:
+                self.pending.popitem(last=False)
+                self.counts['evicted_submits'] += 1
+            if self.last_submit is not None:
+                record['submit_gap_ms'] = (stamp - self.last_submit) * 1000
+            self.last_submit = stamp
+        else:
+            self.counts['completions' if event == 67 else 'submission_errors'] += 1
+            submitted = self.pending.pop(identity, None)
+            if submitted is None:
+                self.counts['unpaired_completions'] += 1
+            else:
+                record['completion_latency_ms'] = (stamp - submitted) * 1000
+            if self.last_complete is not None:
+                record['complete_gap_ms'] = (stamp - self.last_complete) * 1000
+            self.last_complete = stamp
+        self.maximum_pending = max(self.maximum_pending, len(self.pending))
+        record.update(pending=len(self.pending), last_submit=self.last_submit, last_complete=self.last_complete)
+        self.history.append(record)
+
+    def at(self, stamp):
+        # The detector reports after resynchronizing; select history at the first
+        # bad packet, rather than treating the later report time as the fault time.
+        records = [record for record in self.history if record['time'] <= stamp]
+        if not records:
+            return None
+        latest = max(reversed(records), key=lambda record: record['time'])
+        recent = [record for record in records if record['time'] >= stamp - 0.05]
+        result = {'pending': latest['pending'], 'window_ms': 50,
+                  'minimum_pending': min((record['pending'] for record in recent), default=latest['pending'])}
+        for name in ('submit', 'complete'):
+            value = latest['last_' + name]
+            result['since_' + name + '_ms'] = None if value is None or value > stamp else round((stamp - value) * 1000, 3)
+        for name in ('submit_gap_ms', 'complete_gap_ms', 'completion_latency_ms'):
+            values = [record[name] for record in recent if name in record and record[name] >= 0]
+            result['maximum_' + name] = round(max(values), 3) if values else None
+        return result
+
+    def summary(self):
+        return {**self.counts, 'pending': len(self.pending), 'maximum_pending': self.maximum_pending,
+                'history_capacity': TIMING_HISTORY}
 
 
 def next_pattern(state):
@@ -75,14 +142,22 @@ class Pattern:
 class Decoder:
     def __init__(self, device, bus, report):
         self.device, self.bus = device, bus
-        self.output = Pattern('submitted-output', report)
-        self.input = Pattern('completed-input-return', report)
+        self.report = report
+        self.timing = {5: Timing(), 133: Timing()}
+        self.output = Pattern('submitted-output', self.continuity)
+        self.input = Pattern('completed-input-return', self.continuity)
         self.events = Counter()
         self.packet_errors = Counter()
         self.transfer_errors = Counter()
         self.invalid = 0
         self.channel = None
         self.zeros = 0
+
+    def continuity(self, record):
+        error = record['continuity_error']
+        error['host_timing'] = {name: self.timing[endpoint].at(error['time'])
+                               for endpoint, name in ((5, 'output'), (133, 'input'))}
+        self.report(record)
 
     def outgoing(self, payload, stamp):
         if len(payload) % 30:
@@ -128,8 +203,11 @@ class Decoder:
             return
         status = struct.unpack_from('<i', header, 28)[0]
         self.events[chr(event), endpoint, status] += 1
-        if (event == 67 and status not in (0, -2, -104)) or (event == 83 and status not in (0, -115)):
+        if event == 69 or (event == 67 and status not in (0, -2, -104)) or (event == 83 and status not in (0, -115)):
             self.transfer_errors[endpoint, status] += 1
+        seconds, microseconds = struct.unpack_from('<qi', header, 16)
+        stamp = seconds + microseconds / 1e6
+        self.timing[endpoint].event(struct.unpack_from('<Q', header)[0], event, stamp)
         if (event, endpoint) != (83, 5) and (event, endpoint, status) != (67, 133, 0):
             return
         captured = struct.unpack_from('<I', header, 36)[0]
@@ -138,8 +216,6 @@ class Decoder:
         if captured > CAPACITY or captured > len(data) or base > captured:
             self.invalid += 1
             return
-        seconds, microseconds = struct.unpack_from('<qi', header, 16)
-        stamp = seconds + microseconds / 1e6
         packet = data[:captured]
         if endpoint == 5:
             self.outgoing(packet[base:], stamp)
@@ -156,6 +232,7 @@ class Decoder:
                 'incoming_verified_pattern_samples': self.input.verified,
                 'packet_errors': dict(self.packet_errors),
                 'transfer_errors': {str(key): count for key, count in self.transfer_errors.items()},
+                'host_queue_timing': {str(endpoint): timing.summary() for endpoint, timing in self.timing.items()},
                 'invalid_payloads': self.invalid,
                 'reader_queued': queued, 'reader_dropped': dropped, 'audio_payload_files': False}
 

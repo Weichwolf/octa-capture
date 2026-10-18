@@ -124,6 +124,12 @@ class Records(unittest.TestCase):
         self.assertEqual(summary['transfer_errors'], {'(133, -32)': 1})
         self.assertFalse(summary['audio_payload_files'])
 
+    def test_submission_error_is_not_silently_ignored(self):
+        header, data = packet([], endpoint=5, status=-28)
+        header[8] = 69  # USB monitor E: submission failed before completion.
+        self.decoder.event(header, data)
+        self.assertEqual(self.decoder.summary(0, 0)['transfer_errors'], {'(5, -28)': 1})
+
     def test_bounded_malformed_records(self):
         generator = random.Random(82337)
         for _ in range(5000):
@@ -135,6 +141,60 @@ class Records(unittest.TestCase):
                     data = generator.randbytes(generator.randrange(256))
             self.decoder.event(header, data)
         self.assertLessEqual(len(self.decoder.input.errors), usb.MAX_ERRORS)
+
+
+class QueueTiming(unittest.TestCase):
+    def test_overlapping_urbs_and_event_time_selection(self):
+        timing = usb.Timing()
+        timing.event(123, 83, 10.0)
+        timing.event(456, 83, 10.001)
+        timing.event(123, 67, 10.006)
+        timing.event(456, 67, 10.02)
+        # Later completions must not contaminate the snapshot at the first gap.
+        gap = timing.at(10.006)
+        self.assertEqual(gap['pending'], 1)
+        self.assertEqual(gap['maximum_submit_gap_ms'], 1.0)
+        self.assertEqual(gap['maximum_completion_latency_ms'], 6.0)
+        self.assertEqual(gap['since_submit_ms'], 5.0)
+        self.assertEqual(timing.at(10.02)['minimum_pending'], 0)
+        self.assertEqual(timing.summary()['maximum_pending'], 2)
+        self.assertNotIn('123', str(timing.at(10.006)))
+
+    def test_partial_observation_failed_submit_and_bounded_storage(self):
+        timing = usb.Timing()
+        timing.event(999, 67, 1.0)
+        timing.event(999, 69, 1.001)
+        self.assertEqual(timing.summary()['unpaired_completions'], 2)
+        self.assertEqual(timing.summary()['submission_errors'], 1)
+        self.assertIsNone(timing.at(0.5))
+        for identity in range(usb.TIMING_HISTORY + 100):
+            timing.event(identity, 83, 2.0 + identity / 1000)
+        self.assertEqual(len(timing.pending), usb.MAX_PENDING_URBS)
+        self.assertEqual(len(timing.history), usb.TIMING_HISTORY)
+        self.assertGreater(timing.summary()['evicted_submits'], 0)
+
+    def test_detected_gap_has_correlated_host_timing(self):
+        reports = []
+        decoder = usb.Decoder(4, 1, reports.append)
+        original = samples(500)
+        corrupted = original[:200] + [0] * 20 + original[220:]
+        decoder.event(*packet(samples(128), endpoint=5))
+        for start in range(0, len(corrupted), 128):
+            decoder.event(*packet(corrupted[start:start + 128]))
+        self.assertEqual(len(reports), 1)
+        timing = reports[0]['continuity_error']['host_timing']
+        self.assertEqual(timing['output']['pending'], 1)
+        self.assertEqual(timing['input']['pending'], 0)
+        self.assertEqual(decoder.summary(0, 0)['incoming_pattern_errors'][0]['host_timing'], timing)
+
+    def test_reordered_timestamps_are_explicit_without_negative_latencies(self):
+        timing = usb.Timing()
+        timing.event(123, 83, 2.0)
+        timing.event(123, 67, 1.0)
+        self.assertEqual(timing.summary()['nonmonotonic_events'], 1)
+        gap = timing.at(1.0)
+        self.assertIsNone(gap['since_submit_ms'])
+        self.assertIsNone(gap['maximum_completion_latency_ms'])
 
 
 if __name__ == '__main__':

@@ -148,6 +148,16 @@ kernel sanitizer/URB fault testing.
 
 ## WSL USB/IP timing investigation
 
+`tools/observe-usb-prbs.py --device 1-1 --seconds 360` passively observes the
+PRBS11 test from `tools/check-mixer-audio.py` through usbmon. It keeps audio and
+bounded URB associations in RAM. Each detected gap includes host-observed queue
+depth, submission/completion gaps and latency in the preceding 50 ms. These are
+host timestamps, not measurements of the device FIFO or proof of causation.
+The summary includes submit failures (`E` events), incomplete associations and
+monitor drops; kernel addresses and audio payloads are not logged. Exit 2 means
+the required outgoing/return patterns were not verified, even if queue timing
+was observed. The observer itself does not configure or silence any output.
+
 An independent libusb test with this module unloaded reproduces the 1/8
 input rate at 48 kHz. The host-side workaround is verified on the tested setup:
 usbipd-win `aa3db8b` does not issue VBoxUSB `GET_DEVICE`; in VirtualBox
