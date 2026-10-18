@@ -13,6 +13,12 @@ silently negotiated alternatives fail the test. These short silent tests check
 timing and XRUN diagnostics, not signal integrity, round-trip latency or sustained
 performance at these smaller buffers.
 
+The aperiodic digital-return checker removes the short PRBS11 alignment ambiguity.
+It passes all ten sources at 44.1 kHz with verified 256/1024 frames, but
+normal-priority 48 kHz tests under concurrent CPU load encounter XRUNs with
+128/512 and 256/1024 frames. Sustained small-buffer stability remains unproven;
+see the [protocol findings](../doc/usb-midi-protocol.txt) for verification scope.
+
 Use source matching the target kernel and its prepared build files, including `Module.symvers`:
 
 ```bash

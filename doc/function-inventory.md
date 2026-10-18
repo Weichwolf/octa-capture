@@ -80,6 +80,13 @@ keeps this host preference separate from the device and audio-port warning.
 
 ## Specific unresolved distinctions
 
+Native small-buffer streaming is not established as stable under CPU load.
+The aperiodic digital test passes all ten sources at 44.1 kHz with verified
+256/1024-frame period/buffer. Normal-priority 48 kHz runs under concurrent load
+also encounter a capture overrun at 128/512 and playback underrun at 256/1024;
+full-state/rate recovery passes. These failures are not sample mismatches hidden
+by the earlier PRBS11 period, and do not yet distinguish scheduling from transport.
+
 One native control-stress run failed while restoring a raw snapshot. Independent
 outer recovery restored and verified the complete original state and rate.
 An identical-fixture repeat and the full 304-case monitor sweep then passed;

@@ -18,6 +18,7 @@ from gui.backend import Bridge
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pcm_checks import geometry_valid, owned_parameters
+from pcm_integrity import IntegrityError, interleave_sequence, make_sequence, verify_sequence
 
 RATES = (44100, 48000, 96000)
 UNITY = 0x200000
@@ -52,7 +53,7 @@ class AudioMismatch(RuntimeError):
 
 
 class Check:
-    def __init__(self, directory, keep_going=False, period=1024, buffer=8192):
+    def __init__(self, directory, keep_going=False, period=1024, buffer=8192, aperiodic=False):
         self.directory = directory.resolve()
         self.bridge = Bridge(self.directory / 'octa-bridge')
         self.rate = None
@@ -62,6 +63,7 @@ class Check:
         self.period = period
         self.buffer = buffer
         self.last_parameters = {}
+        self.aperiodic = aperiodic
 
     def audio_failure(self, label, message):
         if not self.keep_going:
@@ -121,7 +123,7 @@ class Check:
     def measure(self, channel, amplitude, pattern=False, duration=2):
         self.verify_silence()
         rate = self.rate
-        sample = (pattern_cycle(channel) if pattern else
+        sample = (pattern_cycle(channel) if pattern and not self.aperiodic else
                   b''.join((amplitude if index == channel else 0).to_bytes(3, 'little', signed=True)
                            for index in range(10)))
         processes = []
@@ -131,7 +133,9 @@ class Check:
             # Start/end on digital zero; keep all generated/captured audio in RAM.
             quiet = bytes(30) * (rate // 4)
             size = (rate * duration - 2 * (rate // 4)) * 30
-            payload = (sample * ((size + len(sample) - 1) // len(sample)))[:size]
+            reference = make_sequence(size // 30) if pattern and self.aperiodic else None
+            payload = (interleave_sequence(reference, channel) if reference is not None else
+                       (sample * ((size + len(sample) - 1) // len(sample)))[:size])
             generated.write(quiet + payload + quiet)
             generated.flush()
             generated.seek(0)
@@ -154,7 +158,13 @@ class Check:
                     full_values = [int.from_bytes(audio[index + offset:index + offset + 3], 'little', signed=True)
                                    for index in range(0, len(audio), 36)]
                     values = full_values[rate // 2:rate * duration - rate // 2]
-                    if pattern and offset == 30:
+                    reference_start = None
+                    if pattern and offset == 30 and reference is not None:
+                        try:
+                            reference_start = verify_sequence(reference, values)
+                        except IntegrityError as error:
+                            raise AudioMismatch(f'Channel {channel + 1}: {error}') from error
+                    elif pattern and offset == 30:
                         state = values[0] + TAG
                         if not 1 <= state <= PATTERN_PERIOD:
                             raise AudioMismatch('Invalid first PRBS11 sample.')
@@ -168,7 +178,7 @@ class Check:
                             state = next_pattern(state)
                     if pattern and offset == 33:
                         if min(values) != 0 or max(values) != 0:
-                            raise AudioMismatch('PRBS11 leaked to the other return channel.')
+                            raise AudioMismatch('Integrity signal leaked to the other return channel.')
                     minimum, maximum = min(values), max(values)
                     minimum_frame = rate // 2 + values.index(minimum)
                     maximum_frame = rate // 2 + values.index(maximum)
@@ -179,6 +189,8 @@ class Check:
                                    'maximum_all_channels_zero': not any(audio[maximum_frame * 36:(maximum_frame + 1) * 36]),
                                    'first_nonzero_frame': next((index for index, value in enumerate(full_values) if value), None),
                                    'last_nonzero_frame': next((len(full_values) - 1 - index for index, value in enumerate(reversed(full_values)) if value), None)})
+                    if reference_start is not None:
+                        result[-1]['reference_start_frame'] = reference_start
                 return result
             finally:
                 for process in processes:
@@ -231,13 +243,14 @@ class Check:
 
     def pattern(self, channel, duration=2):
         self.cases += 1
+        label = 'Aperiodic sample integrity' if self.aperiodic else 'PRBS11 sample integrity'
         try:
             result = self.measure(channel, TAG, pattern=True, duration=duration)
-            print(json.dumps({'rate_hz': self.rate, 'case': 'PRBS11 sample integrity',
+            print(json.dumps({'rate_hz': self.rate, 'case': label,
                               'source_channel': channel + 1, 'checked_samples': self.rate * (duration - 1),
                               'return_11_12': result, 'actual_parameters': self.last_parameters}), flush=True)
         except AudioMismatch as error:
-            self.audio_failure(f'PRBS11 channel {channel + 1}', error)
+            self.audio_failure(f'{label} channel {channel + 1}', error)
 
     def channels(self):
         for channel in range(10):
@@ -303,7 +316,8 @@ def main():
     parser.add_argument('--write', action='store_true', help='temporarily change mixers/routes and play isolated quiet tags')
     parser.add_argument('--rates', action='store_true', help='44.1/48/96 kHz; requires --write and restores the original rate')
     parser.add_argument('--keep-going', action='store_true', help='collect sample mismatches; I/O/safety failures still stop immediately')
-    parser.add_argument('--integrity-seconds', type=int, help='only check ten longer PRBS11 streams per rate (2..60 seconds each)')
+    parser.add_argument('--integrity-seconds', type=int, help='only check ten quiet integrity streams per rate (2..60 seconds each)')
+    parser.add_argument('--aperiodic', action='store_true', help='use a unique quiet reference sequence; requires --integrity-seconds')
     parser.add_argument('--period-size', type=int, default=1024, help='requested PCM period frames')
     parser.add_argument('--buffer-size', type=int, default=8192, help='requested PCM buffer frames')
     parser.add_argument('--recovery-dir', type=Path, default=ROOT / 'build/hardware')
@@ -314,9 +328,12 @@ def main():
         parser.error('--keep-going requires --write.')
     if args.integrity_seconds is not None and (not args.write or not 2 <= args.integrity_seconds <= 60):
         parser.error('--integrity-seconds requires --write and a value from 2 to 60.')
+    if args.aperiodic and args.integrity_seconds is None:
+        parser.error('--aperiodic requires --write and --integrity-seconds.')
     if not geometry_valid(args.period_size, args.buffer_size):
         parser.error('Use a 64..32768-frame period and a 128..65536-frame buffer holding at least two whole periods.')
-    check = Check(args.bin_dir, keep_going=args.keep_going, period=args.period_size, buffer=args.buffer_size)
+    check = Check(args.bin_dir, keep_going=args.keep_going, period=args.period_size,
+                  buffer=args.buffer_size, aperiodic=args.aperiodic)
     before = check.json('octa-state')
     original_rate = check.json('octa-status')['sample_rate_hz']
     if not args.write:

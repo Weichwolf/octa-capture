@@ -512,10 +512,24 @@ or missing owned parameter observation fails, even when alsa-utils exits zero.
 --integrity-seconds checks the middle duration-minus-one seconds of each
 PRBS11 stream; its 2047-sample repetition cannot detect a displacement by a
 whole pattern period. This is not an absolute latency or losslessness proof.
+With --aperiodic, each source instead carries a deterministic SHAKE256-derived
+sequence bounded to -1024..1023 PCM counts. A 32-sample prefix must have exactly
+one sample-aligned match in the entire transmitted sequence; every subsequent
+sample in the comparison window must match that same contiguous reference.
+This detects jumps by the old 2047-sample period. It still does not establish
+absolute latency or integrity outside the checked middle window. Offline
+regressions inject missing, duplicated, reordered, zeroed and changed samples,
+ambiguous alignment and over-limit levels; a simulated full capture path also
+checks selected-source packing and rejection of corruption without an XRUN.
 Native Debian 6.12.113 passes all ten sources at 44.1/48/96 kHz with verified
 256/1024-frame period/buffer, and at 48 kHz with verified 128/512 frames.
 Each stream lasts ten seconds; the middle nine seconds are compared, including
 zero on the other return channel. Complete raw state and rate recovery pass.
+The aperiodic test also passes all ten sources at 44.1 kHz with 256/1024 frames.
+Under concurrent CPU load, normal-priority 48 kHz runs fail on a capture overrun
+at 128/512 and a playback underrun at 256/1024. Independent full-state/rate
+recovery passes. Earlier short successes therefore do not establish sustained
+small-buffer stability under load; scheduling and transport causes remain open.
 
 Master bulk fields:
   404..407 input master stereo links, one byte per bus, bit 0
@@ -908,6 +922,10 @@ TxASensStop at 0x10002888a sends one byte to 00 02 01 05: 00 finishes,
 01 cancels (CDlgASens::Stop/Cancel callers). A completion notification at
 00 02 01 05 clears all eight activity flags regardless of its data byte
 (CCplDev::SetEach1 at 0x10000a8e0). Activity is not part of the bulk bank.
+The macOS CCplDev constructor (0x100008afc) initializes these eight cached flags
+to zero; SetBlk (0x100009434) preserves them. Isolated original-code execution
+checks construction and all 256 prior activity masks through bulk decoding.
+These software defaults do not establish pre-connect device inactivity.
 The shared octa-bridge forwards valid selection/completion notifications as
 auto-sense JSON events, preserving inactive and repeated notifications. HTTP
 auto_sense_activity is unknown until observed and is discarded on connection

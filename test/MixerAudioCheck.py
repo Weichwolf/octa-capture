@@ -6,6 +6,7 @@ import copy
 import importlib.util
 import io
 from pathlib import Path
+import struct
 import sys
 import unittest
 from unittest.mock import Mock, patch
@@ -14,6 +15,99 @@ spec = importlib.util.spec_from_file_location(
     'mixer_audio_check', Path(__file__).resolve().parent.parent / 'tools/check-mixer-audio.py')
 check = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check)
+from pcm_integrity import AMPLITUDE, IntegrityError, interleave_sequence, make_sequence, verify_sequence
+
+
+class IntegritySequence(unittest.TestCase):
+    def setUp(self):
+        self.reference = make_sequence(20000)
+        self.samples = list(struct.unpack('<20000h', self.reference))
+
+    def test_delayed_capture_has_one_exact_reference_segment(self):
+        for start in (0, 781, 2047, 7000):
+            with self.subTest(start=start):
+                self.assertEqual(verify_sequence(self.reference, self.samples[start:start + 4096]), start)
+
+    def test_dropped_duplicated_reordered_and_zeroed_blocks_fail(self):
+        original = self.samples[500:500 + 8192]
+        faults = {
+            'one dropped sample': original[:2048] + original[2049:],
+            'one duplicated sample': original[:2048] + original[2047:],
+            '2047-sample forward jump': original[:2048] + original[4095:],
+            '2047-sample backward jump': original[:2048] + original[1:],
+            'reordered USB block': original[:2048] + original[2176:2304] + original[2048:2176] + original[2304:],
+            'zeroed USB block': original[:2048] + [0] * 128 + original[2176:],
+            'single changed sample': original[:2048] + [original[2048] ^ 1] + original[2049:],
+        }
+        for name, values in faults.items():
+            with self.subTest(fault=name), self.assertRaises(IntegrityError):
+                verify_sequence(self.reference, values)
+
+    def test_absent_ambiguous_short_and_out_of_bounds_captures_fail(self):
+        cases = ((self.reference, [0] * 64), (b'\x01\0' * 128, [1] * 64),
+                 (self.reference, self.samples[:31]), (self.reference, [32767] * 64),
+                 (self.reference, self.samples[-64:] + [0]), (b'\0', [0] * 64))
+        for reference, values in cases:
+            with self.subTest(values=values[:3], length=len(values)), self.assertRaises(IntegrityError):
+                verify_sequence(reference, values)
+
+    def test_all_ten_sources_pack_signed_quiet_samples_and_silence_other_sources(self):
+        reference = self.reference[:128]
+        values = self.samples[:64]
+        self.assertLess(min(values), 0)
+        self.assertGreater(max(values), 0)
+        self.assertTrue(all(-AMPLITUDE <= value < AMPLITUDE for value in self.samples))
+        for channel in range(10):
+            payload = interleave_sequence(reference, channel)
+            self.assertEqual(len(payload), 64 * 30)
+            for frame, expected in enumerate(values):
+                decoded = [int.from_bytes(payload[frame * 30 + offset:frame * 30 + offset + 3],
+                                          'little', signed=True) for offset in range(0, 30, 3)]
+                self.assertEqual(decoded, [expected if index == channel else 0 for index in range(10)])
+
+    def test_invalid_lengths_geometry_and_amplitude_cannot_generate_audio(self):
+        for frames in (0, -1, True, 60 * 96000 + 1, 1.5):
+            with self.subTest(frames=frames), self.assertRaises(ValueError):
+                make_sequence(frames)
+        for reference, channel in ((b'', 0), (b'\0', 0), (self.reference, -1), (self.reference, 10),
+                                   (self.reference, True), (struct.pack('<h', 1024), 0),
+                                   (struct.pack('<h', -1025), 0)):
+            with self.subTest(channel=channel, length=len(reference)), self.assertRaises(ValueError):
+                interleave_sequence(reference, channel)
+
+
+class IntegrityCapture(unittest.TestCase):
+    def measure(self, corrupt):
+        device = check.Check(Path('/unused'), aperiodic=True)
+        device.rate = 100
+        sinks = {}
+
+        def process(command, **options):
+            if command[0] == 'arecord':
+                sinks['capture'] = options['stdout']
+            else:
+                payload = options['stdin'].read()
+                audio = bytearray(200 * 36)
+                for frame in range(200):
+                    audio[frame * 36 + 30:frame * 36 + 33] = payload[frame * 30 + 27:frame * 30 + 30]
+                if corrupt:
+                    audio[120 * 36 + 30] ^= 1
+                sinks['capture'].write(audio)
+                sinks['capture'].flush()
+            return Mock(stdout=None, stderr=None, poll=Mock(return_value=0))
+
+        with patch.object(device, 'verify_silence'), patch.object(device, 'observe_streams', return_value={}), \
+                patch.object(check.subprocess, 'Popen', side_effect=process):
+            return device.measure(9, 1024, pattern=True, duration=2)
+
+    def test_full_capture_path_compares_the_selected_source_to_its_unique_reference(self):
+        result = self.measure(False)
+        self.assertEqual(result[0]['reference_start_frame'], 25)
+        self.assertEqual((result[1]['minimum'], result[1]['maximum']), (0, 0))
+
+    def test_corrupted_capture_fails_without_needing_an_xrun(self):
+        with self.assertRaisesRegex(check.AudioMismatch, 'sample/order mismatch'):
+            self.measure(True)
 
 
 class Device:
@@ -128,7 +222,8 @@ class StreamVerification(unittest.TestCase):
 
     def test_invalid_geometry_cannot_open_the_device(self):
         for options in (['--period-size', '0'], ['--period-size', '63'],
-                        ['--buffer-size', '65537'], ['--period-size', '256', '--buffer-size', '7681']):
+                        ['--buffer-size', '65537'], ['--period-size', '256', '--buffer-size', '7681'],
+                        ['--aperiodic'], ['--aperiodic', '--write']):
             with self.subTest(options=options), patch.object(check, 'Check') as device, \
                     patch.object(sys, 'argv', ['check-mixer-audio.py', *options]), redirect_stdout(io.StringIO()), \
                     patch('sys.stderr', new_callable=io.StringIO), self.assertRaises(SystemExit) as result:
