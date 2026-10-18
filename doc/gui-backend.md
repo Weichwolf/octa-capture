@@ -278,7 +278,17 @@ no external content and is available in both the browser and GTK host.
 The signal-flow dialog uses our own SVG drawing of the reference topology
 (Windows bitmap 246 and macOS `PNL_DIAGRAM.bmp` agree). Dialog bodies scroll
 independently of their footers; Chromium and WebKit checks verify visible,
-clickable footer buttons at the desktop host's 978×408 viewport.
+clickable footer buttons at the desktop host's 978×429 viewport.
+
+The connected panel's bottom status bar follows the Windows layout: device
+selection/identification, direct sample-rate selection and actual clock status.
+Its rate selector and Driver Settings share the same busy guard and authoritative
+readback. Native Playwright checks exercise all four footer rates, kernel/DSP
+agreement, PCM meter recovery and full-state restoration. Missing clock status
+displays `UNKNOWN`; this fallback is checked with a browser-only response
+simulation, without changing hardware status. GTK checks verify footer readback
+and pointer access within the fixed window. The device selector remains available
+when disconnected to support reconnection; the original hides its bottom bar.
 
 The original 192 kHz audio-port warning appears once on entering that rate,
 including an initial connection at 192 kHz. Other open dialogs defer it. The

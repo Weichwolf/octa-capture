@@ -46,7 +46,7 @@ class Desktop:
             self.window.present()
             return
         self.window = self.Gtk.ApplicationWindow(application=app, title='OCTA-CAPTURE')
-        self.window.set_default_size(978, 408)
+        self.window.set_default_size(978, 429)
         self.window.set_resizable(False)
         self.window_controls = WindowControls(self.window, self.device.data_dir, self.GLib)
         session = self.WebKit.NetworkSession.new_ephemeral()
@@ -57,7 +57,7 @@ class Desktop:
         if not manager.register_script_message_handler_with_reply('octaWindow', None):
             raise RuntimeError('Could not register the window-control bridge.')
         self.view = self.WebKit.WebView(network_session=session, user_content_manager=manager)
-        self.view.set_size_request(978, 408)
+        self.view.set_size_request(978, 429)
         settings = self.view.get_settings()
         settings.set_enable_developer_extras(False)
         settings.set_javascript_can_open_windows_automatically(False)

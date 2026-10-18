@@ -14,7 +14,6 @@
     <nav class="menubar" aria-label="Control panel menus">
       <button data-menu="driver">Driver</button>
       <button data-menu="device">Device</button>
-      <span id="device-status" title="Current device and clock status">OCTA-CAPTURE</span>
     </nav>
     <header class="panel-header">
       <button id="header-action" class="header-action"><span class="lamp"></span><span>AUTO-SENS</span></button>
@@ -30,6 +29,15 @@
       <div id="connection-message" class="connection-message" role="status">Connecting to OCTA-CAPTURE…</div>
       <div id="busy-message" class="busy-message" role="status" hidden>Applying settings…</div>
     </main>
+    <footer class="device-bar" aria-label="Device and clock status">
+      <button id="device-status"><span class="device-lamp" aria-hidden="true"></span><span id="device-label">OCTA-CAPTURE</span></button>
+      <label class="footer-rate">SAMPLE RATE
+        <select id="footer-rate" data-rate-select aria-label="Current sample rate" disabled>
+          <option value="" disabled>--</option><option value="44100">44.1 kHz</option><option value="48000">48 kHz</option><option value="96000">96 kHz</option><option value="192000">192 kHz</option>
+        </select>
+      </label>
+      <div class="footer-clock"><span>CLOCK</span><output id="footer-clock">--</output></div>
+    </footer>
   </div>
   <div id="menus"></div>
   <div id="toast" role="alert" hidden></div>
@@ -52,7 +60,7 @@
     <h2 id="settings-title">OCTA-CAPTURE Linux Audio Settings</h2>
     <div class="dialog-content settings-fields">
       <label class="settings-device"><select id="settings-device" aria-label="OCTA-CAPTURE device" disabled><option value="">OCTA-CAPTURE</option></select></label>
-      <fieldset><label>SAMPLE RATE: <select id="sample-rate"><option value="44100">44100 Hz</option><option value="48000">48000 Hz</option><option value="96000">96000 Hz</option><option value="192000">192000 Hz</option></select></label><label>CLOCK: <output id="settings-clock">--</output></label></fieldset>
+      <fieldset><label>SAMPLE RATE: <select id="sample-rate" data-rate-select><option value="44100">44100 Hz</option><option value="48000">48000 Hz</option><option value="96000">96000 Hz</option><option value="192000">192000 Hz</option></select></label><label>CLOCK: <output id="settings-clock">--</output></label></fieldset>
       <fieldset><legend>Linux Audio</legend><label>Audio API: <output>ALSA</output></label><label>Hardware format: <output>24-bit PCM</output></label><label>ALSA capture / playback: <output id="settings-channels">--</output></label><p id="settings-capture-note"></p><p>Direct monitoring uses the OCTA-CAPTURE hardware mixer.</p></fieldset>
       <fieldset><legend>Buffer Size and Latency</legend><p>Set the period and buffer size in your audio application or sound server, such as PipeWire or JACK. Sample-rate changes here take effect immediately.</p></fieldset>
     </div>

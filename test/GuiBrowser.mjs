@@ -14,6 +14,7 @@ import {checkControlMatrix} from './GuiControlMatrix.mjs';
 import {checkReverb} from './GuiReverb.mjs';
 import {checkMasterFaders} from './GuiMasterFaders.mjs';
 import {checkInputMonitor} from './GuiInputMonitor.mjs';
+import {checkFooter, checkFooterRates} from './GuiFooter.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -72,6 +73,7 @@ try {
   await browser.blank();
   await browser.call('Page.navigate', {url: launch});
   await until(() => browser.evaluate('document.querySelectorAll(".preamp-strip").length === 8 && document.querySelector("#connection-message").hidden'), 'live preamp view');
+  await checkFooter(browser, api);
   const devices = (await api('/api/devices')).devices;
   assert.equal(devices.filter(device=>device.selected).length, 1, 'Selected card is discovered through sysfs');
   await browser.key('#device-status', 'ContextMenu');
@@ -294,7 +296,7 @@ try {
     await browser.evaluate(`document.querySelector('#${name}').close()`);
   }
   await until(() => browser.evaluate('document.querySelector("#diagram img").complete && document.querySelector("#diagram img").naturalWidth === 945'), 'local signal-flow schematic decoded');
-  await browser.call('Emulation.setDeviceMetricsOverride', {width: 978, height: 408, deviceScaleFactor: 1, mobile: false});
+  await browser.call('Emulation.setDeviceMetricsOverride', {width: 978, height: 429, deviceScaleFactor: 1, mobile: false});
   for (const name of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about', 'readme', 'port-warning']) {
     await browser.evaluate(`document.querySelector('#${name}').showModal()`);
     assert.equal(await browser.evaluate(`(() => {
@@ -353,6 +355,7 @@ try {
   if (write) await checkInputMonitor(browser, api, restoreMixer);
   if (matrix) await checkControlMatrix(browser, api);
   if (rates) await checkRates(browser, api, directory, [44100, 48000, 96000, 192000][payload[2]]);
+  if (rates) await checkFooterRates(browser, api);
   const expectedErrors = reload ? await checkReconnect(browser, api, launch, run) : {consoleErrors: [], httpErrors: []};
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');
   assert.deepEqual(browser.securityErrors, [], 'Content Security Policy violations');

@@ -18,7 +18,7 @@
 - Findings are dated snapshots: recheck tools, permissions, and running builds before relying on them.
 - `tools/setup-native-dev.sh` installs native tools and development permissions after `build/driver-native/snd-octa-capture.ko` is built for the running kernel. It writes `/etc/octa-capture-dev.env` and configures the root helper with that native module path. Never install a WSL module on native Debian.
 - LLVM 19, GNU Binutils, GDB and Ghidra 12.1.2 are available natively. `ghidra.analyzeHeadless` resolves to the user-local installation under `~/.local/opt/ghidra_12.1.2_PUBLIC`; existing projects open read-only. Manufacturer analysis remains under `doc/local/`.
-- Wine GUI observations: `doc/windows-gui-inspection.txt`; screenshots in ignored `doc/local/windows-gui/`. Main preamp/compressor view, Driver menu, and About dialog captured; Direct Mixer remains unobserved because the GUI reports no device.
+- Wine GUI observations: `doc/windows-gui-inspection.txt`; screenshots in ignored `doc/local/windows-gui/`. Disconnected preamp, Driver menu and About captured. A private offline device-interface model also reveals Direct Mixer, Device menu and the connected footer; this does not verify original Windows hardware control.
 
 # Working practices
 

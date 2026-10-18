@@ -1,4 +1,4 @@
-Windows GUI inspection under Wine, 2026-10-17
+Windows GUI inspection under Wine, 2026-10-18
 ============================================
 
 Result
@@ -6,7 +6,8 @@ Result
 The original 64-bit OCTA-CAPTURE Control Panel starts under Wine and draws
 its preamp/compressor interface. It displays "The device could not be found."
 The Driver menu and About dialog are accessible. The Direct Mixer view did
-not open in this disconnected state. No hardware control or audio streaming
+not open in this disconnected state. A separate offline model subsequently
+exposed the connected views described below. No hardware control or audio streaming
 was verified. This is an observation of the unmodified GUI, not a functional
 Windows driver running under Linux.
 
@@ -69,8 +70,37 @@ Stored under doc/local/windows-gui/ and excluded from Git:
 
 These screenshots are visual references, not original project GUI assets.
 Use them to guide our own implementation; do not publish manufacturer
-assets as GPL-licensed project artwork. Direct Mixer and device-dependent
-dialogs still require further observation.
+assets as GPL-licensed project artwork. Further device-dependent dialogs and
+interaction behavior still require observation.
+
+Connected views with an offline model
+------------------------------------
+A private analysis prototype redirects the original executable's device-file,
+IOCTL and device-metadata registry imports to an in-memory model. The executable
+and its resources are unchanged on disk. Wine audio backends are disabled;
+there is no USB forwarding, Windows kernel driver or Linux device control.
+This provides a visual reference, not verified Windows hardware behavior.
+
+The GUI probes \\.\Rdwm1110001 through 004 and corresponding Rdwm1110Ex paths.
+The model accepts only the first ordinary path and supplies synthetic 48 kHz
+metadata, state and notification events. Incomplete IOCTL semantics and the
+zeroed device-state model limit behavioral conclusions. The prototype remains
+under ignored build/wine-reference/ and is not a supported compatibility bridge.
+
+The connected panel measures 978x429 pixels in the Wine X-window capture,
+including the menu and a 21-pixel bottom bar, excluding window-manager decorations.
+The bar contains a device button/lamp, SAMPLE RATE selector and CLOCK display.
+The Direct Mixer view contains INPUT MIXER A and WAVE OUT MIXER A, ten strips
+each, with a master section for output-jack assignment, input/output linking,
+reverb type/return and linked master faders. The Device menu exposes Save/Load
+settings, Open the Patch Bay, Directly Output the Inputs, Initialize and signal
+flow. These observations agree with the previously extracted menus/resources;
+the model does not establish correct effects of their commands.
+
+The connected Direct Mixer capture is stored locally as
+doc/local/windows-gui/direct-mixer-offline-model.png. Only our own HTML/CSS/vector
+artwork is shipped. Native Windows font rendering and full visual parity remain
+unverified.
 
 Windows driver compatibility checks
 -----------------------------------
@@ -82,8 +112,9 @@ Wine 10.0 library directories. This is a concrete blocker to loading the
 original Roland driver in the current Wine environment; an installer
 completing would not demonstrate a working driver.
 
-RDDP1110.EXE imports CreateFileW and DeviceIoControl. Its precise device
-discovery and control interface has not yet been traced. A working Linux
+RDDP1110.EXE imports CreateFileW and DeviceIoControl. Its discovery paths and
+enough of its control interface for the offline display model are traced;
+full device-dependent interaction remains incomplete. A working Linux
 ALSA driver would not automatically provide the Windows driver interface
 expected by the vendor GUI. A dedicated compatibility bridge could be
 investigated separately if running the original GUI becomes a goal.

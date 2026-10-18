@@ -11,7 +11,16 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focu
 .menubar { display: flex; height: 18px; background: #eee; color: #111; align-items: center; }
 .menubar > button { height: 18px; padding: 0 7px; border: 0; background: transparent; color: #111; font-size: 11px; }
 .menubar > button:hover, .menubar > button[aria-expanded=true] { background: #bdd1e7; }
-#device-status { margin-left: auto; padding-right: 6px; color: #555; font-size: 10px; }
+.device-bar { display: flex; height: 21px; align-items: center; gap: 2px; padding: 0 3px; border-top: 2px ridge #aaa; background: #888; color: #ccc; font-size: 9px; font-weight: bold; }
+.device-bar > * { height: 17px; border: 1px solid #aaa; background: #272727; }
+#device-status { display: flex; flex: 0 0 150px; align-items: center; gap: 5px; padding: 0 3px; color: #ccc; font-size: 9px; text-align: left; cursor: pointer; }
+.device-lamp { width: 21px; height: 15px; flex-shrink: 0; border: 1px solid #555; border-radius: 2px; background: linear-gradient(#999,#444); box-shadow: inset 0 0 0 2px #777; }
+.panel:not(.disconnected) .device-lamp { background: radial-gradient(ellipse at 40% 30%,#ffcf83,#e08730 70%); }
+.footer-rate, .footer-clock { display: flex; align-items: center; }
+.footer-rate { gap: 3px; padding-left: 8px; }
+.footer-rate select { width: 85px; min-height: 0; height: 15px; padding: 0 2px; border: 1px solid #555; border-radius: 0; background: #050505; color: #ddd; font: bold 9px Arial,sans-serif; text-align: center; }
+.footer-clock > span { padding: 0 8px; }
+.footer-clock output { min-width: 80px; height: 15px; padding: 1px 5px; background: #050505; color: #ddd; white-space: nowrap; text-align: center; }
 .panel-header { position: relative; display: flex; height: 28px; align-items: center; justify-content: space-between; background: linear-gradient(52deg,#c7c7c7 54%,#555 54.2%); border-block: 1px solid #888; }
 .brand { position: absolute; left: 58.1%; top: 3px; color: #fff; font-size: 18px; letter-spacing: -.6px; font-weight: bold; transform: scale(1.28,.78); transform-origin: left center; }
 .header-action { display: flex; align-items: center; gap: 5px; height: 25px; border: 0; background: transparent; padding: 1px 12px; color: #292929; font-size: 14px; font-weight: bold; }
@@ -163,5 +172,5 @@ dialog select, dialog input[type=number] { min-width: 100px; padding: 2px 4px; f
 .signal-flow img { display: block; width: 100%; height: auto; }
 .signal-flow p { font-size: 11px; color: #555; }
 .readme-content { width: 440px; max-height: 65vh; overflow: auto; line-height: 1.5; }
-@media (max-width: 998px) { body { padding-inline: 0; min-width: 978px; } .panel { margin: 0; } }
+@media (max-width: 998px) { body { padding: 0; min-width: 978px; } .panel { margin: 0; } }
 @media (max-height: 448px) { body { padding-block: 0; } }

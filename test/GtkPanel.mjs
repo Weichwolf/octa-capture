@@ -1,5 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Trusted test body for WebKit.call_async_javascript_function; write is supplied by the checker.
+function checkFooter(documentState, check) {
+  const rate = [44100, 48000, 96000, 192000][parseInt(documentState.state.payload_hex.slice(4, 6), 16)];
+  check(Number(document.querySelector('#footer-rate').value) === rate, 'GTK footer displays the actual device rate');
+  check(document.querySelector('#footer-clock').textContent === document.querySelector('#settings-clock').textContent,
+    'GTK footer and settings display the same clock');
+  for (const selector of ['#device-status', '#footer-rate']) {
+    const node = document.querySelector(selector), box = node.getBoundingClientRect();
+    check(box.top >= 0 && box.bottom <= innerHeight &&
+      node.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)),
+    `GTK footer control is visible and receives pointer input: ${selector}`);
+  }
+}
+
 export async function checkPanel(write) {
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   const until = async (predicate, name) => {
@@ -31,6 +44,7 @@ export async function checkPanel(write) {
   check(panel.left >= 0 && panel.top >= 0 && panel.right <= innerWidth && panel.bottom <= innerHeight,
     `Complete panel fits the GTK viewport: ${JSON.stringify({panel:panel.toJSON(), width:innerWidth, height:innerHeight})}`);
   const documentState = await api('/api/state');
+  checkFooter(documentState, check);
   const initial = documentState.state;
   const mixerChannels = initial.payload_hex.slice(4, 6) === '03' ? 4 : 10;
   if (mixerChannels === 4 && documentState.preferences.show_port_warning) {

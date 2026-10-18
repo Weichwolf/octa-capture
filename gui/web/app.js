@@ -87,9 +87,10 @@ function setConnected(value, message = 'The device could not be found.') {
   $('[data-menu="device"]').hidden = !value;
   $('#device-status').hidden = false;
   $('#device-status').setAttribute('aria-label', value ? 'Identify OCTA-CAPTURE' : 'Select OCTA-CAPTURE');
-  if (!value) $('#device-status').textContent = 'Select OCTA-CAPTURE…';
+  if (!value) $('#device-label').textContent = 'Select OCTA-CAPTURE…';
   if (!value) {
-    $('#sample-rate').disabled = true;
+    for (const select of all('[data-rate-select]')) { select.disabled = true; select.value = ''; }
+    $('#footer-clock').textContent = '--';
     $('#settings-device').disabled = !canSelectDevice() || !$('#settings-device').value;
     if ($('#settings').open) void settingsDevices();
     reverbDelay?.sync(reverbDelay.value, false, true);
@@ -549,14 +550,16 @@ function update(result) {
   }
   $('#mixer-tabs .routing-summary').textContent = `OUTPUT: ${state.output_routes.flatMap((route, pair) => route === bus ? [`${pair * 2 + 1}/${pair * 2 + 2}`] : []).join(' ') || '--'}`;
   const clock = result.status?.clock_source === 'external' ?
-    (result.status.clock_active ? `EXTERNAL (${result.status.sample_rate_hz} Hz)` : 'EXTERNAL (Unlock)') : 'INTERNAL';
-  $('#device-status').textContent = `OCTA-CAPTURE · ${rate ? rate / 1000 : '--'} kHz · ${clock}`;
+    (result.status.clock_active ? `EXTERNAL (${result.status.sample_rate_hz} Hz)` : 'EXTERNAL (Unlock)') :
+    (result.status?.clock_source === 'internal' ? 'INTERNAL' : 'UNKNOWN');
+  $('#device-label').textContent = 'OCTA-CAPTURE';
+  $('#device-status').title = `OCTA-CAPTURE · ${rate ? rate / 1000 : '--'} kHz · ${clock}. Click to identify; right-click or Shift+F10 to select a device.`;
+  $('#footer-clock').textContent = clock;
   $('#settings-clock').textContent = clock;
   $('#settings-channels').textContent = rateIndex === 3 ? '4 in / 4 out' : '12 in / 10 out';
   $('#settings-capture-note').textContent = rateIndex === 3 ? 'At 192 kHz, inputs and outputs 1–4 are available.' :
     'Capture channels 11/12 carry the stereo return from Mixer A.';
-  $('#sample-rate').value = rate;
-  $('#sample-rate').disabled = busy || writing;
+  for (const select of all('[data-rate-select]')) { select.value = rate; select.disabled = busy || writing; }
   $('#settings-device').disabled = !canSelectDevice() || inFlight.has('settings-devices') || !$('#settings-device').value;
   syncDialogs(state, rateIndex);
   panelWarnings.update(rate, result.preferences);
@@ -648,7 +651,7 @@ function setOperationBusy(value) {
   localBusy = value;
   busy = value || Boolean(documentState?.busy);
   $('#busy-message').hidden = !busy;
-  $('#sample-rate').disabled = !connected || busy || writing;
+  for (const select of all('[data-rate-select]')) select.disabled = !connected || busy || writing;
   $('#settings-device').disabled = !canSelectDevice() || inFlight.has('settings-devices') || !$('#settings-device').value;
   if (busy) {
     reverbDelay.sync(reverbDelay.value, false, true);
@@ -849,13 +852,18 @@ function setupDialogs() {
     reverbDelay.sync(reverbDelay.value, false, true);
     reverbTime.sync(reverbTime.value, false, true);
   });
-  $('#sample-rate').addEventListener('change', async () => {
-    const rate = Number($('#sample-rate').value);
-    const current = [44100, 48000, 96000, 192000][parseInt(documentState?.state.payload_hex.slice(4, 6), 16)];
-    if (!canOperate()) { $('#sample-rate').value = current; return; }
-    if (rate !== current) await operation({action: 'sample-rate', rate});
-    if (documentState) $('#sample-rate').value = [44100, 48000, 96000, 192000][parseInt(documentState.state.payload_hex.slice(4, 6), 16)];
-  });
+  for (const select of all('[data-rate-select]')) {
+    select.addEventListener('change', async () => {
+      const rate = Number(select.value);
+      const current = [44100, 48000, 96000, 192000][parseInt(documentState?.state.payload_hex.slice(4, 6), 16)];
+      if (!canOperate()) { select.value = current; return; }
+      if (rate !== current) await operation({action: 'sample-rate', rate});
+      if (documentState) {
+        const actual = [44100, 48000, 96000, 192000][parseInt(documentState.state.payload_hex.slice(4, 6), 16)];
+        for (const control of all('[data-rate-select]')) control.value = actual;
+      }
+    });
+  }
   $('#settings-device').addEventListener('change', event => {
     void selectDevice(event.target.value).then(() => settingsDevices());
   });

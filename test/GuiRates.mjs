@@ -21,7 +21,7 @@ export async function checkRates(browser, api, directory, originalRate) {
       return !document.busy && parseInt(document.state.payload_hex.slice(4, 6), 16) === index &&
         document.status?.sample_rate_hz === rate;
     }, `${rate} Hz bulk and kernel status`, 20000);
-    await until(() => browser.evaluate(`document.querySelector('#device-status').textContent.includes('${rate / 1000} kHz') && document.querySelector('#busy-message').hidden`), 'rate shown in browser');
+    await until(() => browser.evaluate(`Number(document.querySelector('#footer-rate').value) === ${rate} && document.querySelector('#busy-message').hidden`), 'rate shown in the footer');
     assert.equal(await browser.evaluate('document.querySelector("#toast").hidden'), true, 'No rate change error');
     assert.equal(await browser.evaluate('document.querySelector("#settings-channels").textContent'),
       rate === 192000 ? '4 in / 4 out' : '12 in / 10 out');
