@@ -134,6 +134,55 @@ class Interactive(unittest.TestCase):
                 application.stop_auto_sense(body)
         application.bridge.request.assert_not_called()
 
+    def test_calibration_started_while_request_waits_for_operation_lock(self):
+        operations = (
+            ('change', {'kind': 'preamp', 'channel': 0, 'parameter': 'attack', 'value': 0}),
+            ('export_preset', None),
+            ('import_preset', bytes(1639)),
+            ('action', {'action': 'initialize', 'target': 'reverb'}),
+            ('select_device', {'id': 'serial:UNIT'}),
+            ('start_auto_sense', {'channels': 1}),
+        )
+        for method, body in operations:
+            with self.subTest(method=method):
+                application = Application('/missing/bin', '/unused')
+                application.bridge = Mock()
+                checked = threading.Event()
+                errors = []
+                require_available = application._require_no_auto_sense
+
+                def preflight():
+                    require_available()
+                    checked.set()
+
+                def request():
+                    try:
+                        operation = getattr(application, method)
+                        operation() if body is None else operation(body)
+                    except Exception as error:
+                        errors.append(error)
+
+                with patch.object(application, '_require_no_auto_sense', side_effect=preflight), \
+                        patch.object(application, '_sync_selected_device',
+                                     side_effect=AssertionError('Device I/O during calibration')) as sync:
+                    thread = threading.Thread(target=request, daemon=True)
+                    try:
+                        with application._operation:
+                            thread.start()
+                            self.assertTrue(checked.wait(timeout=2), 'Request did not finish its initial guard')
+                            # Auto-Sens starts after the early guard, before this request acquires the lock.
+                            application._auto_job = Mock()
+                            application._auto_job.require_available.side_effect = DeviceError('Auto-Sens is active.')
+                        thread.join(timeout=2)
+                        self.assertFalse(thread.is_alive())
+                        self.assertEqual(len(errors), 1)
+                        self.assertIsInstance(errors[0], DeviceError)
+                        sync.assert_not_called()
+                        application.bridge.close.assert_not_called()
+                        application.bridge.request.assert_not_called()
+                    finally:
+                        thread.join(timeout=2)
+
 
 if __name__ == '__main__':
     unittest.main()

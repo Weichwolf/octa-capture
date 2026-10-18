@@ -108,6 +108,7 @@ class Application:
         self._touch()
         with self._operation:
             self._open()
+            self._require_no_auto_sense()
             self._sync_selected_device()
             self._remember(self.bridge.request(operation, arguments)['state'])
             return self._document()
@@ -220,6 +221,7 @@ class Application:
         self._require_no_auto_sense()
         with self._operation:
             self._open()
+            self._require_no_auto_sense()
             self._sync_selected_device()
             self.bridge.close()
             output = self._run([self.bin_dir / 'octa-preset', 'export', self.port], timeout=15)
@@ -233,6 +235,7 @@ class Application:
         self._require_no_auto_sense()
         with self._operation:
             self._open()
+            self._require_no_auto_sense()
             self._sync_selected_device()
             directory = self._directory()
             uploaded = directory / 'settings.octa'
@@ -275,6 +278,7 @@ class Application:
         self._require_no_auto_sense()
         with self._operation:
             self._open()
+            self._require_no_auto_sense()
             self._sync_selected_device()
             arguments = self._action_arguments(body)
             directory = self._directory()
