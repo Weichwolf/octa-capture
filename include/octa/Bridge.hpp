@@ -2,6 +2,7 @@
 #pragma once
 
 #include "octa/DspControl.hpp"
+#include "octa/InputMonitor.hpp"
 #include "octa/PanelCommand.hpp"
 #include "octa/Preamp.hpp"
 
@@ -19,7 +20,8 @@ struct MeterSwitch {
   bool enabled;
 };
 
-using BridgeCommand = std::variant<StateQuery, MeterSwitch, PreampChange, DspChange, PanelCommand>;
+using BridgeCommand = std::
+    variant<StateQuery, MeterSwitch, PreampChange, DspChange, PanelCommand, InputMonitorChange>;
 
 struct BridgeRequest {
   std::uint32_t serial;

@@ -69,7 +69,8 @@ cmake --install build/release --prefix "$HOME/.local"
 
 [Kernel and Debian/DKMS instructions](kernel/README.md) cover matching headers,
 module activation and packages. `VERSION` controls CMake/CPack versions. The
-runtime package includes both GUI launchers, device tools and a desktop entry.
+runtime package includes both GUI launchers, device tools and an OCTA-CAPTURE
+entry under **Applications → Settings** in Xfce.
 The DKMS package builds only the external module for its supported kernel
 series. [WSL requires the documented USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation)
 on the tested usbipd/VBoxUSB combination.

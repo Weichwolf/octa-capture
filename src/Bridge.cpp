@@ -2,6 +2,7 @@
 #include "octa/Bridge.hpp"
 
 #include "octa/DspControl.hpp"
+#include "octa/InputMonitor.hpp"
 #include "octa/PanelCommand.hpp"
 #include "octa/Preamp.hpp"
 
@@ -97,6 +98,21 @@ std::optional<BridgeCommand> command(std::string_view operation, Values args) {
   }
   if (operation == "identify" && args.empty()) {
     return PanelCommand{.action = PanelAction::identify};
+  }
+  if (operation == "monitor" && args.size() == 4) {
+    constexpr std::uint32_t broadcast = 0x7f;
+    constexpr std::uint32_t maximum_pan = 0x8000;
+    constexpr std::uint32_t maximum_volume = 0x7fffff;
+    if ((args[0] >= 10 && args[0] != broadcast) || args[1] > 1 || args[2] > maximum_pan ||
+        args[3] > maximum_volume) {
+      return std::nullopt;
+    }
+    return InputMonitorChange{.channel = args[0] == broadcast
+                                             ? std::nullopt
+                                             : std::optional(static_cast<std::uint8_t>(args[0])),
+                              .enabled = args[1] != 0,
+                              .pan = static_cast<std::uint16_t>(args[2]),
+                              .volume = args[3]};
   }
   if (operation == "preamp" && args.size() == 3 && bytes(args)) {
     const PreampChange change = {.channel = static_cast<std::uint8_t>(args[0]),

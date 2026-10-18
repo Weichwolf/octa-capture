@@ -87,6 +87,13 @@ def validate_control(body):
         return kind, [channel, parameter, value]
     if kind in ('mixer', 'master'):
         return channel_control(body)
+    if kind == 'monitor':
+        fields(body, ('channel', 'enabled', 'pan', 'volume'))
+        if type(body['enabled']) is not bool:
+            raise InvalidControl('Expected a boolean monitor state.')
+        channel = 127 if body['channel'] is None else integer(body['channel'], 0, 9)
+        return kind, [channel, int(body['enabled']), integer(body['pan'], 0, 0x8000),
+                      integer(body['volume'], 0, 0x7fffff)]
     if kind == 'reverb':
         fields(body, ('parameter', 'bank', 'value'))
         parameter = choice(body['parameter'], {'type': 0, 'pre-delay': 1, 'time': 2})
@@ -277,7 +284,7 @@ class Bridge:
         return response
 
     def request(self, operation, arguments=()):
-        if operation not in ('state', 'meters', 'preamp', 'mixer', 'master', 'reverb', 'route', 'display', 'identify'):
+        if operation not in ('state', 'meters', 'preamp', 'mixer', 'master', 'reverb', 'route', 'display', 'identify', 'monitor'):
             raise InvalidControl('Unsupported backend operation.')
         if any(type(value) is not int or not 0 <= value <= 0xffffffff for value in arguments):
             raise InvalidControl('Invalid backend argument.')

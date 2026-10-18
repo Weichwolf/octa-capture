@@ -13,6 +13,7 @@ import {checkReconnect} from './GuiReconnect.mjs';
 import {checkControlMatrix} from './GuiControlMatrix.mjs';
 import {checkReverb} from './GuiReverb.mjs';
 import {checkMasterFaders} from './GuiMasterFaders.mjs';
+import {checkInputMonitor} from './GuiInputMonitor.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -349,6 +350,7 @@ try {
     console.log('PASS browser Auto-Sens start/finish/cancel, verified notifications and recovery');
   }
   if (write) await checkReverb(browser, api);
+  if (write) await checkInputMonitor(browser, api, restoreMixer);
   if (matrix) await checkControlMatrix(browser, api);
   if (rates) await checkRates(browser, api, directory, [44100, 48000, 96000, 192000][payload[2]]);
   if (reload) await checkReconnect(browser, api, launch, run);

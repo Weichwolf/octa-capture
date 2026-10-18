@@ -28,6 +28,10 @@ class Controls(unittest.TestCase):
             ({'kind': 'route', 'pair': 4, 'selection': 8}, ('route', [4, 8])),
             ({'kind': 'display', 'bus': 3}, ('display', [3])),
             ({'kind': 'identify'}, ('identify', [])),
+            ({'kind': 'monitor', 'channel': 9, 'enabled': False, 'pan': 32768, 'volume': 8388607},
+             ('monitor', [9, 0, 32768, 8388607])),
+            ({'kind': 'monitor', 'channel': None, 'enabled': True, 'pan': 0, 'volume': 0},
+             ('monitor', [127, 1, 0, 0])),
         ]
         for body, expected in examples:
             self.assertEqual(validate_control(body), expected)
@@ -61,6 +65,14 @@ class Controls(unittest.TestCase):
             with self.subTest(body=body), self.assertRaises(InvalidControl):
                 validate_control(body)
 
+    def test_monitor_bounds_reject_coercions_unknown_fields_and_unmapped_inputs(self):
+        original = {'kind': 'monitor', 'channel': 0, 'enabled': True, 'pan': 0, 'volume': 0}
+        for changes in ({'channel': True}, {'channel': -1}, {'channel': 10}, {'channel': 127},
+                        {'enabled': 1}, {'enabled': 'true'}, {'pan': True}, {'pan': -1}, {'pan': 32769},
+                        {'volume': -1}, {'volume': 8388608}, {'volume': 1.0}, {'extra': 0}):
+            with self.subTest(changes=changes), self.assertRaises(InvalidControl):
+                validate_control({**original, **changes})
+
 
 class Transport(unittest.TestCase):
     def bridge(self, mode='normal'):
@@ -76,6 +88,12 @@ class Transport(unittest.TestCase):
         peer.close()
         self.assertIsNone(peer.meters())
         self.assertEqual(peer.request('state')['state']['operation'], 'state')
+
+    def test_monitor_change_reaches_the_serialized_transport(self):
+        peer = self.bridge()
+        state = peer.change({'kind': 'monitor', 'channel': None, 'enabled': True,
+                             'pan': 16384, 'volume': 2097152})
+        self.assertEqual(state, {'operation': 'monitor', 'values': [127, 1, 16384, 2097152]})
 
     def test_concurrent_requests_do_not_cross_replies(self):
         peer = self.bridge()

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/Bridge.hpp"
 #include "octa/DspControl.hpp"
+#include "octa/InputMonitor.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
 #include "octa/PanelCommand.hpp"
@@ -92,6 +93,8 @@ std::expected<octa::Message, octa::MidiError> execute(octa::MidiSession &session
           return session.write_dsp(change, notification);
         } else if constexpr (std::is_same_v<Change, octa::PanelCommand>) {
           return session.panel_command(change, notification);
+        } else if constexpr (std::is_same_v<Change, octa::InputMonitorChange>) {
+          return session.write_input_monitor(change, notification);
         } else {
           return std::unexpected(octa::MidiError{.code = -EINVAL, .operation = "bridge command"});
         }

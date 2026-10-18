@@ -30,11 +30,36 @@ indices/coefficients. No filenames, shell commands or arbitrary SysEx are accept
 | `route PAIR SELECTION` | Physical output pair routing |
 | `display BUS` | Select device LCD mixer A=0 through D=3; B–D unavailable at 192 kHz |
 | `identify` | Send the original device identification/blink command |
+| `monitor CHANNEL ENABLED PAN VOLUME` | Composite input mute/pan/volume; channel 0..9 or 127 for all ten stored inputs, enabled 0/1, pan 0..32768, volume 0..8388607 |
 
 The C++ parser applies the same validated selectors/bounds as the existing
 control APIs before any command write. It rejects extra fields, signed/fractional
 values, integer overflow, non-ASCII digits and oversized input. The Python side
 also rejects unknown JSON fields and booleans masquerading as integer values.
+
+The monitor command uses one firmware DT1, independently of audio streaming.
+It first reads the current bulk state and computes the entire expected reply,
+including linked mute/volume changes while retaining the peer's pan. Success
+requires exact complete raw readback. At 192 kHz an individual selector is limited
+to 0..3; broadcast still updates all ten stored inputs. Reference-only inputs
+10/11 have no mapped mixer state and are rejected before any write.
+The equivalent authenticated HTTP control is:
+
+```json
+{"kind":"monitor","channel":0,"enabled":true,"pan":16384,"volume":2097152}
+```
+
+`channel: null` selects all ten stored inputs. These are native Linux control
+semantics; no Windows ASIO settings are shown. The actual browser write suite
+checks that external monitor changes appear in the GUI's fader, pan and mute
+controls. The isolated hardware checker uses a private full-state recovery file:
+
+```bash
+pasuspender -- python3 tools/check-input-monitor.py --write --rates --links
+```
+
+Close the panel first. Outputs are verified silent before each fixture; the test
+does not toggle phantom/Hi-Z and restores the original rate and complete raw state.
 
 Output is newline-delimited JSON:
 

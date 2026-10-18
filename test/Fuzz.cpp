@@ -68,6 +68,45 @@ std::uint32_t nibble_value(std::span<const std::uint8_t> bytes) {
   return value;
 }
 
+void input_monitor_target(std::span<const std::uint8_t> bytes, octa::InputMonitorChange change) {
+  octa::Message before = {.command = octa::Command::data,
+                          .address = octa::bulk_address,
+                          .payload = std::vector<std::uint8_t>(octa::bulk_size)};
+  const auto count = std::min(before.payload.size(), bytes.size());
+  std::ranges::transform(bytes.first(count), before.payload.begin(), [](auto byte) {
+    constexpr std::uint8_t nibble_mask = 15;
+    return static_cast<std::uint8_t>(byte & nibble_mask);
+  });
+  before.payload[2] &= 3;
+  const auto target = octa::input_monitor_target(before, change);
+  const auto frame = octa::encode_input_monitor(change);
+  const unsigned int active = before.payload[2] == 3 ? 4 : 10;
+  require(target.has_value() == (frame && (!change.channel || *change.channel < active)));
+  if (!target) { return; }
+  require(target->command == before.command && target->address == before.address &&
+          target->payload.size() == before.payload.size());
+  const auto prior = octa::decode_dsp(before);
+  const auto after = octa::decode_dsp(*target);
+  require(prior && after);
+  if (!prior || !after) { return; }
+  auto expected = *prior;
+  for (std::size_t channel = 0; channel < 10; ++channel) {
+    const bool addressed = !change.channel || channel == *change.channel;
+    const bool peer = change.channel && prior->mixers[0].input.pairs[*change.channel / 2].linked &&
+                      channel == (*change.channel ^ 1U);
+    auto &input = expected.mixers[0].input.channels[channel];
+    if (addressed) { input.pan = change.pan; }
+    if (addressed || peer) {
+      input.mute = !change.enabled;
+      input.volume = change.volume;
+    }
+  }
+  require(*after == expected);
+  constexpr std::size_t first_input_controls = 0x74;
+  require(std::ranges::equal(std::span(before.payload).first(first_input_controls),
+                             std::span(target->payload).first(first_input_controls)));
+}
+
 void input_monitor(std::span<const std::uint8_t> bytes) {
   constexpr std::size_t required = 8;
   if (bytes.size() < required) { return; }
@@ -79,8 +118,10 @@ void input_monitor(std::span<const std::uint8_t> bytes) {
   const std::optional<std::uint8_t> channel =
       (bytes[1] & 2U) != 0 ? std::nullopt : std::optional(bytes[0]);
   constexpr std::uint32_t maximum_volume = 0x7fffff;
-  const auto frame = octa::encode_input_monitor(
-      {.channel = channel, .enabled = (bytes[1] & 1U) != 0, .pan = pan, .volume = volume});
+  const octa::InputMonitorChange change = {
+      .channel = channel, .enabled = (bytes[1] & 1U) != 0, .pan = pan, .volume = volume};
+  input_monitor_target(bytes, change);
+  const auto frame = octa::encode_input_monitor(change);
   require(frame.has_value() ==
           ((!channel || *channel < 12) && pan <= 0x8000 && volume <= maximum_volume));
   if (!frame) { return; }

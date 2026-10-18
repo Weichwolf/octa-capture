@@ -337,7 +337,13 @@ The four active preamps at 192 kHz and Hi-Z on inputs 1/2 at both 48 and
 rate and complete bulk state were independently restored afterward.
 Every legal index on input 1, including both Hi-Z values, passed 367 independent
 writes/readbacks at each of 48 and 192 kHz, with other preamps unchanged.
-This verifies these controls, not audio streaming or physical DSP response.
+Native Debian at 48 kHz additionally passes every legal safe index on all eight
+inputs: 2,924 writes/readbacks including both Hi-Z values on inputs 1/2. Every
+write compares the complete decoded state and all 1146 raw bytes against the
+expected single-field change. Phantom power is not toggled; physical outputs
+remain on a verified-silent mixer. The original full state and clock are
+independently restored afterward. These are control/isolation checks, not
+calibrated analog gain or physical compressor response.
 
 Compressor stereo linking (owner's manual p.45) copies the left channel's
 compressor enable, gate, attack, release, threshold, ratio and gain to the
@@ -348,9 +354,11 @@ passed all four link enable/disable cycles and 160 scalar cases covering
 four pairs, two link states, both directions and ten safe parameters.
 tools/check-preamp-links.py --write reproduces these checks and compares
 all 1146 raw bytes after each change, then restores the exact original state.
-Strict and release binaries passed. Phantom/Hi-Z changes are excluded and
-the fixture requires those switches off. Physical compressor response,
-power-switch behavior and native Debian still require hardware checks.
+Strict and release binaries passed on WSL. The same four cycles and 160
+coupling cases also pass on native Debian at 48 kHz with the strict build and
+exact full-state restoration. Phantom/Hi-Z changes are excluded and the
+fixture requires those switches off. Physical compressor response and
+power-switch behavior still require hardware checks.
 
 Direct mixer bulk layout and updates
 -----------------------------------
@@ -390,8 +398,8 @@ bulk reply to observe coupled device changes. The reference fader's CVrTbl::m_vr
 CCtrlLevelBase::SetRange at 0x10002151a uses control positions 0..1024.
 This implementation uses raw coefficients rather than copying that table.
 
-Windows direct-monitor composite command (offline reference evidence)
--------------------------------------------------------------------
+Windows direct-monitor composite command
+---------------------------------------
 The x64 RDAS1110.DLL IASIO vtable points future() to 0x1800080b0. With its
 host preference enabled, selector 3 forwards the monitor request through
 0x180005860 and IOCTL 0x222144; selector 9 reports availability. The DLL
@@ -407,7 +415,7 @@ is mute (state==0), four pan nibbles and six volume nibbles. Pan comes from
 the high 16 bits of the host's 31-bit pan value, with 7FFF mapped to 8000;
 volume is the host's 31-bit gain shifted right eight bits. The suggested
 output is not used by this path, so it does not select a patchbay output.
-These are original sender semantics, not verified device-side effects.
+These fields are independent of patchbay output selection.
 
 encode_input_monitor() implements this bounded codec without device I/O.
 tools/verify-input-monitor.py compares 910 C++ frames against the original
@@ -415,8 +423,23 @@ kernel builder and executes 2,080 ASIO requests through the original DLL,
 device dispatcher and encoder using synthetic initialized contexts and a
 nonidentity logical-input map. Only the final MIDI send, DeviceIoControl
 and IRP completion are replaced with memory-only stubs. It also checks
-disabled monitoring and IOCTL failure. No new live monitoring API is exposed;
-actual effects, broadcast behavior and inputs 10/11 remain hardware-unverified.
+disabled monitoring and IOCTL failure. This reference execution uses no hardware.
+
+Native Debian device checks establish that the command updates Mixer A input
+mute, pan and volume. A linked input copies mute/volume to its peer but preserves
+the peer's pan; the mono flag does not change this behavior. Broadcast updates
+all ten stored inputs, including inactive inputs 4..9 at 192 kHz. Individual
+selectors are limited to active inputs 0..9, or 0..3 at 192 kHz. Inputs 10/11
+remain unmapped and are rejected by the live API before any write.
+
+MidiSession::write_input_monitor() reads the full state, predicts these changes
+and requires an exact full raw reply after the single composite DT1. The typed
+bridge/HTTP path passes 304 hardware cases covering both states, individual and
+broadcast selectors, all four rates and every link/mono combination. Independent
+readback and complete raw/rate recovery pass. Playwright also verifies actual
+fader, pan and mute display after browser-originated requests. These are control
+checks, not signal-response or DAW-integration verification. See the function
+inventory for an unreproduced raw snapshot restoration failure during stress.
 
 The same DLL exposes one current ASIO clock source named Device through
 0x180007310; 0x180007550 accepts only selector 0. CPU execution verifies

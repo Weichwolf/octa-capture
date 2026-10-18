@@ -4,6 +4,7 @@
 #include "octa/AutoSense.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Initialization.hpp"
+#include "octa/InputMonitor.hpp"
 #include "octa/Meters.hpp"
 #include "octa/PanelCommand.hpp"
 #include "octa/Preamp.hpp"
@@ -64,6 +65,11 @@ public:
   write_preamp(PreampChange change, const MessageListener &listener = {});
   [[nodiscard]] std::expected<Message, MidiError> write_dsp(const DspChange &change,
                                                             const MessageListener &listener = {});
+
+  // Composite write with full-state readback, including peer coupling. Rejects
+  // individual inactive/unmapped inputs before transmitting the update.
+  [[nodiscard]] std::expected<Message, MidiError>
+  write_input_monitor(InputMonitorChange change, const MessageListener &listener = {});
 
   // Sends Store/Load Memory and queries current state. The reply does not prove
   // persistent storage or completion of a load; callers must verify separately.

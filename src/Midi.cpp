@@ -5,6 +5,7 @@
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Initialization.hpp"
+#include "octa/InputMonitor.hpp"
 #include "octa/Meters.hpp"
 #include "octa/PanelCommand.hpp"
 #include "octa/Preamp.hpp"
@@ -471,6 +472,25 @@ std::expected<Message, MidiError> MidiSession::write_dsp(const DspChange &change
   const auto matches = matches_dsp_change(*state, change);
   if (!matches || !*matches) {
     return std::unexpected(MidiError{.code = -EIO, .operation = "DSP readback"});
+  }
+  return reply;
+}
+
+std::expected<Message, MidiError>
+MidiSession::write_input_monitor(InputMonitorChange change, const MessageListener &listener) {
+  const auto frame = encode_input_monitor(change);
+  constexpr std::uint8_t stored_channels = 10;
+  if (!frame || (change.channel && *change.channel >= stored_channels)) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "monitor value"});
+  }
+  const auto before = read_bulk_state(listener);
+  if (!before) { return before; }
+  const auto target = input_monitor_target(*before, change);
+  if (!target) { return std::unexpected(MidiError{.code = -EINVAL, .operation = "monitor input"}); }
+  auto reply = query(*frame, listener);
+  if (!reply) { return reply; }
+  if (*reply != *target) {
+    return std::unexpected(MidiError{.code = -EIO, .operation = "monitor full-state readback"});
   }
   return reply;
 }

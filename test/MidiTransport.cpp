@@ -4,6 +4,7 @@
 #include "octa/DirectOut.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Initialization.hpp"
+#include "octa/InputMonitor.hpp"
 #include "octa/Meters.hpp"
 #include "octa/Midi.hpp"
 #include "octa/PanelCommand.hpp"
@@ -400,6 +401,61 @@ bool session_writes() {
                      wrong_preamp.error().code == -EIO && !invalid &&
                      invalid.error().code == -EINVAL && before == io.writes && io.opens == 1,
                  "typed writes validate before transmission and verify readback on one connection");
+}
+
+enum class MonitorScenario : std::uint8_t {
+  success,
+  unrelated_change,
+  highest_rate,
+  inactive_input,
+  unmapped_input
+};
+
+bool input_monitor_session(MonitorScenario scenario) {
+  io = {};
+  auto before = octa::decode(bulk_frame());
+  if (!before) { return false; }
+  const bool highest =
+      scenario == MonitorScenario::highest_rate || scenario == MonitorScenario::inactive_input;
+  before->payload[2] = highest ? 3 : 0;
+  std::uint8_t channel = 0;
+  if (scenario == MonitorScenario::inactive_input) {
+    channel = 4;
+  } else if (scenario == MonitorScenario::unmapped_input) {
+    channel = 10;
+  }
+  const octa::InputMonitorChange change = {
+      .channel = channel, .enabled = false, .pan = 1, .volume = 1};
+  const auto original = octa::encode(before->command, before->address, before->payload);
+  const auto target = octa::input_monitor_target(*before, change);
+  if (!original) { return false; }
+  io.replies = {*original};
+  if (target) {
+    auto response = *target;
+    constexpr std::size_t unrelated = 0x442;
+    if (scenario == MonitorScenario::unrelated_change) { response.payload[unrelated] = 1; }
+    const auto encoded = octa::encode(response.command, response.address, response.payload);
+    if (!encoded) { return false; }
+    io.replies.push_back(*encoded);
+  }
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  const auto result = session->write_input_monitor(change);
+  if (scenario == MonitorScenario::unmapped_input) {
+    return require(!result && result.error().code == -EINVAL && io.writes == 0,
+                   "unmapped monitor input rejected before any MIDI transmission");
+  }
+  if (scenario == MonitorScenario::inactive_input) {
+    const auto request = octa::request(octa::bulk_address, octa::bulk_size);
+    return require(!result && result.error().code == -EINVAL && request && io.outgoing == *request,
+                   "inactive monitor input may query state but cannot transmit a change");
+  }
+  if (scenario == MonitorScenario::unrelated_change) {
+    return require(!result && result.error().code == -EIO,
+                   "monitor success requires the entire predicted raw state");
+  }
+  return require(result && target && *result == *target,
+                 "monitor request verifies its complete reply");
 }
 
 bool auto_sense_session() {
@@ -1524,7 +1580,12 @@ int main() {
       input_failure(true) && write_failures() && deadlines() && open_failure() &&
       auto_sense_session() && auto_sense_cleanup() && auto_sense_failures(true) &&
       auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&
-      session_queries() && session_stale_fragment() && session_writes() && memory_operations() &&
+      session_queries() && session_stale_fragment() && session_writes() &&
+      input_monitor_session(MonitorScenario::success) &&
+      input_monitor_session(MonitorScenario::highest_rate) &&
+      input_monitor_session(MonitorScenario::unrelated_change) &&
+      input_monitor_session(MonitorScenario::inactive_input) &&
+      input_monitor_session(MonitorScenario::unmapped_input) && memory_operations() &&
       memory_rejection() && memory_partial_failure() && preset_transfer() && preset_rejection() &&
       malformed_preset_bulk() && preset_192_metadata_readback() && preset_readback_failure() &&
       preset_partial_failure() && session_uncertain() && session_receive_bounds() &&
