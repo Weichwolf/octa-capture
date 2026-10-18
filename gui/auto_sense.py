@@ -10,6 +10,10 @@ import threading
 
 from .backend import DeviceError, InvalidControl
 
+MAX_CALIBRATION_SECONDS = 60
+# Snapshot, start send/acknowledgement, stop send/acknowledgement, result query.
+PROCESS_TIMEOUT_SECONDS = MAX_CALIBRATION_SECONDS + 6 * 3
+
 
 class ObservedAutoSense:
     """Track observed device activity without claiming a pre-calibration backup."""
@@ -139,7 +143,7 @@ class AutoSenseJob:
         reader.start()
         try:
             try:
-                self._process.wait(timeout=75)
+                self._process.wait(timeout=PROCESS_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:
                 self.request('cancel')
                 # The child needs time to close CTRL, reopen and verify rollback.

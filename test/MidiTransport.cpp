@@ -65,6 +65,10 @@ struct FakeIo {
   bool require_auto_completion = false;
   bool reject_observed_stop = false;
   std::size_t auto_completion_end = 0;
+  std::size_t auto_start_end = 0;
+  unsigned int auto_start_read_delay_us = 0;
+  std::chrono::steady_clock::time_point auto_start_confirmed_at;
+  std::chrono::steady_clock::time_point auto_stop_sent_at;
   unsigned int route_commands = 0;
   unsigned int fail_route = 0;
   unsigned int interrupt_route = 0;
@@ -685,13 +689,18 @@ enum class AutoSenseScenario : std::uint8_t {
   interruption,
   interactive_finish,
   interactive_missing_completion,
-  interactive_interruption
+  interactive_interruption,
+  delayed_start,
+  delayed_interactive_finish,
+  delayed_interruption
 };
 
 bool auto_sense_should_fail(octa::AutoSenseAction action, AutoSenseScenario scenario) {
   switch (scenario) {
     case AutoSenseScenario::success:
     case AutoSenseScenario::linked_success:
+    case AutoSenseScenario::delayed_start:
+    case AutoSenseScenario::delayed_interactive_finish:
     case AutoSenseScenario::interactive_finish: return false;
     case AutoSenseScenario::unselected_peer:
     case AutoSenseScenario::unrelated_result: return action == octa::AutoSenseAction::finish;
@@ -702,6 +711,7 @@ bool auto_sense_should_fail(octa::AutoSenseAction action, AutoSenseScenario scen
     case AutoSenseScenario::interruption:
     case AutoSenseScenario::interactive_missing_completion:
     case AutoSenseScenario::interactive_interruption:
+    case AutoSenseScenario::delayed_interruption:
     default: return true;
   }
 }
@@ -721,6 +731,7 @@ std::vector<std::uint8_t> auto_sense_baseline(AutoSenseScenario scenario) {
 
 bool interactive_auto_sense(AutoSenseScenario scenario) {
   return scenario == AutoSenseScenario::interactive_finish ||
+         scenario == AutoSenseScenario::delayed_interactive_finish ||
          scenario == AutoSenseScenario::interactive_missing_completion ||
          scenario == AutoSenseScenario::interactive_interruption;
 }
@@ -747,6 +758,8 @@ bool prepare_auto_sense(octa::AutoSenseAction action,
       (scenario == AutoSenseScenario::success || scenario == AutoSenseScenario::linked_success ||
        scenario == AutoSenseScenario::unrelated_result ||
        scenario == AutoSenseScenario::unselected_peer ||
+       scenario == AutoSenseScenario::delayed_start ||
+       scenario == AutoSenseScenario::delayed_interactive_finish ||
        scenario == AutoSenseScenario::interactive_finish);
   io.replies = {baseline, changed_reply ? *changed : baseline, baseline};
   if (scenario != AutoSenseScenario::missing_start) { io.auto_start_reply = *start; }
@@ -761,11 +774,19 @@ bool prepare_auto_sense(octa::AutoSenseAction action,
     io.auto_start_reply = *malformed;
   }
   io.auto_fail_stop = scenario == AutoSenseScenario::partial_stop;
-  io.auto_signal = scenario == AutoSenseScenario::interruption ? SIGTERM : 0;
-  io.require_auto_completion = scenario == AutoSenseScenario::interruption ||
-                               scenario == AutoSenseScenario::interactive_interruption;
+  const bool interrupted = scenario == AutoSenseScenario::interruption ||
+                           scenario == AutoSenseScenario::delayed_interruption;
+  io.auto_signal = interrupted ? SIGTERM : 0;
+  io.require_auto_completion =
+      interrupted || scenario == AutoSenseScenario::interactive_interruption;
   if (interactive_auto_sense(scenario)) {
     io.auto_signal = scenario == AutoSenseScenario::interactive_interruption ? SIGTERM : SIGUSR1;
+  }
+  constexpr unsigned int delayed_start_us = 10000;
+  if (scenario == AutoSenseScenario::delayed_start ||
+      scenario == AutoSenseScenario::delayed_interactive_finish ||
+      scenario == AutoSenseScenario::delayed_interruption) {
+    io.auto_start_read_delay_us = delayed_start_us;
   }
   return true;
 }
@@ -799,6 +820,7 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
   int expected_status = failed ? 1 : 0;
   constexpr int interrupted_status = 130;
   if (scenario == AutoSenseScenario::interruption ||
+      scenario == AutoSenseScenario::delayed_interruption ||
       scenario == AutoSenseScenario::interactive_interruption) {
     expected_status = interrupted_status;
   }
@@ -809,16 +831,21 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
       io.outgoing.size() >= expected_tail.size() &&
       std::ranges::equal(std::span(io.outgoing).last(expected_tail.size()), expected_tail);
   const bool cancelled = scenario == AutoSenseScenario::interruption ||
+                         scenario == AutoSenseScenario::delayed_interruption ||
                          scenario == AutoSenseScenario::interactive_interruption;
   const unsigned int connections = failed && !cancelled ? 2U : 1U;
   const bool recovery_verified =
       !failed || errors.str().contains("Original raw state restored and verified.");
   const bool removed_file = unlink(path.c_str()) == 0;
   const bool removed_directory = rmdir(directory.data()) == 0;
+  const bool held_after_start =
+      scenario != AutoSenseScenario::delayed_start ||
+      (io.auto_start_confirmed_at != std::chrono::steady_clock::time_point{} &&
+       io.auto_stop_sent_at - io.auto_start_confirmed_at >= request.duration);
   const bool passed =
       require(status == expected_status && saved && io.opens == connections &&
                   io.closes == connections * 2 && (!recovered || raw_tail) && recovery_verified &&
-                  removed_file && removed_directory && bounded,
+                  removed_file && removed_directory && bounded && held_after_start,
               "Auto-Sens workflow snapshots, completion, bounded result changes and raw recovery");
   if (!passed) {
     std::cerr << "Auto-Sens action=" << static_cast<unsigned int>(action)
@@ -827,7 +854,7 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
               << " opens=" << io.opens << " closes=" << io.closes
               << " expected_connections=" << connections << " raw_tail=" << raw_tail
               << " recovery_verified=" << recovery_verified << " bounded=" << bounded
-              << "\nCaptured diagnostics:\n"
+              << " held_after_start=" << held_after_start << "\nCaptured diagnostics:\n"
               << errors.str();
   }
   return passed;
@@ -1498,10 +1525,14 @@ int handle_fake_route(const octa::Message &message) {
 int handle_fake_auto_sense(const octa::Message &message) {
   if (message.address == octa::Address{0, 2, 1, 4}) {
     append_bytes(io.incoming, io.auto_start_reply);
+    io.auto_start_end = io.incoming.size();
     if (io.auto_fail_stop) { io.fail_write = io.writes + 2; }
     if (io.auto_signal != 0 && kill(getpid(), io.auto_signal) != 0) { return -errno; }
   }
   if (message.address == octa::Address{0, 2, 1, 5}) {
+    if (io.auto_stop_sent_at == std::chrono::steady_clock::time_point{}) {
+      io.auto_stop_sent_at = std::chrono::steady_clock::now();
+    }
     if (io.reject_observed_stop) { return -EIO; }
     if (io.require_auto_completion) {
       io.auto_stop_pending = io.auto_stop_reply;
@@ -1569,10 +1600,18 @@ extern "C" ssize_t snd_rawmidi_read(snd_rawmidi_t * /*rmidi*/, void *buffer, std
   }
   if (io.oversized_read) { return static_cast<ssize_t>(size + 1); }
   if (io.position == io.incoming.size()) { return -EAGAIN; }
+  if (io.auto_start_end != 0 && io.position < io.auto_start_end &&
+      io.auto_start_read_delay_us != 0) {
+    const auto delay = std::exchange(io.auto_start_read_delay_us, 0U);
+    if (usleep(delay) != 0) { return -errno; }
+  }
   const auto count = std::min({size, io.read_size, io.incoming.size() - io.position});
   std::ranges::copy(std::span(io.incoming).subspan(io.position, count),
                     static_cast<std::uint8_t *>(buffer));
   io.position += count;
+  if (io.auto_start_end != 0 && io.position == io.auto_start_end) {
+    io.auto_start_confirmed_at = std::chrono::steady_clock::now();
+  }
   return static_cast<ssize_t>(count);
 }
 
@@ -1651,6 +1690,30 @@ int observed_cases() {
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;
 }
 
+int auto_sense_workflow_cases(octa::AutoSenseAction action) {
+  bool passed = true;
+  for (const auto scenario : {AutoSenseScenario::success,
+                              AutoSenseScenario::linked_success,
+                              AutoSenseScenario::unselected_peer,
+                              AutoSenseScenario::malformed,
+                              AutoSenseScenario::missing_start,
+                              AutoSenseScenario::missing_completion,
+                              AutoSenseScenario::unrelated_result,
+                              AutoSenseScenario::partial_stop,
+                              AutoSenseScenario::interruption,
+                              AutoSenseScenario::interactive_finish,
+                              AutoSenseScenario::interactive_missing_completion,
+                              AutoSenseScenario::interactive_interruption,
+                              AutoSenseScenario::delayed_start,
+                              AutoSenseScenario::delayed_interactive_finish,
+                              AutoSenseScenario::delayed_interruption}) {
+    passed = auto_sense_workflow(action, scenario) && passed;
+  }
+  const int read_closed = close(wake_pipe.front());
+  const int write_closed = close(wake_pipe.back());
+  return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;
+}
+
 int transport_cases() {
   bool memory_cli_passed = true;
   for (const auto action : {octa::MemoryAction::store, octa::MemoryAction::load}) {
@@ -1659,24 +1722,6 @@ int transport_cases() {
     memory_cli_passed = memory_cli_case(action, 0, true) && memory_cli_passed;
     memory_cli_passed = memory_cli_case(action, SIGINT, false) && memory_cli_passed;
     memory_cli_passed = memory_cli_case(action, SIGTERM, false) && memory_cli_passed;
-  }
-  bool auto_sense_workflow_passed = true;
-  for (const auto action : {octa::AutoSenseAction::finish, octa::AutoSenseAction::cancel}) {
-    for (const auto scenario : {AutoSenseScenario::success,
-                                AutoSenseScenario::linked_success,
-                                AutoSenseScenario::unselected_peer,
-                                AutoSenseScenario::malformed,
-                                AutoSenseScenario::missing_start,
-                                AutoSenseScenario::missing_completion,
-                                AutoSenseScenario::unrelated_result,
-                                AutoSenseScenario::partial_stop,
-                                AutoSenseScenario::interruption,
-                                AutoSenseScenario::interactive_finish,
-                                AutoSenseScenario::interactive_missing_completion,
-                                AutoSenseScenario::interactive_interruption}) {
-      auto_sense_workflow_passed =
-          auto_sense_workflow(action, scenario) && auto_sense_workflow_passed;
-    }
   }
   bool routing_passed = true;
   for (const auto preset :
@@ -1715,11 +1760,10 @@ int transport_cases() {
   }
   const bool passed =
       initialization_passed && direct_out_passed && routing_passed && memory_cli_passed &&
-      auto_sense_workflow_passed && successful_stream() && input_failure(false) &&
-      input_failure(true) && write_failures() && deadlines() && open_failure() &&
-      auto_sense_session() && auto_sense_cleanup() && auto_sense_failures(true) &&
-      auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&
-      session_queries() && session_stale_fragment() && session_writes() &&
+      successful_stream() && input_failure(false) && input_failure(true) && write_failures() &&
+      deadlines() && open_failure() && auto_sense_session() && auto_sense_cleanup() &&
+      auto_sense_failures(true) && auto_sense_failures(false) && auto_sense_rejection() &&
+      session_buffering() && session_queries() && session_stale_fragment() && session_writes() &&
       input_monitor_session(MonitorScenario::success) &&
       input_monitor_session(MonitorScenario::highest_rate) &&
       input_monitor_session(MonitorScenario::unrelated_change) &&
@@ -1737,9 +1781,19 @@ int transport_cases() {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 1 && (argc != 2 || std::string_view(argv[1]) != "--observed-auto-sense")) {
+  if (argc != 1 && (argc != 2 || (std::string_view(argv[1]) != "--observed-auto-sense" &&
+                                  std::string_view(argv[1]) != "--auto-sense-finish" &&
+                                  std::string_view(argv[1]) != "--auto-sense-cancel"))) {
     return 2;
   }
   if (pipe(wake_pipe.data()) != 0) { return 1; }
-  return argc == 2 ? observed_cases() : transport_cases();
+  if (argc == 1) { return transport_cases(); }
+  const std::string_view mode(argv[1]);
+  if (mode == "--auto-sense-finish") {
+    return auto_sense_workflow_cases(octa::AutoSenseAction::finish);
+  }
+  if (mode == "--auto-sense-cancel") {
+    return auto_sense_workflow_cases(octa::AutoSenseAction::cancel);
+  }
+  return observed_cases();
 }

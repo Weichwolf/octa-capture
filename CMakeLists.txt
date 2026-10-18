@@ -220,9 +220,11 @@ add_test(NAME midi COMMAND midi_test)
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
+add_test(NAME midi-auto-sense-finish COMMAND midi_transport_test --auto-sense-finish)
+add_test(NAME midi-auto-sense-cancel COMMAND midi_transport_test --auto-sense-cancel)
 add_test(NAME midi-observed-auto-sense COMMAND midi_transport_test --observed-auto-sense)
 set_tests_properties(midi-observed-auto-sense PROPERTIES TIMEOUT 20)
-set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli panel-command input-monitor panel-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-devices gui-preferences gui-warnings gui-graphs gui-install dkms-build gui-parameters gui-meters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport PROPERTIES TIMEOUT 20
+set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli panel-command input-monitor panel-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-devices gui-preferences gui-warnings gui-graphs gui-install dkms-build gui-parameters gui-meters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport midi-auto-sense-finish midi-auto-sense-cancel PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp"

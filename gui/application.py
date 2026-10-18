@@ -13,7 +13,7 @@ import threading
 import time
 
 from .backend import Bridge, DeviceError, InvalidControl, integer, validate_control
-from .auto_sense import AutoSenseJob, ObservedAutoSense
+from .auto_sense import AutoSenseJob, MAX_CALIBRATION_SECONDS, ObservedAutoSense
 from .devices import discover
 from .preferences import Preferences
 
@@ -350,7 +350,8 @@ class Application:
                 self._open()
                 self._observed_auto.reset()
                 job = AutoSenseJob([self.bin_dir / 'octa-auto-sense', '--interactive', channels,
-                                    60000, 'finish', directory / 'recovery.syx', self.port], directory, channels)
+                                    MAX_CALIBRATION_SECONDS * 1000, 'finish', directory / 'recovery.syx', self.port],
+                                   directory, channels)
                 self._auto_job = job
                 self._set_transaction(True)
                 self._auto_thread = threading.Thread(target=self._run_auto_sense, args=(job,),

@@ -155,6 +155,10 @@ cancelled on disconnect, shutdown or client inactivity. Audio continues separate
 Auto-Sens runs in an exclusive background C++ process. Its prepared notification
 acknowledges installed signal handlers before the server sends finish/cancel;
 its running notification requires actual selected-channel device activity.
+Start confirmation has a separate three-second deadline; the calibration limit
+begins after that activity. The child watchdog allows 60 seconds plus six
+bounded device stages (78 seconds), then requests cancellation and waits for
+recovery. Early Finish still waits for confirmed activity.
 SIGUSR1 finishes early, while SIGINT/SIGTERM cancel with recovery. Completion
 still requires device notifications and verified state bounds. A cancellation is
 reported as successful only when the CLI confirms unchanged state or verified

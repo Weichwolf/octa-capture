@@ -2,6 +2,7 @@
 """Exercise interactive process readiness, finish/cancel and recovery reporting."""
 
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import threading
@@ -180,6 +181,31 @@ class Interactive(unittest.TestCase):
 
     def test_early_finish_waits_for_installed_handlers(self):
         self.check_job('normal', 'finish', 'completed', early=True)
+
+    def test_process_watchdog_cancels_and_waits_for_verified_recovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job = AutoSenseJob([sys.executable, Path(__file__).with_name('AutoSensePeer.py'), 'normal'],
+                               Path(directory), 1)
+            actual_wait = job._process.wait
+            timed_out = False
+
+            def timeout_once(timeout):
+                nonlocal timed_out
+                if not timed_out:
+                    timed_out = True
+                    raise subprocess.TimeoutExpired('AutoSensePeer', timeout)
+                return actual_wait(timeout=timeout)
+
+            try:
+                with patch.object(job._process, 'wait', side_effect=timeout_once):
+                    job.run()
+                self.assertEqual(job.document()['state'], 'cancelled')
+                self.assertFalse(job.document()['active'])
+                self.assertEqual(job._process.returncode, 130)
+            finally:
+                if job._process.poll() is None:
+                    job.request('cancel')
+                    actual_wait(timeout=5)
 
     def test_cancel_does_not_claim_failed_recovery_succeeded(self):
         self.check_job('recovery-error', 'cancel', 'failed')

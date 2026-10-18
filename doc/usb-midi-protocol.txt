@@ -990,7 +990,11 @@ octa-auto-sense MASK DURATION_MS finish|cancel NEW-RECOVERY.syx [hw:CTRL-port]
 accepts decimal masks 1..255 and durations 1..60000 ms. It saves a validated,
 private full raw snapshot before starting, waits for activity on a selected
 input, sends finish/cancel and requires a notification clearing activity.
-Completion has a three-second deadline. Missing/malformed notifications,
+Start confirmation has its own three-second deadline. The requested calibration
+duration begins after selected-input activity is observed; it is not the budget
+for receiving the start message. Early interactive Finish waits for that activity;
+Cancel remains available while waiting. Completion also has a three-second
+deadline. Missing/malformed notifications,
 unrelated result changes and signals trigger cancellation plus raw recovery
 on a fresh CTRL connection. Finish accepts only bounded sensitivity changes
 only on selected inputs; compressor stereo linking does not expand this
@@ -998,6 +1002,13 @@ selection. Cancel restores the complete
 snapshot. octa-preset restore-auto RECOVERY.syx [hw:CTRL-port] explicitly
 sends cancel before manual raw recovery. Forced termination/disconnection
 can prevent cleanup; retain and check the recovery file.
+Offline regressions delay the first start-message read by ten milliseconds,
+including early Finish and interruption, while preserving one-byte reads and
+snapshot/result/recovery checks. The noninteractive delay case also requires
+the stop to follow the fully received start by at least the requested duration.
+Native 48 kHz/input-1 checks pass both actions with a requested one-ms duration,
+and Playwright passes actual start/finish/cancel with full raw/rate recovery.
+These checks do not measure physical gain calibration or absolute timing.
 
 On the attached WSL device at 48 kHz, short input-1 finish/cancel runs
 received activity/completion notifications and passed complete result-state

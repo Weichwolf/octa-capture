@@ -275,6 +275,10 @@ struct AutoSenseProgress {
   bool interactive = false;
 };
 
+enum class AutoSenseWait : std::uint8_t { start, calibration, completion };
+
+constexpr auto auto_sense_notification_timeout = std::chrono::seconds(3);
+
 std::expected<void, MidiError> update_auto_sense(AutoSenseProgress &progress,
                                                  const Message &message) {
   if (message.command != Command::data || message.address[0] != 0 || message.address[1] != 2 ||
@@ -306,14 +310,18 @@ std::expected<void, MidiError> update_auto_sense(AutoSenseProgress &progress,
 std::expected<void, MidiError> wait_auto_sense(MidiSession &session,
                                                AutoSenseProgress &progress,
                                                Clock::time_point deadline,
-                                               bool allow_finish = false,
+                                               AutoSenseWait phase,
                                                bool allow_interrupt = true) {
   constexpr auto poll_interval = std::chrono::milliseconds(50);
-  while (Clock::now() < deadline && !progress.completed) {
+  while (Clock::now() < deadline && !progress.completed &&
+         (phase != AutoSenseWait::start || !progress.started)) {
     if (allow_interrupt && interrupted != 0) {
       return std::unexpected(MidiError{.code = -EINTR, .operation = "Auto-Sens interrupted"});
     }
-    if (allow_finish && finish_requested != 0 && progress.started) { return {}; }
+    if (phase == AutoSenseWait::calibration && progress.interactive && finish_requested != 0 &&
+        progress.started) {
+      return {};
+    }
     const auto until = deadline - Clock::now();
     auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(until);
     if (remaining < until) { ++remaining; }
@@ -327,6 +335,19 @@ std::expected<void, MidiError> wait_auto_sense(MidiSession &session,
     if (!updated) { return updated; }
   }
   return {};
+}
+
+std::expected<void, MidiError> observe_auto_sense(MidiSession &session,
+                                                  AutoSenseProgress &progress,
+                                                  std::chrono::milliseconds duration) {
+  const auto started = wait_auto_sense(
+      session, progress, Clock::now() + auto_sense_notification_timeout, AutoSenseWait::start);
+  if (!started) { return started; }
+  if (!progress.started) {
+    return std::unexpected(
+        MidiError{.code = -ETIMEDOUT, .operation = "Auto-Sens start notification"});
+  }
+  return wait_auto_sense(session, progress, Clock::now() + duration, AutoSenseWait::calibration);
 }
 
 std::expected<void, MidiError>
@@ -362,21 +383,18 @@ attempt_auto_sense(AutoSenseOptions request, ApplyState &state, AutoSenseProgres
   state.write_attempted = true;
   const auto started = session->start_auto_sense(request.channels);
   if (!started) { return std::unexpected(started.error()); }
-  const auto observed =
-      wait_auto_sense(*session, progress, Clock::now() + request.duration, request.interactive);
+  const auto observed = observe_auto_sense(*session, progress, request.duration);
   const bool cancelled = !observed && observed.error().code == -EINTR;
   if (!observed && !cancelled) { return std::unexpected(observed.error()); }
-  if (!progress.started && !cancelled) {
-    return std::unexpected(
-        MidiError{.code = -ETIMEDOUT, .operation = "Auto-Sens start notification"});
-  }
   if (cancelled) { request.action = AutoSenseAction::cancel; }
   const auto stopped = session->stop_auto_sense(request.action);
   if (!stopped) { return std::unexpected(stopped.error()); }
-  constexpr auto completion_timeout = std::chrono::seconds(3);
   // Keep CTRL ownership until cancellation is acknowledged before restoring raw state.
-  const auto completed =
-      wait_auto_sense(*session, progress, Clock::now() + completion_timeout, false, !cancelled);
+  const auto completed = wait_auto_sense(*session,
+                                         progress,
+                                         Clock::now() + auto_sense_notification_timeout,
+                                         AutoSenseWait::completion,
+                                         !cancelled);
   if (!completed) { return std::unexpected(completed.error()); }
   if (!progress.completed) {
     return std::unexpected(
