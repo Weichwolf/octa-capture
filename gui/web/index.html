@@ -44,15 +44,16 @@
   <input id="load-file" type="file" accept=".octa" hidden>
   <dialog id="patchbay" aria-labelledby="patchbay-title">
     <h2 id="patchbay-title">PATCH BAY</h2>
+    <div class="patchbay-presets"><span>Preset :</span><button data-action="multi-monitor">Multi-Monitor</button><button data-action="routing-default">Initial Setting</button></div>
     <div class="dialog-content" id="patchbay-content"></div>
-    <footer><button data-action="routing-default">Initial Setting</button><button data-action="multi-monitor">Multi-Monitor</button><button data-close>Close</button></footer>
+    <footer><button data-close>Close</button></footer>
   </dialog>
   <dialog id="reverb" aria-labelledby="reverb-title">
     <h2 id="reverb-title">REVERB</h2>
     <div class="dialog-content reverb-fields">
       <label>TYPE: <select id="reverb-type"></select></label>
-      <label>PRE DELAY [ms]: <span class="reference-stepper" id="reverb-delay-stepper"><input id="reverb-delay" type="text" readonly aria-label="Reverb pre-delay"><button type="button" data-step="1" aria-label="Increase reverb pre-delay">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb pre-delay">▾</button></span></label>
-      <label>TIME [sec]: <span class="reference-stepper" id="reverb-time-stepper"><input id="reverb-time" type="text" readonly aria-label="Reverb time"><button type="button" data-step="1" aria-label="Increase reverb time">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb time">▾</button></span></label>
+      <label>PRE DELAY [ms] : <span class="reference-stepper" id="reverb-delay-stepper"><input id="reverb-delay" type="text" readonly aria-label="Reverb pre-delay"><button type="button" data-step="1" aria-label="Increase reverb pre-delay">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb pre-delay">▾</button></span></label>
+      <label>TIME [sec] : <span class="reference-stepper" id="reverb-time-stepper"><input id="reverb-time" type="text" readonly aria-label="Reverb time"><button type="button" data-step="1" aria-label="Increase reverb time">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb time">▾</button></span></label>
     </div>
     <footer><button data-action="reverb-default">Initial Setting</button><button data-close>Close</button></footer>
   </dialog>

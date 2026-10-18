@@ -318,6 +318,8 @@ also inspect actual rendered pixels.
 
 Reverb pre-delay/time use read-only text and clamped arrow controls, matching
 Windows edit style `0x50800882` and both original 0..12/0..49 index ranges.
+Patch Bay's top preset row and compact output selectors, and Reverb's compact
+controls follow Windows dialog resources 178/188 and the offline Wine captures.
 All 13 pre-delay strings and 50 time displays agree with both binaries. Keyboard,
 pointer, endpoint bounds and all four effect-bank writes/readbacks are checked in
 the actual browser. Offline checks verify autorepeat cancellation on release,

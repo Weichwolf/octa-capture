@@ -39,7 +39,7 @@ const pending = new Map(), queued = new Map();
 const faderPreviews = new Map();
 const REVERB_TYPES = ['OFF', 'ECHO', 'ROOM', 'SMALL HALL', 'LARGE HALL'];
 let reverbDelay, reverbTime;
-const ROUTES = ['Direct Mix A', 'Direct Mix B', 'Direct Mix C', 'Direct Mix D',
+const ROUTES = ['DIRECT MIX A', 'DIRECT MIX B', 'DIRECT MIX C', 'DIRECT MIX D',
   'WAVE OUT 1-2', 'WAVE OUT 3-4', 'WAVE OUT 5-6', 'WAVE OUT 7-8', 'WAVE OUT 9-10'];
 const VOLUME_PRESETS = [0x7fffff, 0x3fd930, 0x200000, 0x1009b9, 0x809bc,
   0x4074f, 0x204e1, 0x1030d, 0x81d5, 0];
@@ -822,7 +822,7 @@ function setupDialogs() {
   reverbDelay = new ReferenceStepper($('#reverb-delay-stepper'), 12, preDelayText, 'ms', reverbChange('pre-delay'));
   reverbTime = new ReferenceStepper($('#reverb-time-stepper'), 49, reverbTimeText, 'seconds', reverbChange('time'));
   for (let pair = 0; pair < 5; pair++) {
-    const label = el('label', '', `OUTPUT ${pair * 2 + 1}-${pair * 2 + 2}:`);
+    const label = el('label', '', `OUTPUT ${pair * 2 + 1}-${pair * 2 + 2} :`);
     const select = el('select'); select.dataset.pair = pair;
     for (const [index, name] of ROUTES.entries()) { const option = el('option', '', name); option.value = index; select.append(option); }
     select.addEventListener('change', () => queueChange({kind: 'route', pair, selection: Number(select.value)}));

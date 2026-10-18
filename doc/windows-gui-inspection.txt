@@ -97,10 +97,16 @@ settings, Open the Patch Bay, Directly Output the Inputs, Initialize and signal
 flow. These observations agree with the previously extracted menus/resources;
 the model does not establish correct effects of their commands.
 
-The connected Direct Mixer capture is stored locally as
-doc/local/windows-gui/direct-mixer-offline-model.png. Only our own HTML/CSS/vector
-artwork is shipped. Native Windows font rendering and full visual parity remain
-unverified.
+Patch Bay and Reverb also open against the model. Their client areas measure
+227x189 and 195x135 pixels, matching dialog resources 178 (151x126 dialog units)
+and 188 (130x90). Patch Bay has a top Preset row with Multi-Monitor and Initial
+Setting, five output selectors and a bottom Close button. Reverb has a type
+selector, compact read-only pre-delay/time spinners and two bottom buttons.
+
+Connected captures are stored under doc/local/windows-gui/ as
+direct-mixer-offline-model.png, patchbay-offline-model.png and
+reverb-offline-model.png. Only our own HTML/CSS/vector artwork is shipped.
+Native Windows font rendering and full visual parity remain unverified.
 
 Windows driver compatibility checks
 -----------------------------------
