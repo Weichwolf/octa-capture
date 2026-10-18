@@ -231,6 +231,11 @@ try {
   assert.equal(await browser.evaluate('document.querySelector("#readme").open'), true);
   assert.equal(await browser.evaluate('document.querySelectorAll("#readme a, #readme script, #readme iframe").length'), 0);
   await browser.click('#readme [data-close]');
+  await browser.click('[data-menu="driver"]');
+  await browser.click('#menus button:first-of-type');
+  await until(() => browser.evaluate(`JSON.stringify([...document.querySelector('#settings-device').options].map(option=>option.value)) === ${JSON.stringify(JSON.stringify(devices.map(device=>device.id)))}`), 'settings device selector uses discovered identities');
+  assert.equal(await browser.evaluate('document.querySelector("#settings-device").value'), devices.find(device=>device.selected).id);
+  await browser.click('#settings [data-close]');
   // Dialog inspection is read-only. Dangerous power/memory controls are never clicked.
   for (const name of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about']) {
     await browser.evaluate(`document.querySelector('#${name}').showModal()`);

@@ -88,6 +88,8 @@ function setConnected(value, message = 'The device could not be found.') {
   if (!value) $('#device-status').textContent = 'Select OCTA-CAPTURE…';
   if (!value) {
     $('#sample-rate').disabled = true;
+    $('#settings-device').disabled = !canSelectDevice() || !$('#settings-device').value;
+    if ($('#settings').open) void settingsDevices();
     reverbDelay?.sync(reverbDelay.value, false, true);
     reverbTime?.sync(reverbTime.value, false, true);
   }
@@ -527,6 +529,7 @@ function update(result) {
   $('#settings-clock').textContent = clock;
   $('#sample-rate').value = rate;
   $('#sample-rate').disabled = busy || writing;
+  $('#settings-device').disabled = !canSelectDevice() || inFlight.has('settings-devices') || !$('#settings-device').value;
   syncDialogs(state, rateIndex);
   panelWarnings.update(rate, result.preferences);
   if (result.meters) updateMeters(result.meters);
@@ -592,6 +595,7 @@ function showDialog(name) {
   if (name === 'patchbay' && documentState?.state.payload_hex.slice(4, 6) === '03') return;
   const dialog = $(`#${name}`);
   if (!dialog.open) dialog.showModal();
+  if (name === 'settings') void settingsDevices();
 }
 
 function confirmation(message) {
@@ -611,11 +615,13 @@ function confirmation(message) {
 }
 
 function canOperate() { return connected && !busy && !writing; }
+function canSelectDevice() { return !(connected && busy) && !localBusy && !writing && pending.size === 0; }
 function setOperationBusy(value) {
   localBusy = value;
   busy = value || Boolean(documentState?.busy);
   $('#busy-message').hidden = !busy;
   $('#sample-rate').disabled = !connected || busy || writing;
+  $('#settings-device').disabled = !canSelectDevice() || inFlight.has('settings-devices') || !$('#settings-device').value;
   if (busy) {
     reverbDelay.sync(reverbDelay.value, false, true);
     reverbTime.sync(reverbTime.value, false, true);
@@ -805,6 +811,9 @@ function setupDialogs() {
     if (documentState) $('#sample-rate').value = [44100, 48000, 96000, 192000][parseInt(documentState.state.payload_hex.slice(4, 6), 16)];
   });
   $('#cancel-settings').addEventListener('click', () => { void refresh(); });
+  $('#settings-device').addEventListener('change', event => {
+    void selectDevice(event.target.value).then(() => settingsDevices());
+  });
   $('#settings').addEventListener('cancel', event => { event.preventDefault(); void refresh(); });
   for (const button of all('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
   for (const button of all('[data-action]')) {
@@ -897,7 +906,7 @@ async function deviceMenu(event) {
   try {
     const result = await api('/api/devices');
     const items = result.devices.map(device => ({label: device.name, checked: device.selected,
-      disabled: (connected && busy) || localBusy || writing || pending.size > 0,
+      disabled: !canSelectDevice(),
       run: () => { void selectDevice(device.id); }}));
     if (!items.length) items.push({label: 'The device could not be found.', disabled: true});
     openMenu(items, rect.left, rect.bottom);
@@ -906,12 +915,31 @@ async function deviceMenu(event) {
 }
 
 async function selectDevice(id) {
-  if ((connected && busy) || localBusy || writing || pending.size) return;
+  if (!canSelectDevice()) return;
   setOperationBusy(true); revision++;
   closeMenus();
   try { bus = 0; update(await api('/api/device', {id})); }
   catch (error) { notify(error.message); }
   finally { setOperationBusy(false); void refresh(); }
+}
+
+async function settingsDevices() {
+  if (!enter('settings-devices')) return;
+  const select = $('#settings-device');
+  select.disabled = true;
+  try {
+    const result = await api('/api/devices');
+    const options = result.devices.map(device => {
+      const option = el('option', '', device.name);
+      option.value = device.id; option.selected = device.selected;
+      return option;
+    });
+    select.replaceChildren(...options);
+    const selected = result.devices.find(device => device.selected);
+    select.value = selected?.id || '';
+    select.disabled = !canSelectDevice() || !options.length;
+  } catch (error) { notify(error.message); }
+  finally { leave('settings-devices'); }
 }
 
 async function refresh() {

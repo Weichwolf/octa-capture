@@ -145,6 +145,8 @@ dialog select, dialog input[type=number] { min-width: 100px; padding: 2px 4px; f
 .reference-stepper button { min-width: 0; padding: 0; border: 0; border-left: 1px solid #999; border-radius: 0; font: 9px/9px Arial,sans-serif; }
 .reference-stepper button:first-of-type { border-bottom: 1px solid #aaa; }
 .settings-fields { width: 340px; }
+.settings-fields .settings-device { margin: 0; }
+.settings-device select { width: 100%; }
 .settings-fields fieldset { margin: 8px 0; border: 1px solid #aaa; }
 .settings-fields p { font-size: 11px; color: #555; line-height: 1.4; }
 .settings-fields label { justify-content: flex-start; }

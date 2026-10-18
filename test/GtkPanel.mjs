@@ -62,6 +62,13 @@ export async function checkPanel(write) {
   [...document.querySelectorAll('#menus button')].find(node=>node.textContent === 'Show README').click();
   check(document.querySelector('#readme').open, 'Local README menu opened');
   document.querySelector('#readme [data-close]').click();
+  document.querySelector('[data-menu="driver"]').click();
+  [...document.querySelectorAll('#menus button')].find(node=>node.textContent.startsWith('Driver Settings')).click();
+  const discovered = (await api('/api/devices')).devices;
+  await until(() => document.querySelector('#settings-device').value === discovered.find(device=>device.selected).id,
+    'GTK settings device selector');
+  check(document.querySelector('#settings-device').options.length === discovered.length, 'GTK discovered device options');
+  document.querySelector('#settings [data-close]').click();
   for (const id of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about', 'readme', 'port-warning']) {
     const dialog = document.querySelector(`#${id}`);
     dialog.showModal(); check(dialog.open, `${id} opened`);

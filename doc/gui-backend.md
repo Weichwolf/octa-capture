@@ -211,6 +211,8 @@ Cancel/Escape keep Driver Settings open and reset staged host fields; Close ends
 the dialog. Linux audio applications own their buffers, so the Windows host-policy
 Apply/Default buttons stay disabled. No inactive slider silently controls another
 application's buffer.
+The Driver Settings unit selector uses the same discovered, serial-bound device
+identities as the panel selector; it is unavailable during pending device writes.
 
 `--reload-module` uses the already provisioned `sudo -n octa-capture-dev` helper
 at `/usr/local/sbin/octa-capture-dev` to unload and reinstall this module. It
