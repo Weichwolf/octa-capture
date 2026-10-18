@@ -48,6 +48,23 @@ Transport capture channels 11/12 are preserved for diagnostics; the original
 Direct Mixer displays only the first ten. Preamp OUT uses the first eight and
 is visible when that channel's compressor is enabled.
 
+At 44.1/48/96 kHz, capture 11/12 carries Mixer A's digital stereo return
+(also documented in the device manual). `tools/check-mixer-audio.py --write
+--rates --keep-going` checks ten playback sources, five linear pan positions,
+signed samples, mute/solo precedence, strip/master gain and PRBS11 sample order.
+It first routes every physical output to verified-silent Mixer B, keeps test and
+capture samples in RAM, and restores the original rate and complete raw state.
+A durable private recovery frame is written before changing settings. At
+192 kHz this return is unavailable; the checker refuses its write test there.
+Digital return checks do not establish analog or compressor response.
+
+The tested WSL USB/IP path has produced intermittent zero samples and a PRBS
+sequence jump inside otherwise correct digital returns, even without an ALSA
+XRUN. Successful timed transfers and quiet soak checks therefore do not establish
+audio integrity. The checker reports these comparisons as failures; its
+`--keep-going` option only collects sample mismatches, never suppresses I/O,
+output-isolation or restoration failures. Native Debian comparison remains.
+
 ```bash
 ./build/strict/octa-pcm-meters --read  # passive snapshot
 ./build/strict/octa-pcm-meters 2       # enable, observe, disable after two seconds
