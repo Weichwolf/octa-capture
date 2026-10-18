@@ -49,6 +49,7 @@ export async function checkMasterFaders(browser, api, restore) {
       };
       await browser.page.route('**/api/control', route);
       const start = browser.controls.length;
+      let target;
       try {
         const selector = `[aria-label="${names[settings.origin]}"]`;
         for (let step = 1; step <= 3; step++) {
@@ -61,22 +62,35 @@ export async function checkMasterFaders(browser, api, restore) {
           assert.equal(new Set(settings.peers.map(index => actual[index].text)).size, 1,
             'linked numeric readouts move together');
         }
+        const box = await browser.page.locator(selector).boundingBox();
+        const thumb = 32, travel = box.height - thumb;
+        const y = position => box.y + box.height - thumb / 2 - position / 1024 * travel;
+        await browser.page.mouse.move(box.x + box.width / 2, y(base + 3));
+        await browser.page.mouse.down();
+        try { await browser.page.mouse.move(box.x + box.width / 2, y(base + 100), {steps: 4}); }
+        finally { await browser.page.mouse.up(); }
+        await browser.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve())));
+        const dragged = await displayed();
+        target = dragged[settings.origin].position;
+        assert(target > base + 3 && target < base + 200, 'actual pointer drag changes the native range');
+        assert.deepEqual(dragged.map(value => value.position), names.map((_, index) =>
+          settings.peers.includes(index) ? target : base), 'pointer-dragged peers move before any reply');
         // State polls still report the old hardware value while this request is held.
         await new Promise(resolve => setTimeout(resolve, 1100));
         assert.deepEqual(volumes(await read()), Array(4).fill(VOLUME[base]));
         assert.deepEqual((await displayed()).map(value => value.position), names.map((_, index) =>
-          settings.peers.includes(index) ? base + 3 : base), 'polling cannot overwrite the pending preview');
+          settings.peers.includes(index) ? target : base), 'polling cannot overwrite the pending preview');
       } finally {
         release();
         if (!first) await resumed;
         await browser.page.unroute('**/api/control', route);
       }
-      const expected = names.map((_, index) => VOLUME[settings.peers.includes(index) ? base + 3 : base]);
+      const expected = names.map((_, index) => VOLUME[settings.peers.includes(index) ? target : base]);
       await until(async () => JSON.stringify(volumes(await read())) === JSON.stringify(expected), 'latest queued master value reaches hardware');
       await until(() => browser.controls.slice(start).filter(change => change.httpStatus === 200).length === 2,
         'first and coalesced latest master writes acknowledged');
       assert.equal(browser.controls.length - start, 2, 'peer movement sends no redundant control requests');
     }
   } finally { await restore(); }
-  console.log('PASS Playwright master faders: immediate linked thumbs/readouts, delayed replies, poll stability, latest queued value and hardware coupling');
+  console.log('PASS Playwright master faders: keyboard/pointer input, immediate linked thumbs/readouts, delayed replies, poll stability, latest queued value and hardware coupling');
 }
