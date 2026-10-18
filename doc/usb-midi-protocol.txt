@@ -515,7 +515,17 @@ Master volume address: 00 group ((bus<<4)|LR) 01; group=08 input,
 Input/output master link: 00 08 (bus<<4) 0D, one boolean byte.
 Reverb return: 00 08 00 07, six nibbles.
 Reference: CCplDevDMix::SetBlk at 0x1000095d4 and
-CCplDevDMixMaster2::Set at 0x100009a28.
+CCplDevMst2::Set at 0x100009a28.
+
+The unnamed bit 0 at 442+bus corresponds to a one-byte DT1 at
+00 08 (bus<<4) 0E. Windows RDWM1110.SYS command 0x29 in 0x140006550
+updates its cached flag and sends this frame. macOS CCplDev::SetEach1
+(0x10000a8e0) receives it, normalizes a nonzero value to true and reports
+master event mask 0x80000. Its bulk decoder reads only bit 0; MakeExBulk
+updates bit 0 while preserving the other bits. tools/verify-master-flag.py
+executes eight original Windows-to-macOS sender/receiver cases and 512
+bulk roundtrips entirely offline. No feature meaning or corresponding GUI
+control is established, and no live setter or device-side claim is exposed.
 
 Mixer switches and master coupling
 ----------------------------------
