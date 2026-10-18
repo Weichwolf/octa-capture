@@ -912,6 +912,13 @@ The shared octa-bridge forwards valid selection/completion notifications as
 auto-sense JSON events, preserving inactive and repeated notifications. HTTP
 auto_sense_activity is unknown until observed and is discarded on connection
 loss; its observation age does not imply a periodic notification cadence.
+Native 48 kHz reconnect checks consumed the start notification before opening
+a fresh bridge: four subsequent bulk reads still reported unknown activity.
+A well-formed RQ1 for two bytes at 00 02 01 04 returned no activity reply
+before, during or after that calibration. Cancel was acknowledged and the
+complete pre-start state/rate restored independently. This does not establish
+that the address supports reads; do not infer inactivity from a missing reply
+or temporary sensitivity values. Pre-connect activity remains unresolved.
 src/AutoSense.cpp implements these bounded codecs and atomic activity
 updates. Offline fixtures check the wire bytes, all 255 nonempty channel
 masks, reserved flag bits, repeated updates and rejection without mutation.
