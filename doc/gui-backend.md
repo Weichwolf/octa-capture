@@ -69,6 +69,10 @@ Exact Host/Origin checks, no CORS, a local-only CSP and fixed asset paths restri
 browser access. Requests have bounded headers, bodies, connection lifetimes and
 concurrency; duplicate JSON fields, non-finite numbers and unknown controls fail
 before device writes. A regular browser keeps its normal sandbox enabled.
+Input reception has a five-second absolute deadline and a cumulative 16 KiB cap;
+slow partial headers/bodies cannot renew it. Completed headers are limited to
+8 KiB and bodies to 4 KiB. A fully received request can still await its bounded
+device operation without being cut off by the input deadline.
 
 | Endpoint | Operation |
 | --- | --- |

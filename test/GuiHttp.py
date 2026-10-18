@@ -6,10 +6,13 @@ from contextlib import closing
 import json
 from pathlib import Path
 import sys
+import socket
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import Mock
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gui.application import Application
@@ -213,6 +216,47 @@ class Http(unittest.TestCase):
                                       {'Content-Type': 'application/octet-stream'})[0], 200)
         self.assertEqual(self.request('POST', '/api/disconnect', b'{}')[0], 200)
         self.assertEqual(self.application.calls, ['import', 'disconnect'])
+
+    def test_slow_headers_and_bodies_cannot_renew_the_input_deadline(self):
+        with patch.object(self.server, 'request_input_timeout', 0.25):
+            for prefix in (b'GET /api/state HTTP/1.0\r\nX-Slow: ',
+                           (f'POST /api/preferences HTTP/1.0\r\nHost: {self.server.host}\r\n'
+                            f'Authorization: Bearer private-test-token\r\nOrigin: {self.server.origin}\r\n'
+                            'Content-Type: application/json\r\nContent-Length: 100\r\n\r\n').encode()):
+                with self.subTest(prefix=prefix[:25]), socket.create_connection(self.server.server_address, timeout=2) as client:
+                    started = time.monotonic()
+                    client.sendall(prefix)
+                    for _ in range(8):
+                        time.sleep(0.06)
+                        try:
+                            client.sendall(b' ')
+                        except (BrokenPipeError, ConnectionResetError):
+                            break
+                    try:
+                        self.assertEqual(client.recv(1), b'')
+                    except ConnectionResetError:
+                        pass
+                    self.assertLess(time.monotonic() - started, 1.5)
+                self.assertEqual(self.application.calls, [])
+            self.assertEqual(self.request('GET', '/api/preferences')[0], 200)
+
+    def test_oversized_unfinished_headers_are_bounded_before_dispatch(self):
+        with socket.create_connection(self.server.server_address, timeout=2) as client:
+            try:
+                client.sendall(b'GET /api/state HTTP/1.0\r\nX-Oversized: ' + b'x' * 60000)
+                self.assertEqual(client.recv(1), b'')
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+        self.assertEqual(self.application.calls, [])
+        self.assertEqual(self.request('GET', '/api/preferences')[0], 200)
+
+    def test_complete_input_does_not_time_out_a_slower_backend_operation(self):
+        def operation(body):
+            time.sleep(0.2)
+            return body
+        with patch.object(self.server, 'request_input_timeout', 0.1), \
+                patch.object(self.application, 'set_preferences', side_effect=operation):
+            self.assertEqual(self.request('POST', '/api/preferences', '{"show_port_warning":false}')[0], 200)
 
 
 class Operations(unittest.TestCase):

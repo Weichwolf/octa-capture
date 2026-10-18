@@ -7,6 +7,7 @@ import argparse
 import hmac
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import io
 import json
 import os
 from pathlib import Path
@@ -16,6 +17,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from urllib.parse import urlsplit
 import webbrowser
 
@@ -52,10 +54,40 @@ def invalid_constant(_value):
     raise ValueError('Non-finite JSON number.')
 
 
+class RequestInput(io.RawIOBase):
+    """Bound cumulative input and elapsed receive time, including slow senders."""
+
+    def __init__(self, source, connection, timeout):
+        self.source = source
+        self.connection = connection
+        self.deadline = time.monotonic() + timeout
+        self.remaining = 16384
+
+    def readable(self):
+        return True
+
+    def readinto(self, destination):
+        remaining_time = self.deadline - time.monotonic()
+        if remaining_time <= 0 or self.remaining <= 0:
+            raise TimeoutError('Request input limit reached.')
+        self.connection.settimeout(remaining_time)
+        count = self.source.readinto(memoryview(destination)[:self.remaining])
+        if count is not None:
+            self.remaining -= count
+        return count
+
+    def close(self):
+        try:
+            self.source.close()
+        finally:
+            super().close()
+
+
 class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
     request_queue_size = 16
+    request_input_timeout = 5
 
     def __init__(self, application, port=8765, token=None, asset_dir=None):
         self.application = application
@@ -95,12 +127,19 @@ class Handler(BaseHTTPRequestHandler):
     server_version = 'OCTA-CAPTURE'
     sys_version = ''
     protocol_version = 'HTTP/1.0'
+    rbufsize = 0
+
+    def setup(self):
+        super().setup()
+        self.rfile = io.BufferedReader(RequestInput(self.rfile, self.connection, self.server.request_input_timeout))
 
     def log_message(self, _format, *_arguments):
         # URLs and Authorization values must never enter request logs.
         pass
 
     def reply(self, status, data, content_type='application/json; charset=utf-8', headers=None, head=False):
+        # A completed input deadline must not shorten a device operation's reply.
+        self.connection.settimeout(5)
         if not isinstance(data, bytes):
             data = json.dumps(data, allow_nan=False, separators=(',', ':')).encode('utf-8')
         self.send_response(status)
