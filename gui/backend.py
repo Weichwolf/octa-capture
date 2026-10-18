@@ -310,7 +310,7 @@ class Bridge:
         return response
 
     def request(self, operation, arguments=()):
-        if operation not in ('state', 'meters', 'preamp', 'mixer', 'master', 'reverb', 'route', 'display', 'identify', 'monitor'):
+        if operation not in ('state', 'meters', 'preamp', 'mixer', 'master', 'reverb', 'route', 'display', 'identify', 'monitor', 'auto-sense-stop'):
             raise InvalidControl('Unsupported backend operation.')
         if any(type(value) is not int or not 0 <= value <= 0xffffffff for value in arguments):
             raise InvalidControl('Invalid backend argument.')

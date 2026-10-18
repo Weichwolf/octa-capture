@@ -21,6 +21,8 @@ seeds = ['1 state', '2 meters 1', '3 preamp 0 4 100', '4 preamp 6 5 1',
          '11 display 0', '12 display 3', '13 identify', '14 display 4', '15 identify 0',
          '16 monitor 0 1 16384 2097152', '17 monitor 127 0 32768 8388607',
          '18 monitor 10 1 0 0', '19 monitor 0 2 0 0', '20 monitor 0 1 32769 0',
+         '21 auto-sense-stop 0', '22 auto-sense-stop 1',
+         '23 auto-sense-stop 2', '24 auto-sense-stop 0 1',
          '4294967295 state', '4294967296 state', '1 state\x00']
 for index, seed in enumerate(seeds):
     (corpus / f'request-{index}').write_bytes(seed.encode('ascii'))

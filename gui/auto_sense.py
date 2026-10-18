@@ -8,7 +8,61 @@ import signal
 import subprocess
 import threading
 
-from .backend import DeviceError
+from .backend import DeviceError, InvalidControl
+
+
+class ObservedAutoSense:
+    """Track observed device activity without claiming a pre-calibration backup."""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._document = None
+
+    def reset(self):
+        with self._lock:
+            self._document = None
+
+    def observe(self, activity):
+        with self._lock:
+            current = self._document
+            if current and current['state'] == 'failed':
+                return dict(current)
+            if activity and activity['active']:
+                if not current or current['state'] not in ('finishing', 'cancelling'):
+                    self._document = {'state': 'running', 'channels': activity['channels'],
+                                      'active': True, 'origin': 'device', 'error': None}
+            elif current and current['state'] == 'running':
+                if activity is None:
+                    self.fail('Device activity became unknown.')
+                else:
+                    self.complete('finish', False)
+            return dict(self._document) if self._document else None
+
+    def require_available(self):
+        with self._lock:
+            if self._document and self._document['state'] == 'failed':
+                raise DeviceError(self._document['error'])
+            if self._document and self._document['active']:
+                raise DeviceError('Auto-Sens is running on the device.')
+
+    def begin(self, action):
+        with self._lock:
+            if not self._document or self._document['state'] not in ('running', 'completed', 'cancelled'):
+                raise InvalidControl('No active device Auto-Sens operation was observed.')
+            self._document = {**self._document, 'active': True,
+                              'state': 'cancelling' if action == 'cancel' else 'finishing'}
+
+    def complete(self, action, stop_sent):
+        with self._lock:
+            self._document = {**self._document,
+                              'state': 'cancelled' if action == 'cancel' and stop_sent else 'completed',
+                              'active': False, 'error': None}
+
+    def fail(self, error):
+        with self._lock:
+            self._document = {**self._document, 'state': 'failed', 'active': False,
+                              'error': str(error) + ' Completion is unverified. Finish or cancel '
+                                       'on the device, then reopen this panel.'}
 
 
 class AutoSenseJob:

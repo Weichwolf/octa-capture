@@ -277,7 +277,10 @@ class Operations(unittest.TestCase):
             application.bridge.auto_sense_activity.return_value = activity
             document = json.loads(json.dumps(application._document()))
             self.assertEqual(document['auto_sense_activity'], activity)
-            self.assertIsNone(document['auto_sense'])
+            self.assertIsNone(application._auto_job)
+            if activity:
+                self.assertEqual(document['auto_sense']['origin'], 'device')
+                self.assertEqual(document['auto_sense']['active'], activity['active'])
             self.assertEqual(document['busy'], bool(activity and activity['active']))
             if activity and activity['active']:
                 with self.assertRaises(DeviceError):

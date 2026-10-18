@@ -924,14 +924,26 @@ the memory-command reference check; it never opens physical MIDI ports.
 MidiSession::start_auto_sense(mask) sends the selection on the owned CTRL
 connection; stop_auto_sense(finish/cancel) sends the corresponding stop.
 Invalid values are rejected before MIDI I/O. Another start is rejected
-while that session may own an active operation. A failed/partial start
-still marks ownership; only a completely transmitted stop clears it.
+while that session may own an active operation or has observed active flags.
+A failed/partial start still marks ownership. A completely transmitted stop
+clears it; verified already-inactive readback also releases ownership.
 Destruction attempts cancel before meter disable and handle release.
 Explicit stop reports errors and remains available after unresolved bulk
 queries; a new start requires reopening after those query errors.
 This ownership flag does not represent observed device activity. Use
 receive/query listeners and apply_auto_sense_update for notifications;
 a successful send does not confirm that Auto-Sens started or completed.
+MidiSession::stop_observed_auto_sense performs a bounded same-connection
+transaction: refresh/drain, require observed activity, send the original stop,
+receive inactive flags, then validate fresh bulk state. It shares a three-second
+deadline across all stages. Unknown activity is rejected without a stop frame;
+already-inactive state returns stop_sent=false. Unresolved stop/reply errors
+prevent further queries until reopening. There is no rollback to a host snapshot
+of an operation that began elsewhere. Native 48 kHz single-input checks show
+that sensitivity can be temporary while running, and Cancel restores the actual
+pre-start value without a host restore. A snapshot captured while active is
+therefore not a valid cancellation baseline. Physical gain response remains
+unverified.
 Fault tests cover partial start/finish writes, destructor cancellation,
 move ownership, shared queries/notifications and reentrancy. The MIDI
 fuzzer also exercises selections, actions and cleanup with fake ALSA.

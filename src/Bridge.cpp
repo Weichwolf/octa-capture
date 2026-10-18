@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/Bridge.hpp"
 
+#include "octa/AutoSense.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/InputMonitor.hpp"
 #include "octa/PanelCommand.hpp"
@@ -89,6 +90,9 @@ std::optional<DspChange> parse_dsp(std::string_view operation, Values args) {
 
 std::optional<BridgeCommand> command(std::string_view operation, Values args) {
   if (operation == "state" && args.empty()) { return StateQuery{}; }
+  if (operation == "auto-sense-stop" && args.size() == 1 && args.front() <= 1) {
+    return AutoSenseStop{.action = static_cast<AutoSenseAction>(args.front())};
+  }
   if (operation == "meters" && args.size() == 1 && args.front() <= 1) {
     return MeterSwitch{.enabled = args.front() != 0};
   }

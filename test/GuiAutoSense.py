@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gui.application import Application
-from gui.auto_sense import AutoSenseJob
+from gui.auto_sense import AutoSenseJob, ObservedAutoSense
 from gui.backend import DeviceError, InvalidControl
 
 
@@ -22,6 +22,127 @@ def wait_for(predicate):
             return
         time.sleep(0.01)
     raise AssertionError('Timed out waiting for interactive Auto-Sens.')
+
+
+class Observed(unittest.TestCase):
+    def test_unknown_idle_running_and_spontaneous_completion(self):
+        tracker = ObservedAutoSense()
+        self.assertIsNone(tracker.observe(None))
+        self.assertIsNone(tracker.observe({'channels': 0, 'active': False}))
+        document = tracker.observe({'channels': 129, 'active': True})
+        self.assertEqual((document['origin'], document['state'], document['channels']), ('device', 'running', 129))
+        document['channels'] = 0
+        with self.assertRaises(DeviceError):
+            tracker.require_available()
+        self.assertEqual(tracker.observe({'channels': 129, 'active': True})['channels'], 129)
+        finished = tracker.observe({'channels': 0, 'active': False})
+        self.assertEqual((finished['state'], finished['active']), ('completed', False))
+        tracker.require_available()
+
+    def test_pending_operation_requires_verified_completion(self):
+        for action, sent, expected in (('cancel', True, 'cancelled'), ('cancel', False, 'completed'),
+                                       ('finish', True, 'completed')):
+            with self.subTest(action=action, sent=sent):
+                tracker = ObservedAutoSense()
+                tracker.observe({'channels': 1, 'active': True})
+                tracker.begin(action)
+                self.assertTrue(tracker.observe({'channels': 0, 'active': False})['active'])
+                self.assertTrue(tracker.observe(None)['active'])
+                tracker.complete(action, sent)
+                self.assertEqual(tracker.observe(None)['state'], expected)
+                tracker.require_available()
+
+    def test_lost_activity_and_failed_stop_block_changes_until_reset(self):
+        tracker = ObservedAutoSense()
+        with self.assertRaises(InvalidControl):
+            tracker.begin('cancel')
+        tracker.observe({'channels': 1, 'active': True})
+        document = tracker.observe(None)
+        self.assertEqual(document['state'], 'failed')
+        self.assertIn('unverified', document['error'])
+        self.assertEqual(tracker.observe({'channels': 1, 'active': True})['state'], 'failed')
+        with self.assertRaises(DeviceError):
+            tracker.require_available()
+        tracker.reset()
+        self.assertIsNone(tracker.observe(None))
+        tracker.require_available()
+
+    def test_application_stops_observed_activity_on_the_existing_connection(self):
+        for action, sent, expected in (('cancel', True, 'cancelled'), ('cancel', False, 'completed'),
+                                       ('finish', True, 'completed')):
+            application = Application('/missing/bin', '/unused')
+            application.bridge = Mock()
+            application.bridge.meters.return_value = None
+            application.bridge.auto_sense_activity.return_value = {'channels': 1, 'active': True}
+            application._remember({'before': True})
+
+            def reply(_operation, _arguments):
+                application.bridge.auto_sense_activity.return_value = {'channels': 0, 'active': False}
+                return {'state': {'after': True}, 'auto_sense_stop_sent': sent}
+
+            application.bridge.request.side_effect = reply
+            document = application.stop_auto_sense({'action': action})
+            self.assertEqual(document['state'], {'after': True})
+            self.assertEqual(document['auto_sense']['state'], expected)
+            self.assertFalse(document['busy'])
+            self.assertIsNone(application._auto_job)
+            application.bridge.request.assert_called_once_with('auto-sense-stop', [int(action == 'cancel')])
+            application.bridge.close.assert_not_called()
+
+    def test_failed_or_malformed_completion_is_not_successful(self):
+        for reply in ({'state': {}}, {'state': {}, 'auto_sense_stop_sent': 1}, {'auto_sense_stop_sent': True}):
+            application = Application('/missing/bin', '/unused')
+            application.bridge = Mock()
+            application.bridge.meters.return_value = None
+            application.bridge.auto_sense_activity.return_value = {'channels': 1, 'active': True}
+            application._remember({'before': True})
+
+            def malformed(_operation, _arguments):
+                application.bridge.auto_sense_activity.return_value = {'channels': 0, 'active': False}
+                return reply
+
+            application.bridge.request.side_effect = malformed
+            with self.assertRaises(DeviceError):
+                application.stop_auto_sense({'action': 'cancel'})
+            document = application._document()
+            self.assertEqual(document['auto_sense']['state'], 'failed')
+            self.assertTrue(document['busy'])
+            self.assertEqual(document['state'], {'before': True})
+            with self.assertRaises(DeviceError):
+                application.start_auto_sense({'channels': 1})
+
+    def test_stop_after_spontaneous_completion_reads_fresh_state_without_restarting(self):
+        application = Application('/missing/bin', '/unused')
+        application.bridge = Mock()
+        application.bridge.meters.return_value = None
+        application._remember({'before': True})
+        application.bridge.auto_sense_activity.return_value = {'channels': 1, 'active': True}
+        application._document()
+        application.bridge.auto_sense_activity.return_value = {'channels': 0, 'active': False}
+        application.bridge.request.return_value = {'state': {'fresh': True}, 'auto_sense_stop_sent': False}
+        document = application.stop_auto_sense({'action': 'cancel'})
+        self.assertEqual(document['auto_sense']['state'], 'completed')
+        self.assertEqual(document['state'], {'fresh': True})
+        application.bridge.request.assert_called_once_with('auto-sense-stop', [1])
+
+    def test_stop_keeps_the_owned_job_reference_when_a_new_job_replaces_it(self):
+        application = Application('/missing/bin', '/unused')
+        application.bridge = Mock()
+        application.bridge.meters.return_value = None
+        application.bridge.auto_sense_activity.return_value = None
+        application._remember({'before': True})
+        old, new = Mock(), Mock()
+        application._auto_job = old
+        new.document.return_value = {'active': True, 'state': 'starting', 'channels': 2, 'error': None}
+
+        def replaced():
+            application._auto_job = new
+            return {'active': True, 'state': 'running', 'channels': 1, 'error': None}
+
+        old.document.side_effect = replaced
+        application.stop_auto_sense({'action': 'cancel'})
+        old.request.assert_called_once_with('cancel')
+        new.request.assert_not_called()
 
 
 class Interactive(unittest.TestCase):

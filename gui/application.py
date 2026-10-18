@@ -13,7 +13,7 @@ import threading
 import time
 
 from .backend import Bridge, DeviceError, InvalidControl, integer, validate_control
-from .auto_sense import AutoSenseJob
+from .auto_sense import AutoSenseJob, ObservedAutoSense
 from .devices import discover
 from .preferences import Preferences
 
@@ -37,6 +37,7 @@ class Application:
         self._last_client = time.monotonic()
         self._transaction = False
         self._auto_job = None
+        self._observed_auto = ObservedAutoSense()
         self._auto_thread = None
         self._selected_identity = None
         self._preferences = Preferences(self.data_dir)
@@ -71,13 +72,16 @@ class Application:
         if state is None:
             raise DeviceError('The OCTA-CAPTURE device is not available.')
         activity = self.bridge.auto_sense_activity()
-        external_active = bool(activity and activity['active'])
-        return {'connected': True, 'busy': (transaction if busy is None else busy) or external_active, 'state': state,
+        job = self._auto_job.document() if self._auto_job else None
+        if not job or not job['active']:
+            job = self._observed_auto.observe(activity) or job
+        blocked = bool(job and (job['active'] or (job.get('origin') == 'device' and job['state'] == 'failed')))
+        return {'connected': True, 'busy': (transaction if busy is None else busy) or blocked, 'state': state,
                 'status': self._status, 'meters': self.bridge.meters(),
                 'preferences': self._preferences.document(),
                 'capabilities': {'auto_sense': True},
                 'auto_sense_activity': activity,
-                'auto_sense': self._auto_job.document() if self._auto_job else None}
+                'auto_sense': job}
 
     def snapshot(self):
         self._touch()
@@ -269,6 +273,8 @@ class Application:
             self._transaction = value
 
     def _invalidate(self, preserve=False):
+        if not preserve:
+            self._observed_auto.reset()
         with self._cache_lock:
             if not preserve:
                 self._cached = None
@@ -322,9 +328,8 @@ class Application:
     def _require_no_auto_sense(self):
         if self._auto_job:
             self._auto_job.require_available()
-        activity = self.bridge.auto_sense_activity()
-        if activity and activity['active']:
-            raise DeviceError('Auto-Sens is running on the device. Finish or cancel it on the device.')
+        self._observed_auto.observe(self.bridge.auto_sense_activity())
+        self._observed_auto.require_available()
 
     def start_auto_sense(self, body):
         if type(body) is not dict or set(body) != {'channels'}:
@@ -343,6 +348,7 @@ class Application:
             self.bridge.close()
             with self._lifecycle:
                 self._open()
+                self._observed_auto.reset()
                 job = AutoSenseJob([self.bin_dir / 'octa-auto-sense', '--interactive', channels,
                                     60000, 'finish', directory / 'recovery.syx', self.port], directory, channels)
                 self._auto_job = job
@@ -364,10 +370,33 @@ class Application:
         if type(body) is not dict or set(body) != {'action'} or body['action'] not in ('finish', 'cancel'):
             raise InvalidControl('Expected Auto-Sens finish or cancel.')
         self._touch()
-        if self._auto_job is None:
-            raise InvalidControl('Auto-Sens is not running.')
-        self._auto_job.request(body['action'])
-        return self._document()
+        job = self._auto_job
+        if job and job.document()['active']:
+            job.request(body['action'])
+            return self._document()
+        with self._operation:
+            self._open()
+            self._sync_selected_device()
+            activity = self.bridge.auto_sense_activity()
+            observed = self._observed_auto.observe(activity)
+            if (job and not observed) or (observed and not observed['active'] and
+                                          observed['state'] in ('completed', 'cancelled') and activity is None):
+                return self._document()
+            self._observed_auto.begin(body['action'])
+            self._set_transaction(True)
+            try:
+                reply = self.bridge.request('auto-sense-stop', [int(body['action'] == 'cancel')])
+                sent = reply.get('auto_sense_stop_sent')
+                if type(sent) is not bool or type(reply.get('state')) is not dict:
+                    raise DeviceError('Invalid Auto-Sens completion reply.')
+                self._remember(reply['state'])
+                self._observed_auto.complete(body['action'], sent)
+            except DeviceError as error:
+                self._observed_auto.fail(error)
+                raise
+            finally:
+                self._set_transaction(False)
+            return self._document()
 
     def close(self):
         with self._lifecycle:

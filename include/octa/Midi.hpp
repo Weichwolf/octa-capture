@@ -29,6 +29,11 @@ struct MidiError {
   std::string_view operation;
 };
 
+struct AutoSenseStopResult {
+  Message state;
+  bool stop_sent;
+};
+
 // Notifications encountered while awaiting a bulk reply; callbacks must be short.
 using MessageListener = std::function<void(const Message &)>;
 
@@ -52,6 +57,11 @@ public:
   // notifications separately. A failed start still requires cancel/cleanup.
   [[nodiscard]] std::expected<void, MidiError> start_auto_sense(std::uint8_t channels);
   [[nodiscard]] std::expected<void, MidiError> stop_auto_sense(AutoSenseAction action);
+  // For observed device activity: drain/query first, send only while active,
+  // await inactivity and return fresh validated state on this same connection.
+  // Unknown activity is rejected. Already inactive returns stop_sent=false.
+  [[nodiscard]] std::expected<AutoSenseStopResult, MidiError>
+  stop_observed_auto_sense(AutoSenseAction action, const MessageListener &listener = {});
 
   // Preserves partial frames and unread bytes across calls. Timeout: 1..60000 ms.
   [[nodiscard]] std::expected<Message, MidiError> receive(std::chrono::milliseconds timeout);
@@ -90,6 +100,10 @@ public:
   write_preset(const Preset &preset, const Message &current, const MessageListener &listener = {});
 
 private:
+  [[nodiscard]] std::expected<Message, MidiError>
+  query_unlocked(std::span<const std::uint8_t> update,
+                 const MessageListener &listener,
+                 std::chrono::steady_clock::time_point deadline);
   struct Impl;
   explicit MidiSession(std::unique_ptr<Impl> impl);
   [[nodiscard]] std::expected<Message, MidiError> query(std::span<const std::uint8_t> update,

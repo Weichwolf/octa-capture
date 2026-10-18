@@ -23,6 +23,7 @@ indices/coefficients. No filenames, shell commands or arbitrary SysEx are accept
 | --- | --- |
 | `state` | Fresh full bulk query |
 | `meters ENABLED` | Input meter stream on/off, 0 or 1 |
+| `auto-sense-stop ACTION` | Finish=0/cancel=1 an observed calibration; confirm inactivity and fresh state |
 | `preamp CHANNEL PARAMETER VALUE` | Preamp parameter 0..12 |
 | `mixer SOURCE BUS CHANNEL PARAMETER VALUE` | Input=0/playback=1; typed mixer update |
 | `master SOURCE BUS CHANNEL PARAMETER VALUE` | Typed master update |
@@ -172,26 +173,38 @@ finish/cancel with full recovery. Browser-only response simulation verifies acti
 channel adoption and retention of the dialog on recovery failure; it does not
 inject a hardware failure. `tools/verify-auto-sense-ui.py WINDOWS-GUI MAC-GUI`
 executes 3,072 selection/gating cases per original binary with host controls
-stubbed. Adopting calibration started outside this backend remains unimplemented;
-device activity notifications are separate from the bulk state.
+stubbed. Device activity notifications are separate from the bulk state.
 
-`GET /api/state` separately exposes `auto_sense_activity`: either `null` (not yet
-observed on this connection) or `{channels, active, observed_age_ms}`. The bridge
-forwards both selection and completion notifications, including an inactive
-notification that changes no bits. Unknown/malformed MIDI emits no activity JSON;
-invalid subprocess events fail the connection. Observation age measures time
-since the latest notification; it is not a freshness/expiry threshold. Disconnect,
-process failure and reconnect discard the observation. This telemetry does not
-create an owned calibration job or yet implement external-operation adoption.
-While observed active, the backend rejects conflicting writes and a second start;
-the GUI shows a device-operation hint and disables those controls. An already
-open Auto-Sens dialog shows the observed channels and offers Close, without
-promising to cancel the device operation. Finish/cancel on the device until
-external-operation takeover is implemented.
-Native Debian verifies a valid test-program start through actual device MIDI,
-C++ serialization, the Python reader and the authenticated HTTP response, followed
-by an acknowledged cancel and complete raw restoration. This is not a physical
-front-panel-button test.
+`GET /api/state` exposes `auto_sense_activity`: either `null` (not observed on this
+connection) or `{channels, active, observed_age_ms}`. Valid selection and completion
+notifications are forwarded, including unchanged/inactive flags. Invalid subprocess
+events fail the connection. Observation age measures time since a notification,
+not a periodic freshness deadline. Connection loss discards the observation.
+
+Observed calibration appears as `auto_sense.origin = "device"`. Its dialog and
+Finish/Cancel remain accessible while competing writes are blocked. Stop uses the
+existing CTRL connection: query/drain first, reject unknown activity, send only
+while active, await inactivity and validate fresh state, within one three-second
+budget. The bridge reply's `auto_sense_stop_sent` is false if the operation already
+ended; a late Cancel is then reported as completed rather than cancelled. Pending
+stops remain active until the verified reply. Failure or loss of previously active
+status stays blocked and visible until the panel is reopened; cached or repeated
+active flags cannot clear that failure. No completed/restored state is invented.
+
+An observed operation has no host snapshot from before its start. Cancel uses the
+firmware command and never restores a snapshot captured during calibration.
+Native 48 kHz/input-1 Playwright tests verify both actions, view navigation, exact
+unselected-state preservation, Cancel restoration against the actual pre-start
+fixture and zero browser errors. Physical outputs are isolated on silent Mixer B,
+and the complete user state is independently restored. These use a valid test-
+program start, not a physical front-panel-button press. Activity predating the
+connection remains unknown until a valid notification arrives.
+
+`ctest --test-dir build/strict -R midi-observed-auto-sense` checks 22 offline
+transport cases: missing/malformed end, invalid parameter bounds, write failure,
+restart during readback, already-ended activity and reentrancy. An unresolved
+stop prevents further queries on that session. Fuzz MIDI/bridge inputs offline;
+never send malformed test traffic to hardware.
 
 The independently authored web assets use the original parameter values and
 reference-derived behavior, not extracted manufacturer images. Unimplemented

@@ -207,7 +207,9 @@ struct MidiSession::Impl {
 
   ~Impl() {
     if (auto_sense_may_be_active) {
-      if (const auto stopped = stop_auto_sense(AutoSenseAction::cancel); !stopped) {
+      if (const auto stopped =
+              stop_auto_sense(AutoSenseAction::cancel, Clock::now() + query_timeout);
+          !stopped) {
         std::cerr << "OCTA-CAPTURE Auto-Sens cleanup failed: " << stopped.error().operation << " ("
                   << stopped.error().code << ")\n";
       }
@@ -236,14 +238,20 @@ struct MidiSession::Impl {
     return sent;
   }
 
-  std::expected<void, MidiError> stop_auto_sense(AutoSenseAction action) {
+  std::expected<void, MidiError> stop_auto_sense(AutoSenseAction action,
+                                                 Clock::time_point deadline) {
     const auto frame = encode_auto_sense_stop(action);
     if (!frame) {
       return std::unexpected(MidiError{.code = -EINVAL, .operation = "Auto-Sens action"});
     }
-    const auto sent = send_frame(connection.output.get(), *frame, Clock::now() + query_timeout);
+    const auto sent = send_frame(connection.output.get(), *frame, deadline);
     if (sent) { auto_sense_may_be_active = false; }
     return sent;
+  }
+
+  [[nodiscard]] bool auto_sense_running() const {
+    return auto_sense_activity &&
+           std::ranges::any_of(*auto_sense_activity, [](bool active) { return active; });
   }
 
   std::expected<std::optional<Message>, MidiError> buffered_message() {
@@ -256,7 +264,11 @@ struct MidiSession::Impl {
         return std::unexpected(MidiError{.code = -EBADMSG, .operation = "MIDI envelope"});
       }
       auto &message = *decoded;
-      if (message.has_value()) { return std::move(message); }
+      if (message.has_value()) {
+        auto activity = auto_sense_activity.value_or(AutoSenseChannels{});
+        if (apply_auto_sense_update(activity, *message)) { auto_sense_activity = activity; }
+        return std::move(message);
+      }
     }
     return std::nullopt;
   }
@@ -312,6 +324,7 @@ struct MidiSession::Impl {
   bool busy = false;
   bool meters_may_be_active = false;
   bool auto_sense_may_be_active = false;
+  std::optional<AutoSenseChannels> auto_sense_activity;
   bool request_pending = false;
   bool frame_is_current = false;
   bool query_uncertain = false;
@@ -350,7 +363,7 @@ std::expected<void, MidiError> MidiSession::start_auto_sense(std::uint8_t channe
   if (impl_->query_uncertain) {
     return std::unexpected(MidiError{.code = -EPROTO, .operation = "unresolved CTRL query"});
   }
-  if (impl_->auto_sense_may_be_active) {
+  if (impl_->auto_sense_may_be_active || impl_->auto_sense_running()) {
     return std::unexpected(MidiError{.code = -EALREADY, .operation = "Auto-Sens already started"});
   }
   const ActiveOperation active(impl_->busy);
@@ -367,7 +380,7 @@ std::expected<void, MidiError> MidiSession::stop_auto_sense(AutoSenseAction acti
     return std::unexpected(MidiError{.code = -EBUSY, .operation = "busy session"});
   }
   const ActiveOperation active(impl_->busy);
-  return impl_->stop_auto_sense(action);
+  return impl_->stop_auto_sense(action, Clock::now() + query_timeout);
 }
 
 std::expected<Message, MidiError> MidiSession::receive(std::chrono::milliseconds timeout) {
@@ -393,7 +406,12 @@ std::expected<Message, MidiError> MidiSession::query(std::span<const std::uint8_
     return std::unexpected(MidiError{.code = -EPROTO, .operation = "unresolved CTRL query"});
   }
   const ActiveOperation active(impl_->busy);
-  const auto deadline = Clock::now() + query_timeout;
+  return query_unlocked(update, listener, Clock::now() + query_timeout);
+}
+
+std::expected<Message, MidiError> MidiSession::query_unlocked(std::span<const std::uint8_t> update,
+                                                              const MessageListener &listener,
+                                                              Clock::time_point deadline) {
   impl_->frame_is_current = false;
   const auto drained = impl_->drain(listener, deadline);
   if (!drained) { return std::unexpected(drained.error()); }
@@ -422,6 +440,53 @@ std::expected<Message, MidiError> MidiSession::query(std::span<const std::uint8_
 
 std::expected<Message, MidiError> MidiSession::read_bulk_state(const MessageListener &listener) {
   return query({}, listener);
+}
+
+std::expected<AutoSenseStopResult, MidiError>
+MidiSession::stop_observed_auto_sense(AutoSenseAction action, const MessageListener &listener) {
+  if (action != AutoSenseAction::finish && action != AutoSenseAction::cancel) {
+    return std::unexpected(MidiError{.code = -EINVAL, .operation = "Auto-Sens action"});
+  }
+  if (!impl_) { return std::unexpected(MidiError{.code = -ENODEV, .operation = "closed session"}); }
+  if (impl_->busy) {
+    return std::unexpected(MidiError{.code = -EBUSY, .operation = "busy session"});
+  }
+  if (impl_->query_uncertain) {
+    return std::unexpected(MidiError{.code = -EPROTO, .operation = "unresolved CTRL query"});
+  }
+  const ActiveOperation active(impl_->busy);
+  const auto deadline = Clock::now() + query_timeout;
+  auto before = query_unlocked({}, listener, deadline);
+  if (!before) { return std::unexpected(before.error()); }
+  if (!validate_bulk_write(*before)) {
+    return std::unexpected(MidiError{.code = -EBADMSG, .operation = "Auto-Sens initial state"});
+  }
+  if (!impl_->auto_sense_activity) {
+    return std::unexpected(MidiError{.code = -ENODATA, .operation = "unknown Auto-Sens activity"});
+  }
+  if (!impl_->auto_sense_running()) {
+    impl_->auto_sense_may_be_active = false;
+    return AutoSenseStopResult{.state = std::move(*before), .stop_sent = false};
+  }
+  impl_->query_uncertain = true;
+  const auto stopped = impl_->stop_auto_sense(action, deadline);
+  if (!stopped) { return std::unexpected(stopped.error()); }
+  while (impl_->auto_sense_running()) {
+    const auto message = impl_->next_message(deadline);
+    if (!message) { return std::unexpected(message.error()); }
+    if (listener) { listener(*message); }
+  }
+  impl_->query_uncertain = false;
+  auto after = query_unlocked({}, listener, deadline);
+  if (!after) { return std::unexpected(after.error()); }
+  if (!validate_bulk_write(*after)) {
+    return std::unexpected(MidiError{.code = -EBADMSG, .operation = "Auto-Sens final state"});
+  }
+  if (impl_->auto_sense_running()) {
+    return std::unexpected(
+        MidiError{.code = -EBUSY, .operation = "Auto-Sens restarted during readback"});
+  }
+  return AutoSenseStopResult{.state = std::move(*after), .stop_sent = true};
 }
 
 std::expected<Message, MidiError> MidiSession::panel_command(PanelCommand command,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/Bridge.hpp"
 
+#include "octa/AutoSense.hpp"
 #include "octa/Preamp.hpp"
 
 #include <array>
@@ -8,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 
 namespace {
@@ -133,5 +135,19 @@ bool high_bytes() {
 }
 
 int main() {
+  for (const auto &[line, action] :
+       std::array{std::pair{"1 auto-sense-stop 0", octa::AutoSenseAction::finish},
+                  std::pair{"2 auto-sense-stop 1", octa::AutoSenseAction::cancel}}) {
+    const auto request = octa::parse_bridge_request(line);
+    const auto *stop = request ? std::get_if<octa::AutoSenseStop>(&request->command) : nullptr;
+    if (stop == nullptr || stop->action != action) { return 1; }
+  }
+  for (const auto *const line : {"1 auto-sense-stop",
+                                 "1 auto-sense-stop 2",
+                                 "1 auto-sense-stop -1",
+                                 "1 auto-sense-stop 0 1",
+                                 "1 auto-sense-stop true"}) {
+    if (octa::parse_bridge_request(line)) { return 1; }
+  }
   return valid_requests() && invalid_requests() && high_bytes() ? 0 : 1;
 }

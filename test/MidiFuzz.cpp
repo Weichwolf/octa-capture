@@ -64,6 +64,20 @@ void exercise_auto_sense(octa::MidiSession &session) {
   }
 }
 
+void exercise_observed_auto_sense(octa::MidiSession &session) {
+  const auto action = static_cast<octa::AutoSenseAction>(io.bytes.empty() ? 0 : io.bytes.back());
+  const auto writes = io.writes;
+  const auto stopped = session.stop_observed_auto_sense(action, &check_message);
+  if (action != octa::AutoSenseAction::finish && action != octa::AutoSenseAction::cancel) {
+    require(!stopped && stopped.error().code == -EINVAL && io.writes == writes);
+  } else if (stopped) {
+    require(stopped->state.command == octa::Command::data &&
+            stopped->state.address == octa::bulk_address &&
+            stopped->state.payload.size() == octa::bulk_size);
+    check_message(stopped->state);
+  }
+}
+
 void exercise_preset(octa::MidiSession &session, const octa::Message &current) {
   const auto preset = octa::preset_from_bulk(current);
   // A checksum-valid bulk reply can still contain malformed packed DSP digits.
@@ -125,6 +139,7 @@ void exercise_session() {
     const auto matches = octa::matches_dsp_change(*state, change);
     require(matches && *matches);
   }
+  exercise_observed_auto_sense(*session);
   require(session->set_input_meters(false).has_value());
 }
 

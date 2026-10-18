@@ -34,30 +34,31 @@ export async function checkAutoSenseFailure(browser) {
     const response = await route.fetch();
     const original = await response.json();
     if (phase === 'external') {
-      await route.fulfill({response, json: {...original, busy: true, auto_sense: null,
+      await route.fulfill({response, json: {...original, busy: true,
+        auto_sense: {state: 'running', active: true, channels: 1, origin: 'device', error: null},
         auto_sense_activity: {channels: 1, active: true, observed_age_ms: 0}}});
       return;
     }
     const active = phase === 'cancelling';
-    await route.fulfill({response, json: {...original, busy: active,
-      auto_sense: {state: phase, active, channels: 1, error: active ? null : 'Simulated recovery failure'}}});
+    await route.fulfill({response, json: {...original, busy: true,
+      auto_sense: {state: phase, active, channels: 1, origin: 'device', error: active ? null : 'Simulated recovery failure'}}});
   };
   await browser.click('#header-action');
   await browser.page.route('**/api/state', simulated);
   try {
-    await until(() => browser.evaluate('document.querySelector("#auto-cancel").textContent === "Close"'), 'observed external activity warning');
-    assert.equal(await browser.evaluate('document.querySelector("#auto-start").disabled && document.querySelector("#footer-rate").disabled && document.querySelector("#auto-all").disabled && document.querySelector("#auto-none").disabled'), true, 'External activity blocks competing operations');
-    assert.match(await browser.evaluate('document.querySelector("#busy-message").textContent'), /Finish or cancel it on the device/);
+    await until(() => browser.evaluate('document.querySelector("#auto-start").textContent === "Finish" && !document.querySelector("#auto-start").disabled'), 'observed activity can be finished');
+    assert.equal(await browser.evaluate('!document.querySelector("#header-action").disabled && document.querySelector("#footer-rate").disabled && document.querySelector("#auto-all").disabled && document.querySelector("#auto-none").disabled'), true, 'External activity permits its dialog and blocks competing operations');
     phase = 'cancelling';
     await until(() => browser.evaluate('document.querySelector("#auto-cancel").disabled'), 'simulated pending cancellation');
     assert.deepEqual(await browser.evaluate('[...document.querySelectorAll("#auto-channels input:checked")].map(node=>Number(node.value))'), [0], 'Active checks are populated from the backend job');
     phase = 'failed';
     await until(() => browser.evaluate('document.querySelector("#auto-status").textContent === "Simulated recovery failure"'), 'simulated failure visible');
     assert.equal(await browser.evaluate('document.querySelector("#auto-sens").open'), true, 'Recovery failure must not close the dialog');
+    assert.equal(await browser.evaluate('document.querySelector("#auto-start").disabled && document.querySelector("#footer-rate").disabled && document.querySelector("#auto-cancel").textContent === "Close"'), true, 'Unverified completion remains blocked');
   } finally {
     await browser.page.unroute('**/api/state', simulated);
     await until(() => browser.evaluate('document.querySelector("#auto-status").textContent === "" && !document.querySelector("#auto-cancel").disabled'), 'real idle state restored after response simulation');
     await browser.click('#auto-cancel');
   }
-  console.log('PASS browser-only external activity busy guards, owned active-channel adoption and failed-recovery dialog preservation simulation');
+  console.log('PASS browser-only external activity busy guards, observed active channels and failed-recovery dialog preservation simulation');
 }

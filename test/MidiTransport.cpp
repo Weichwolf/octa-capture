@@ -63,6 +63,7 @@ struct FakeIo {
   int auto_signal = 0;
   bool auto_fail_stop = false;
   bool require_auto_completion = false;
+  bool reject_observed_stop = false;
   std::size_t auto_completion_end = 0;
   unsigned int route_commands = 0;
   unsigned int fail_route = 0;
@@ -492,6 +493,103 @@ bool auto_sense_session() {
   append_bytes(expected, *stop);
   return require(io.outgoing == expected && io.opens == 1 && io.closes == 2,
                  "successful finish sends no additional cancellation on destruction");
+}
+
+enum class ObservedScenario : std::uint8_t {
+  active,
+  unknown,
+  inactive,
+  already_ended,
+  reactivated,
+  missing_end,
+  malformed_end,
+  invalid_initial,
+  invalid_final,
+  restarted,
+  write_failure
+};
+
+void configure_observed(ObservedScenario scenario,
+                        const std::vector<std::uint8_t> &start,
+                        const std::vector<std::uint8_t> &end,
+                        const std::vector<std::uint8_t> &malformed,
+                        const std::vector<std::uint8_t> &invalid_frame) {
+  io.incoming = scenario == ObservedScenario::unknown ? std::vector<std::uint8_t>{} : start;
+  if (scenario == ObservedScenario::inactive) { io.incoming = end; }
+  if (scenario == ObservedScenario::already_ended) { append_bytes(io.incoming, end); }
+  if (scenario == ObservedScenario::reactivated) {
+    io.incoming = end;
+    append_bytes(io.incoming, start);
+  }
+  io.auto_stop_reply =
+      scenario == ObservedScenario::missing_end ? std::vector<std::uint8_t>{} : end;
+  if (scenario == ObservedScenario::malformed_end) { io.auto_stop_reply = malformed; }
+  io.reject_observed_stop = scenario == ObservedScenario::write_failure;
+  io.replies = {bulk_frame(), bulk_frame()};
+  if (scenario == ObservedScenario::invalid_initial) { io.replies.front() = invalid_frame; }
+  if (scenario == ObservedScenario::invalid_final) { io.replies.back() = invalid_frame; }
+  if (scenario == ObservedScenario::restarted) {
+    io.replies.back() = start;
+    append_bytes(io.replies.back(), bulk_frame());
+  }
+}
+
+bool observed_auto_sense(octa::AutoSenseAction action, ObservedScenario scenario) {
+  io = {};
+  const auto start = octa::encode_auto_sense_start(1);
+  const auto end = octa::encode_auto_sense_stop(action);
+  const auto request = octa::request(octa::bulk_address, octa::bulk_size);
+  const auto malformed =
+      octa::encode(octa::Command::data, {0, 2, 1, 5}, std::array<std::uint8_t, 2>{});
+  auto invalid = octa::decode(bulk_frame());
+  if (!start || !end || !request || !malformed || !invalid) { return false; }
+  constexpr std::size_t sensitivity_offset = 0x1d;
+  constexpr std::uint8_t invalid_sensitivity = 101;
+  invalid->payload[sensitivity_offset] = invalid_sensitivity;
+  const auto invalid_frame = octa::encode(invalid->command, invalid->address, invalid->payload);
+  if (!invalid_frame) { return false; }
+  configure_observed(scenario, *start, *end, *malformed, *invalid_frame);
+  const bool inactive =
+      scenario == ObservedScenario::inactive || scenario == ObservedScenario::already_ended;
+  const bool sent = !inactive && scenario != ObservedScenario::unknown &&
+                    scenario != ObservedScenario::invalid_initial;
+  const bool success =
+      inactive || scenario == ObservedScenario::active || scenario == ObservedScenario::reactivated;
+  const bool unresolved = scenario == ObservedScenario::missing_end ||
+                          scenario == ObservedScenario::malformed_end ||
+                          scenario == ObservedScenario::write_failure;
+  {
+    auto session = octa::MidiSession::open("hw:fake");
+    if (!session) { return false; }
+    bool reentrant_safe = true;
+    const auto result = session->stop_observed_auto_sense(action, [&](const octa::Message &) {
+      const auto nested = session->stop_observed_auto_sense(action);
+      reentrant_safe = reentrant_safe && !nested && nested.error().code == -EBUSY;
+    });
+    if (!require(reentrant_safe && result.has_value() == success,
+                 "observed stop requires valid state and acknowledged inactivity; callbacks cannot "
+                 "reenter")) {
+      return false;
+    }
+    if (result &&
+        (!require(result->stop_sent == sent && result->state == *octa::decode(bulk_frame()),
+                  "already-ended calibration sends no stop and all success returns fresh state"))) {
+      return false;
+    }
+    if (unresolved) {
+      const auto writes = io.writes;
+      const auto query = session->read_bulk_state();
+      if (!require(!query && query.error().code == -EPROTO && writes == io.writes,
+                   "unresolved stop cannot reuse the session for queries")) {
+        return false;
+      }
+    }
+  }
+  auto expected = *request;
+  if (sent) { append_bytes(expected, *end); }
+  if (sent && !unresolved) { append_bytes(expected, *request); }
+  return require(io.outgoing == expected && io.opens == 1 && io.closes == 2,
+                 "external activity never acquires ownership or triggers destructor cancellation");
 }
 
 bool auto_sense_cleanup() {
@@ -1386,6 +1484,24 @@ int handle_fake_route(const octa::Message &message) {
   return 0;
 }
 
+int handle_fake_auto_sense(const octa::Message &message) {
+  if (message.address == octa::Address{0, 2, 1, 4}) {
+    append_bytes(io.incoming, io.auto_start_reply);
+    if (io.auto_fail_stop) { io.fail_write = io.writes + 2; }
+    if (io.auto_signal != 0 && kill(getpid(), io.auto_signal) != 0) { return -errno; }
+  }
+  if (message.address == octa::Address{0, 2, 1, 5}) {
+    if (io.reject_observed_stop) { return -EIO; }
+    if (io.require_auto_completion) {
+      io.auto_stop_pending = io.auto_stop_reply;
+      io.auto_completion_end = io.incoming.size() + io.auto_stop_pending.size();
+    } else {
+      append_bytes(io.incoming, io.auto_stop_reply);
+    }
+  }
+  return 0;
+}
+
 int handle_fake_data(const octa::Message &message) {
   if (message.command != octa::Command::data) { return 0; }
   if (message.address == octa::bulk_address && io.require_auto_completion &&
@@ -1402,19 +1518,8 @@ int handle_fake_data(const octa::Message &message) {
       return -errno;
     }
   }
-  if (message.address == octa::Address{0, 2, 1, 4}) {
-    append_bytes(io.incoming, io.auto_start_reply);
-    if (io.auto_fail_stop) { io.fail_write = io.writes + 2; }
-    if (io.auto_signal != 0 && kill(getpid(), io.auto_signal) != 0) { return -errno; }
-  }
-  if (message.address == octa::Address{0, 2, 1, 5}) {
-    if (io.require_auto_completion) {
-      io.auto_stop_pending = io.auto_stop_reply;
-      io.auto_completion_end = io.incoming.size() + io.auto_stop_pending.size();
-    } else {
-      append_bytes(io.incoming, io.auto_stop_reply);
-    }
-  }
+  const int status = handle_fake_auto_sense(message);
+  if (status != 0) { return status; }
   return handle_fake_route(message);
 }
 
@@ -1511,8 +1616,31 @@ extern "C" int snd_rawmidi_poll_descriptors_revents(snd_rawmidi_t * /*rawmidi*/,
   return 0;
 }
 
-int main() {
-  if (pipe(wake_pipe.data()) != 0) { return 1; }
+namespace {
+
+int observed_cases() {
+  bool passed = true;
+  for (const auto action : {octa::AutoSenseAction::finish, octa::AutoSenseAction::cancel}) {
+    for (const auto scenario : {ObservedScenario::active,
+                                ObservedScenario::unknown,
+                                ObservedScenario::inactive,
+                                ObservedScenario::already_ended,
+                                ObservedScenario::reactivated,
+                                ObservedScenario::missing_end,
+                                ObservedScenario::malformed_end,
+                                ObservedScenario::invalid_initial,
+                                ObservedScenario::invalid_final,
+                                ObservedScenario::restarted,
+                                ObservedScenario::write_failure}) {
+      passed = observed_auto_sense(action, scenario) && passed;
+    }
+  }
+  const int read_closed = close(wake_pipe.front());
+  const int write_closed = close(wake_pipe.back());
+  return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;
+}
+
+int transport_cases() {
   bool memory_cli_passed = true;
   for (const auto action : {octa::MemoryAction::store, octa::MemoryAction::load}) {
     memory_cli_passed = memory_cli_guard(action) && memory_cli_passed;
@@ -1593,4 +1721,14 @@ int main() {
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;
+}
+
+}
+
+int main(int argc, char **argv) {
+  if (argc != 1 && (argc != 2 || std::string_view(argv[1]) != "--observed-auto-sense")) {
+    return 2;
+  }
+  if (pipe(wake_pipe.data()) != 0) { return 1; }
+  return argc == 2 ? observed_cases() : transport_cases();
 }

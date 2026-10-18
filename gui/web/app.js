@@ -508,8 +508,8 @@ function update(result) {
   documentState = result;
   setConnected(true);
   busy = localBusy || Boolean(result.busy);
-  $('#busy-message').textContent = result.auto_sense_activity?.active && !result.auto_sense?.active ?
-    'Auto-Sens is running. Finish or cancel it on the device.' : 'Applying settings…';
+  $('#busy-message').textContent = result.auto_sense?.origin === 'device' && result.auto_sense.state === 'failed' ?
+    result.auto_sense.error : result.auto_sense?.active ? 'Auto-Sens is running.' : 'Applying settings…';
   $('#busy-message').hidden = !busy;
   const state = result.state;
   const rateIndex = parseInt(state.payload_hex.slice(4, 6), 16);
@@ -544,9 +544,10 @@ function update(result) {
     tab.disabled = busy || (rateIndex === 3 && index !== 0);
   }
   const multiActive = activeView === 'mixer' && rateIndex !== 3 && multiple;
-  $('#header-action').classList.toggle('lit', multiActive);
-  $('#header-action').setAttribute('aria-pressed', String(multiActive));
-  $('#header-action').disabled = busy || (activeView === 'mixer' && rateIndex === 3);
+  const autoActive = activeView === 'preamp' && Boolean(result.auto_sense?.active);
+  $('#header-action').classList.toggle('lit', multiActive || autoActive);
+  $('#header-action').setAttribute('aria-pressed', String(multiActive || autoActive));
+  $('#header-action').disabled = (busy && !autoActive) || (activeView === 'mixer' && rateIndex === 3);
   $('#header-action').style.visibility = activeView === 'mixer' && rateIndex === 3 ? 'hidden' : 'visible';
   for (const title of all('.group-title[data-source]')) {
     title.textContent = `${title.dataset.source === 'input' ? 'INPUT' : 'WAVE OUT'} MIXER ${'ABCD'[bus]}`;
@@ -691,25 +692,24 @@ function syncDialogs(state, rateIndex) {
 
 function syncAutoSense(rateIndex) {
   const job = documentState.auto_sense, active = Boolean(job?.active);
-  const external = !active && documentState.auto_sense_activity?.active;
+  const unresolved = job?.origin === 'device' && job.state === 'failed';
   if (autoSenseWasActive && !active && ['completed', 'cancelled'].includes(job?.state)) $('#auto-sens').close();
   autoSenseWasActive = active;
   const messages = {starting: 'Starting Auto-Sens…', running: 'Running...',
     finishing: 'Finishing Auto-Sens…', cancelling: 'Cancelling and restoring settings…',
     failed: job?.error};
-  $('#auto-status').textContent = external ? 'Finish or cancel Auto-Sens on the device.' : messages[job?.state] || '';
+  $('#auto-status').textContent = messages[job?.state] || '';
   $('#auto-status').classList.toggle('running', job?.state === 'running');
   $('#auto-start').textContent = active ? 'Finish' : 'Start';
   for (const check of all('#auto-channels input')) {
     if (active) check.checked = Boolean(job.channels & 1 << Number(check.value));
-    if (external) check.checked = Boolean(documentState.auto_sense_activity.channels & 1 << Number(check.value));
-    check.disabled = active || external || (rateIndex === 3 && Number(check.value) >= 4);
+    check.disabled = active || unresolved || (rateIndex === 3 && Number(check.value) >= 4);
   }
   $('#auto-start').disabled = inFlight.has('auto-sense') || !documentState.capabilities?.auto_sense || writing || localBusy ||
     (active ? job.state !== 'running' : busy || autoSenseChannels() === 0);
   $('#auto-cancel').disabled = inFlight.has('auto-sense') || job?.state === 'cancelling';
-  $('#auto-cancel').textContent = external ? 'Close' : 'Cancel';
-  $('#auto-all').disabled = active || external; $('#auto-none').disabled = active || external;
+  $('#auto-cancel').textContent = unresolved ? 'Close' : 'Cancel';
+  $('#auto-all').disabled = active || unresolved; $('#auto-none').disabled = active || unresolved;
 }
 
 function autoSenseChannels() {

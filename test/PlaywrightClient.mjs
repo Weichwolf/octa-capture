@@ -77,7 +77,7 @@ export class PlaywrightClient {
       const modal=[...document.querySelectorAll('dialog[open]')].at(-1);
       return node && node.getClientRects().length > 0 && (!modal || modal.contains(node)) &&
         !node.disabled && node.getAttribute('aria-disabled') !== 'true' && !node.closest('.unavailable-channel') &&
-        (node.closest('#auto-sens') || document.querySelector('#busy-message')?.hidden);
+        (node.closest('#auto-sens') || node.matches('#view-switch,#header-action') || document.querySelector('#busy-message')?.hidden);
     })()`), `enabled and accessible Playwright control: ${selector}`);
   }
 

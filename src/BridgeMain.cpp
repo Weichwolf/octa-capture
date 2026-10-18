@@ -106,7 +106,29 @@ std::expected<octa::Message, octa::MidiError> execute(octa::MidiSession &session
       command);
 }
 
+bool state_reply(std::uint32_t serial,
+                 const octa::Message &message,
+                 std::optional<bool> stop_sent) {
+  std::ostringstream state;
+  if (!octa::write_state_json(state, message)) {
+    error_reply(serial, {.code = -EBADMSG, .operation = "invalid bridge state"});
+    return false;
+  }
+  std::cout << R"({"id":)" << serial << R"(,"ok":true,"state":)" << state.view();
+  if (stop_sent) { std::cout << R"(,"auto_sense_stop_sent":)" << std::boolalpha << *stop_sent; }
+  std::cout << "}\n" << std::flush;
+  return std::cout.good();
+}
+
 bool dispatch(octa::MidiSession &session, const octa::BridgeRequest &request) {
+  if (const auto *stop = std::get_if<octa::AutoSenseStop>(&request.command)) {
+    const auto result = session.stop_observed_auto_sense(stop->action, notification);
+    if (!result) {
+      error_reply(request.serial, result.error());
+      return false;
+    }
+    return state_reply(request.serial, result->state, result->stop_sent);
+  }
   if (const auto *meters = std::get_if<octa::MeterSwitch>(&request.command)) {
     const auto result = session.set_input_meters(meters->enabled);
     if (!result) {
@@ -121,14 +143,7 @@ bool dispatch(octa::MidiSession &session, const octa::BridgeRequest &request) {
     error_reply(request.serial, result.error());
     return false;
   }
-  std::ostringstream state;
-  if (!octa::write_state_json(state, *result)) {
-    error_reply(request.serial, {.code = -EBADMSG, .operation = "invalid bridge state"});
-    return false;
-  }
-  std::cout << R"({"id":)" << request.serial << R"(,"ok":true,"state":)" << state.view() << "}\n"
-            << std::flush;
-  return std::cout.good();
+  return state_reply(request.serial, *result, std::nullopt);
 }
 
 bool input(octa::MidiSession &session, std::string &pending, std::span<const char> bytes) {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "octa/AutoSense.hpp"
 #include "octa/Bridge.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/InputMonitor.hpp"
@@ -31,6 +32,9 @@ bool valid(const octa::BridgeCommand &command) {
           const auto encoded = octa::encode_input_monitor(change);
           return encoded && octa::decode(*encoded).has_value() &&
                  (!change.channel || *change.channel < 10);
+        } else if constexpr (std::is_same_v<Change, octa::AutoSenseStop>) {
+          const auto encoded = octa::encode_auto_sense_stop(change.action);
+          return encoded && octa::decode(*encoded).has_value();
         } else {
           return true;
         }

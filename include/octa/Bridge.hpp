@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
+#include "octa/AutoSense.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/InputMonitor.hpp"
 #include "octa/PanelCommand.hpp"
@@ -16,12 +17,21 @@ namespace octa {
 
 struct StateQuery {};
 
+struct AutoSenseStop {
+  AutoSenseAction action;
+};
+
 struct MeterSwitch {
   bool enabled;
 };
 
-using BridgeCommand = std::
-    variant<StateQuery, MeterSwitch, PreampChange, DspChange, PanelCommand, InputMonitorChange>;
+using BridgeCommand = std::variant<StateQuery,
+                                   MeterSwitch,
+                                   PreampChange,
+                                   DspChange,
+                                   PanelCommand,
+                                   InputMonitorChange,
+                                   AutoSenseStop>;
 
 struct BridgeRequest {
   std::uint32_t serial;
