@@ -6,6 +6,13 @@ The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It 
 
 WSL 6.18 needs the host workaround below. Simultaneous capture/zero-playback passes ten minutes per rate with 1024/8192-frame period/buffer, but smaller periods produced underruns and digital-return tests found sample gaps without XRUNs. Physical analog response, external synchronization and broader native latency/stability testing remain required.
 
+Native Debian also passes ten seconds of simultaneous capture/zero-playback at
+each rate with actual 256-frame periods and a 1024-frame buffer. Both running
+ALSA streams' parameters and ownership are checked through `/proc/asound`;
+silently negotiated alternatives fail the test. These short silent tests check
+timing and XRUN diagnostics, not signal integrity, round-trip latency or sustained
+performance at these smaller buffers.
+
 Use source matching the target kernel and its prepared build files, including `Module.symvers`:
 
 ```bash
@@ -26,8 +33,10 @@ On native Debian, build files normally come from `linux-headers-$(uname -r)`; so
 
 `tools/check-audio-soak.py --duration 600 --period-size 1024 --rate 192000`
 repeats an isolated quiet duplex run; `--rates` instead cycles all four rates.
-It checks timing, XRUN diagnostics and clock state, stops its streams on errors
-or normal signals, then restores the original rate and complete raw state.
+It checks actual ALSA parameters, timing, XRUN diagnostics and clock state,
+stops its streams on errors or normal signals, then restores the original rate
+and verifies the complete raw state. Raw recovery is attempted independently
+even if clock restoration fails; such a failure still makes the test fail.
 A private raw recovery file is saved before any rate change. A forced kill or
 disconnect can prevent automatic restoration; retain the reported snapshot.
 

@@ -70,6 +70,20 @@ digital-return cases, not calibrated analog response or long-term stability.
 Exclusive PCM access is required; pausing one user's sound server does not
 reserve the device against other login sessions.
 
+The separate silent duplex checker verifies both streams' actual kernel ALSA
+parameters and owner PID, timing, XRUN diagnostics and clock state. Native Debian
+passes ten seconds at each of 44.1/48/96/192 kHz with 256-frame periods and a
+1024-frame buffer. This is separate from the PRBS results above; signal integrity
+and sustained performance at these smaller buffers remain unverified.
+
+```bash
+pasuspender -- python3 tools/check-audio-soak.py --rates --duration 10 --period-size 256 --buffer-size 1024
+```
+
+Close the control panel before this exclusive test. It saves a private recovery
+frame, restores the original rate and verifies complete raw state afterward.
+Clock recovery failure cannot skip a needed raw recovery attempt.
+
 The tested WSL USB/IP path has produced intermittent zero samples and a PRBS
 sequence jump inside otherwise correct digital returns, even without an ALSA
 XRUN. Successful timed transfers and quiet soak checks therefore do not establish

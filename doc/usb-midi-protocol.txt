@@ -146,7 +146,10 @@ changing settings. Repeated reads at 48 kHz work after USB/IP reconnection.
 
 Fsc_GetStatChk2 at 0x1757e reads c0/03/0002/0000, length 1, and compares
 the result with 01. The hardware returned 01. Fsc_GetDIN at 0x17606 reads
-c0/05/0000/0000, length 1; that query timed out in the initial test.
+c0/05/0000/0000, length 1; that query timed out both in the initial USB/IP
+test and on native Debian with direct USB. Clock-status reads before/after
+the native query remained successful and unchanged. No DIN setting write
+has been issued; this does not establish supported setting values.
 
 SendFsC at 0x177c8 negotiates a rate with:
   bmRequestType=40, bRequest=03, wValue=0008, wIndex=0000, wLength=0004

@@ -6,12 +6,14 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import tempfile
 import time
 
 RATES = (44100, 48000, 96000, 192000)
+PCM_DIRECTORY = Path('/proc/asound/OCTACAPTURE')
 
 
 class Check:
@@ -25,6 +27,48 @@ class Check:
         result = subprocess.run([str(self.binary_directory / name), *map(str, arguments)],
                                 check=True, capture_output=True, timeout=15)
         return json.loads(result.stdout)
+
+    def parameters(self, item, rate):
+        direction = 'c' if item['name'] == 'arecord' else 'p'
+        directory = PCM_DIRECTORY / f'pcm0{direction}/sub0'
+        owner = re.search(r'^owner_pid\s*:\s*(\d+)\s*$', (directory / 'status').read_text(), re.M)
+        if owner is None or int(owner[1]) != item['process'].pid:
+            return None
+        fields = dict(line.split(':', 1) for line in (directory / 'hw_params').read_text().splitlines() if ':' in line)
+        if not fields:
+            return None  # The stream may have closed between reading the two files.
+        try:
+            actual = {'access': fields['access'].strip(), 'sample_format': fields['format'].strip(),
+                      'channels': int(fields['channels']), 'rate_hz': int(fields['rate'].split()[0]),
+                      'period_frames': int(fields['period_size']), 'buffer_frames': int(fields['buffer_size'])}
+        except (KeyError, ValueError, IndexError) as error:
+            raise RuntimeError(f'Invalid ALSA hardware parameters for {item["name"]}: {fields}') from error
+        expected = {'access': 'RW_INTERLEAVED', 'sample_format': 'S24_3LE', 'channels': item['channels'],
+                    'rate_hz': rate, 'period_frames': self.period, 'buffer_frames': self.buffer}
+        if actual != expected:
+            raise RuntimeError(f'{item["name"]} negotiated unexpected ALSA parameters: {actual}; requested {expected}')
+        return actual
+
+    def raw_restore(self, recovery):
+        subprocess.run([str(self.binary_directory / 'octa-preset'), 'restore', str(recovery)],
+                       check=True, capture_output=True, timeout=15)
+
+    def restore(self, before, original_rate, recovery):
+        try:
+            self.run('octa-audio-check', original_rate, 'capture')
+        finally:
+            # Clock/PCM acquisition failure must not skip raw state recovery.
+            try:
+                current = self.run('octa-state')
+            except (OSError, ValueError, subprocess.SubprocessError):
+                current = None
+            if current != before:
+                self.raw_restore(recovery)
+            if self.run('octa-state') != before:
+                raise RuntimeError(f'Complete raw restoration failed. Recovery: {recovery}')
+        if self.run('octa-status')['sample_rate_hz'] != original_rate:
+            raise RuntimeError(f'Original clock rate was not restored. Recovery: {recovery}')
+        print('Original rate and complete raw state restored and independently verified.', flush=True)
 
     def duplex(self, rate):
         processes = []
@@ -45,6 +89,10 @@ class Check:
                         continue
                     elapsed = time.monotonic() - item['started']
                     process = item['process']
+                    if 'parameters' not in item:
+                        actual = self.parameters(item, rate)
+                        if actual is not None:
+                            item['parameters'] = actual
                     if process.poll() is None and os.fstat(item['error'].fileno()).st_size:
                         item['error'].seek(0)
                         diagnostic = item['error'].read(4096).decode(errors='replace')
@@ -54,6 +102,8 @@ class Check:
                         diagnostic = item['error'].read(4096).decode(errors='replace')
                         if process.returncode != 0 or diagnostic:
                             raise RuntimeError(f'{rate} Hz {item["name"]}: exit {process.returncode}; {diagnostic}')
+                        if 'parameters' not in item:
+                            raise RuntimeError(f'{rate} Hz {item["name"]}: actual ALSA parameters were not observed')
                         if not self.duration * 0.97 - 1 <= elapsed <= self.duration * 1.10 + 3:
                             raise RuntimeError(f'{rate} Hz {item["name"]}: unexpected duration {elapsed:.3f} s')
                         item['elapsed'] = elapsed
@@ -66,7 +116,8 @@ class Check:
             return {'rate_hz': rate, 'duration_seconds': self.duration, 'clock_active': True,
                     'requested_period_frames': self.period, 'requested_buffer_frames': self.buffer,
                     'streams': [{'direction': item['name'], 'transport_channels': item['channels'],
-                                 'elapsed_seconds': round(item['elapsed'], 3)} for item in processes],
+                                 'elapsed_seconds': round(item['elapsed'], 3),
+                                 'actual_parameters': item['parameters']} for item in processes],
                     'xruns': 0, 'generated_audio': 'digital silence'}
         finally:
             for item in processes:
@@ -123,10 +174,7 @@ def main():
             check.run('octa-audio-check', rate, 'capture')
             print(json.dumps(check.duplex(rate)), flush=True)
     finally:
-        check.run('octa-audio-check', original_rate, 'capture')
-        if check.run('octa-state') != before:
-            raise RuntimeError('Complete raw device state changed.')
-        print('Original rate and complete raw state restored and independently verified.', flush=True)
+        check.restore(before, original_rate, recovery)
     print('PASS simultaneous silent playback/capture, timing, no XRUNs and complete raw restoration.', flush=True)
 
 
