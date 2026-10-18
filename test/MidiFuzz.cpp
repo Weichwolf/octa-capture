@@ -3,6 +3,7 @@
 #include "octa/Dsp.hpp"
 #include "octa/DspControl.hpp"
 #include "octa/Midi.hpp"
+#include "octa/Preamp.hpp"
 #include "octa/PresetState.hpp"
 #include "octa/Protocol.hpp"
 
@@ -65,8 +66,14 @@ void exercise_auto_sense(octa::MidiSession &session) {
 
 void exercise_preset(octa::MidiSession &session, const octa::Message &current) {
   const auto preset = octa::preset_from_bulk(current);
-  require(preset.has_value());
-  if (!preset) { return; }
+  // A checksum-valid bulk reply can still contain malformed packed DSP digits.
+  const bool decoded =
+      octa::decode_preamps(current).has_value() && octa::decode_dsp(current).has_value();
+  require(preset.has_value() == decoded);
+  if (!preset) {
+    require(preset.error() == octa::PresetStateError::data);
+    return;
+  }
   const auto valid = octa::preset_to_bulk(*preset, current);
   const auto writes = io.writes;
   const auto result = session.write_preset(*preset, current, &check_message);

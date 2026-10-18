@@ -23,10 +23,14 @@ def frame(address, payload):
 bulk = frame([1, 0, 0, 0], [0] * 1146)
 highest_rate = [0] * 1146
 highest_rate[2:5] = [3, 0, 1]
+malformed_packed = [0] * 1146
+malformed_packed[0x1d] = 96
+malformed_packed[0xf2] = 32  # Valid MIDI data/checksum, invalid packed DSP digit.
 meters = frame([0, 10, 0, 1], [0, 0, 127, 127] * 4)
 seeds = {
     'bulk': bulk,
     'bulk-192-retained-metadata': frame([1, 0, 0, 0], highest_rate),
+    'bulk-invalid-packed-digit': frame([1, 0, 0, 0], malformed_packed),
     'meters': meters,
     'interleaved': meters + bulk + meters,
     'typed-route': b'\0' + bulk + b'\0',

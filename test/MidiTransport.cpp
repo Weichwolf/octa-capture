@@ -1107,6 +1107,32 @@ bool preset_rejection() {
                  "invalid full-state values rejected before any MIDI read/write or listener call");
 }
 
+bool malformed_preset_bulk() {
+  io = {};
+  auto malformed = octa::decode(bulk_frame());
+  if (!malformed) { return false; }
+  constexpr std::size_t sensitivity_offset = 0x1d;
+  constexpr std::size_t packed_pan_offset = 0xf2;
+  constexpr std::uint8_t sensitivity = 96;
+  constexpr std::uint8_t invalid_nibble = 32;
+  malformed->payload[sensitivity_offset] = sensitivity;
+  malformed->payload[packed_pan_offset] = invalid_nibble;
+  const auto frame = octa::encode(malformed->command, malformed->address, malformed->payload);
+  if (!frame) { return false; }
+  io.replies = {*frame};
+  auto session = octa::MidiSession::open("hw:fake");
+  if (!session) { return false; }
+  const auto received = session->read_bulk_state();
+  if (!received) { return false; }
+  const auto writes = io.writes;
+  const auto preset = octa::preset_from_bulk(*received);
+  const auto restored = session->write_bulk_state(*received);
+  return require(
+      *received == *malformed && !preset && preset.error() == octa::PresetStateError::data &&
+          !restored && restored.error().code == -EINVAL && io.writes == writes,
+      "checksum-valid malformed DSP data stays readable but cannot be exported or written");
+}
+
 struct PresetReadbackCase {
   const octa::Message &original;
   const octa::Message &raw_target;
@@ -1473,9 +1499,9 @@ int main() {
       auto_sense_failures(false) && auto_sense_rejection() && session_buffering() &&
       session_queries() && session_stale_fragment() && session_writes() && memory_operations() &&
       memory_rejection() && memory_partial_failure() && preset_transfer() && preset_rejection() &&
-      preset_192_metadata_readback() && preset_readback_failure() && preset_partial_failure() &&
-      session_uncertain() && session_receive_bounds() && impossible_transfers() &&
-      panel_operations() && panel_rejection() && panel_failures();
+      malformed_preset_bulk() && preset_192_metadata_readback() && preset_readback_failure() &&
+      preset_partial_failure() && session_uncertain() && session_receive_bounds() &&
+      impossible_transfers() && panel_operations() && panel_rejection() && panel_failures();
   const int read_closed = close(wake_pipe.front());
   const int write_closed = close(wake_pipe.back());
   return passed && read_closed == 0 && write_closed == 0 ? 0 : 1;
