@@ -13,6 +13,7 @@ import threading
 from .application import Application
 from .navigation import local_document, local_download
 from .server import LocalServer
+from .window_controls import WindowControls
 
 
 def gtk_modules():
@@ -32,6 +33,7 @@ class Desktop:
         self.server = server
         self.window = None
         self.view = None
+        self.window_controls = None
         self._downloads = {}
         self._server_thread = None
         self._signal_sources = []
@@ -46,10 +48,15 @@ class Desktop:
         self.window = self.Gtk.ApplicationWindow(application=app, title='OCTA-CAPTURE')
         self.window.set_default_size(978, 408)
         self.window.set_resizable(False)
+        self.window_controls = WindowControls(self.window, self.device.data_dir, self.GLib)
         session = self.WebKit.NetworkSession.new_ephemeral()
         session.set_proxy_settings(self.WebKit.NetworkProxyMode.NO_PROXY, None)
         session.connect('download-started', self.download_started)
-        self.view = self.WebKit.WebView(network_session=session)
+        manager = self.WebKit.UserContentManager()
+        manager.connect('script-message-with-reply-received::octaWindow', self.window_message)
+        if not manager.register_script_message_handler_with_reply('octaWindow', None):
+            raise RuntimeError('Could not register the window-control bridge.')
+        self.view = self.WebKit.WebView(network_session=session, user_content_manager=manager)
         self.view.set_size_request(978, 408)
         settings = self.view.get_settings()
         settings.set_enable_developer_extras(False)
@@ -69,6 +76,9 @@ class Desktop:
         self.window.present()
         # The capability never enters argv, browser history or persistent storage.
         self.view.load_uri(f'{self.server.origin}/#token={self.server.token}')
+
+    def window_message(self, _manager, value, reply):
+        return self.window_controls.message(self.view, self.server.origin, value, reply)
 
     def decide_policy(self, _view, decision, kind):
         if kind == self.WebKit.PolicyDecisionType.NAVIGATION_ACTION:
@@ -149,6 +159,8 @@ class Desktop:
                 download.cancel()
             if self.view:
                 self.view.stop_loading()
+            if self.window_controls:
+                self.window_controls.close()
             if self.window:
                 self.window.destroy()
             self.server.shutdown()

@@ -20,11 +20,14 @@ def _unique_object(pairs):
 
 
 class Preferences:
+    defaults = {'show_port_warning': True}
+    filename = 'preferences.json'
+
     def __init__(self, directory):
         self.directory = Path(directory)
-        self.path = self.directory / 'preferences.json'
+        self.path = self.directory / self.filename
         self._lock = threading.RLock()
-        self._value = {'show_port_warning': True}
+        self._value = dict(self.defaults)
         try:
             with self.path.open('r', encoding='utf-8') as source:
                 data = source.read(257)
@@ -35,11 +38,11 @@ class Preferences:
         except (OSError, ValueError, UnicodeError):
             pass
 
-    @staticmethod
-    def _validate(value):
-        if (type(value) is not dict or set(value) != {'show_port_warning'} or
-                type(value['show_port_warning']) is not bool):
-            raise InvalidControl('Expected the audio-port warning preference.')
+    @classmethod
+    def _validate(cls, value):
+        if (type(value) is not dict or set(value) != set(cls.defaults) or
+                any(type(item) is not bool for item in value.values())):
+            raise InvalidControl('Expected the supported boolean preferences.')
 
     def document(self):
         with self._lock:
@@ -62,3 +65,8 @@ class Preferences:
             finally:
                 temporary.unlink(missing_ok=True)
             return self.document()
+
+
+class WindowPreferences(Preferences):
+    defaults = {'always_on_top': False}
+    filename = 'window.json'

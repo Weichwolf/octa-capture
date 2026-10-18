@@ -41,7 +41,7 @@ and continues when the panel closes.
 For the desktop window on Debian 13 (GTK 4.10 or later):
 
 ```bash
-sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-webkit-6.0
+sudo apt install python3-gi python3-xlib gir1.2-gtk-4.0 gir1.2-webkit-6.0
 python3 tools/desktop-gui.py
 ```
 

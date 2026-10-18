@@ -771,9 +771,11 @@ async function saveSettings() {
 
 function menu(name, anchor) {
   const highestRate = documentState?.state.payload_hex.slice(4, 6) === '03';
+  const windowBridge = window.webkit?.messageHandlers?.octaWindow;
+  const topmost = {label: 'Always on top', disabled: true, checkbox: true, checked: false};
   const items = name === 'driver' ? [
     {label: 'Driver Settings…', disabled: !connected || busy, run: () => showDialog('settings')}, null,
-    {label: 'Always on top', disabled: true}, {label: 'Show README', run: () => showDialog('readme')},
+    topmost, {label: 'Show README', run: () => showDialog('readme')},
     {label: 'About Driver & Control Panel…', run: () => showDialog('about')}, null,
     {label: 'Exit', shortcut: 'Alt+F4', run: async () => {
       stopped = true;
@@ -794,6 +796,19 @@ function menu(name, anchor) {
   const enabledItems = name === 'device' ? items.map(item => item ? {...item, disabled: !canOperate() || item.disabled} : null) : items;
   openMenu(enabledItems, rect.left, rect.bottom);
   anchor.setAttribute('aria-expanded', 'true');
+  if (name === 'driver' && windowBridge) {
+    const button = $('#menus [role=menuitemcheckbox]');
+    windowBridge.postMessage({action: 'state'}).then(state => {
+      if (!button.isConnected || !state.supported) return;
+      button.disabled = false;
+      button.setAttribute('aria-checked', String(state.above));
+      button.textContent = `${state.above ? '✓' : '\u00a0'} Always on top`;
+      topmost.run = async () => {
+        try { await windowBridge.postMessage({action: 'set', value: !state.above}); }
+        catch (error) { notify(String(error)); }
+      };
+    }).catch(error => notify(String(error)));
+  }
 }
 
 function setupDialogs() {

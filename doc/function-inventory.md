@@ -66,7 +66,12 @@ it does not imply calibrated audio response or native Debian validation.
 | Windows sound/ASIO rate matching | Windows checkbox 1147 and handler | Host policy, not established as a device command. Trace and define the corresponding Linux behavior. |
 | VS EXPAND/two-unit synchronization | Windows checkbox 1173/handler and readme | Detection, validation, stream synchronization and routing incomplete; second-unit hardware validation unavailable here. |
 | Disconnect, suspend/resume and errors | Both native driver lifecycles | Session/rollback fault tests and actual GUI recovery after module unload/reload pass. Selected serial identities are resolved before live operations. Physical hotplug, USB/URB faults, power management and kernel sanitizer tests remain. |
-| Signal-flow/About/warnings/preferences | Both menus, dialogs and local resources | Local HTTP panel, secondary dialogs and local README implemented. Persistent port-warning preference, inverse About/warning checkboxes and all 160 original warning transitions tested; browser hardware rate tests exercise them. GTK4/WebKitGTK embedding, native Save, external-navigation blocking and Exit pass under WSL/Xvfb. The same installed GTK checks also pass on native Debian, including portal-owned Save/Open. The desktop entry appears in Xfce Applications → Settings. Complete visual/behavior parity and Always on top remain. |
+| Signal-flow/About/warnings/preferences | Both menus, dialogs and local resources | Local HTTP panel, secondary dialogs and local README implemented. Persistent port-warning preference, inverse About/warning checkboxes and all 160 original warning transitions tested; browser hardware rate tests exercise them. GTK4/WebKitGTK embedding, native Save, external-navigation blocking and Exit pass under WSL/Xvfb. The same installed GTK checks also pass on native Debian, including portal-owned Save/Open. The desktop entry appears in Xfce Applications → Settings. Always on top is implemented on EWMH/X11, with actual WM confirmation, private persistence and offline WebKit/Xfce restart tests. Browser/unsupported hosts disable it. Complete visual/behavior parity remains. |
+
+The Windows Always on top handler (`0x14002e510`) toggles its frame state and
+writes `AlwaysTop` to the profile. Window creation (`0x14002e520`) reads it with
+default zero; the menu update handler (`0x14002e650`) reflects that state. Linux
+keeps this host preference separate from the device and audio-port warning.
 
 ## Specific unresolved distinctions
 

@@ -268,6 +268,8 @@ try {
   }
   console.log('PASS original context labels, Initialize/All Ch. submenus and keyboard navigation');
   await browser.click('[data-menu="driver"]');
+  assert.equal(await browser.evaluate('document.querySelector("#menus [role=menuitemcheckbox]").disabled'), true,
+    'A browser cannot change its host window stacking policy');
   await browser.click('#menus button:nth-of-type(3)');
   assert.equal(await browser.evaluate('document.querySelector("#readme").open'), true);
   assert.equal(await browser.evaluate('document.querySelectorAll("#readme a, #readme script, #readme iframe").length'), 0);

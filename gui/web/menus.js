@@ -53,9 +53,10 @@ export class PopupMenus {
       button.textContent = item.label;
       button.setAttribute('role', 'menuitem'); button.tabIndex = -1;
       if (typeof item.checked === 'boolean') {
-        button.setAttribute('role', 'menuitemradio');
+        button.setAttribute('role', item.checkbox ? 'menuitemcheckbox' : 'menuitemradio');
         button.setAttribute('aria-checked', String(item.checked));
-        button.textContent = `${item.checked ? '●' : '○'} ${item.label}`;
+        const mark = item.checkbox ? (item.checked ? '✓' : '\u00a0') : (item.checked ? '●' : '○');
+        button.textContent = `${mark} ${item.label}`;
       }
       button.disabled = Boolean(item.disabled);
       if (item.children) {

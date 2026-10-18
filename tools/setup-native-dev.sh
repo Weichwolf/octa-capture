@@ -40,8 +40,8 @@ apt-get install -y --no-install-recommends \
     "linux-headers-$kernel_release" linux-source-6.12 dkms sparse \
     alsa-utils usbutils kmod acl sudo psmisc git gh gdb binutils elfutils \
     openjdk-21-jdk-headless unzip curl file \
-    python3 python3-gi python3-usb1 python3-unicorn \
-    gir1.2-gtk-4.0 gir1.2-webkit-6.0 gir1.2-atspi-2.0 xvfb xauth dbus-x11 xdotool imagemagick \
+    python3 python3-gi python3-xlib python3-usb1 python3-unicorn \
+    gir1.2-gtk-4.0 gir1.2-webkit-6.0 gir1.2-atspi-2.0 xvfb xauth dbus-x11 xdotool x11-utils xfwm4 imagemagick \
     chromium nodejs npm node-undici eslint shellcheck
 
 usermod -a -G audio "$target_user"

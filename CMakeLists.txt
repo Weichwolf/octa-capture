@@ -134,6 +134,7 @@ add_test(NAME mixer-audio-check COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_
 set_tests_properties(mixer-audio-check PROPERTIES TIMEOUT 10)
 add_test(NAME gui-auto-sense COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiAutoSense.py")
 add_test(NAME gui-navigation COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiNavigation.py")
+add_test(NAME gui-window COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiWindow.py")
 add_test(NAME gui-devices COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiDevices.py")
 add_test(NAME gui-preferences COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiPreferences.py")
 add_test(NAME gui-warnings COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs")
@@ -162,6 +163,7 @@ add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   "${CMAKE_SOURCE_DIR}/test/GuiFaders.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMasterFaders.mjs"
   "${CMAKE_SOURCE_DIR}/test/PlaywrightClient.mjs"
   "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs"
+  "${CMAKE_SOURCE_DIR}/test/WindowPanel.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs" "${CMAKE_SOURCE_DIR}/test/GuiGraphs.mjs")
 set_tests_properties(gui-javascript PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 add_executable(dsp_test test/Dsp.cpp)

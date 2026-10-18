@@ -281,7 +281,7 @@ focus loss, hidden pages and disabling; pending readback cannot reverse local st
 `python3 tools/desktop-gui.py` starts a fixed-size desktop window and a private
 loopback server on an automatically selected port. Optional arguments are
 `--bin-dir`, `--midi-port` and `--data-dir`, as for the HTTP launcher.
-Debian 13 packages are `python3-gi`, `gir1.2-gtk-4.0` and `gir1.2-webkit-6.0`;
+Debian 13 packages are `python3-gi`, `python3-xlib`, `gir1.2-gtk-4.0` and `gir1.2-webkit-6.0`;
 GTK 4.10 or later is required for the native asynchronous file dialog.
 
 The WebKit network session is ephemeral, with no system proxy, external
@@ -291,6 +291,26 @@ panel usable without a GPU. Only the panel's own blob downloads reach the native
 Save dialog. WebKitGTK 6.0 receives a filesystem destination path after user
 selection/overwrite confirmation. Exit and window/server shutdown release CTRL;
 the same Auto-Sens recovery lifecycle applies.
+
+Driver → Always on top uses EWMH on supported X11 desktops, including Xfce.
+Its checkmark reads actual window-manager state; a successful change is confirmed
+before its preference is saved privately in `window.json` and restored at startup.
+The narrow `octaWindow` WebKit message handler accepts only a state query or a
+boolean change for this host's own window. It checks the local document URI and
+accepts no window IDs, paths, commands or device operations. The HTTP API is
+unchanged. Ordinary browsers and unsupported window systems keep this item disabled.
+The offline desktop check uses a private X server and no audio device:
+
+```bash
+xvfb-run -a dbus-run-session -- python3 tools/check-window.py --xfwm
+xvfb-run -a dbus-run-session -- python3 tools/check-window.py
+```
+
+The first command also needs `xfwm4` and `x11-utils`. It verifies actual WebKit
+requests, menu toggling, independent X11 property readback, invalid-message
+rejection and restoration across process restarts; the second verifies the
+unsupported-window-manager behavior. Add `--installed-prefix PREFIX` to check
+the installed Python modules and web assets.
 
 The native integration checker uses real X11 key events for controls and Ctrl+S,
 validates the native Save download, checks live controls/meters, blocks an
@@ -312,8 +332,8 @@ path before import confirmation and compares hardware readback with the prepared
 preset, including the documented 192 kHz header behavior. Preset import can reset
 fields omitted by the original file format; the checker finally restores a fresh
 complete raw snapshot. Screenshots and recovery files remain private under `build/gui/`.
-These are WSL/Xvfb desktop integration checks, not native Debian audio or physical
-signal-quality verification. The remaining feature gaps still apply to both hosts.
+These desktop integration checks pass on WSL and native Debian; they do not
+establish audio signal quality. The remaining feature gaps still apply to both hosts.
 
 `cmake --install build/release --prefix PREFIX` installs the runtime independently
 of the checkout, with `PREFIX/bin/octa-capture` and `octa-capture-http`. Native
