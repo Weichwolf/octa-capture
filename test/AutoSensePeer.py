@@ -4,18 +4,15 @@
 import json
 import signal
 import sys
-import threading
 import time
 
 mode = sys.argv[1]
-requested = threading.Event()
 action = None
 
 
 def stop(number, _frame):
     global action
     action = 'cancel' if number == signal.SIGTERM else 'finish'
-    requested.set()
 
 
 if mode == 'launch-error':
@@ -29,7 +26,12 @@ if mode == 'malformed':
     print('not-json', flush=True)
 else:
     print(json.dumps({'event': 'auto-sense-started'}), flush=True)
-if not requested.wait(timeout=3):
+# Keep the signal handler free of locks: it can interrupt this same thread
+# while threading.Event.wait holds its non-reentrant condition lock.
+deadline = time.monotonic() + 3
+while action is None and time.monotonic() < deadline:
+    time.sleep(0.005)
+if action is None:
     sys.exit(2)
 if action == 'cancel':
     if mode != 'recovery-error':

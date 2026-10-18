@@ -25,6 +25,12 @@ def wait_for(predicate):
     raise AssertionError('Timed out waiting for interactive Auto-Sens.')
 
 
+def job_diagnostics(job):
+    return {'returncode': job._process.returncode, 'prepared': job._prepared,
+            'requested': job._requested, 'sent': job._sent, 'protocol_error': job._protocol_error,
+            'log': job._log_path.read_text(errors='replace')}
+
+
 class Observed(unittest.TestCase):
     def test_unknown_idle_running_and_spontaneous_completion(self):
         tracker = ObservedAutoSense()
@@ -162,8 +168,8 @@ class Interactive(unittest.TestCase):
                     wait_for(lambda: job.document()['state'] == 'running')
                     job.request(action)
                 thread.join(timeout=5)
-                self.assertFalse(thread.is_alive())
-                self.assertEqual(job.document()['state'], expected)
+                self.assertFalse(thread.is_alive(), job_diagnostics(job))
+                self.assertEqual(job.document()['state'], expected, job_diagnostics(job))
                 self.assertFalse(job.document()['active'])
                 job.require_available()
             finally:
@@ -199,7 +205,7 @@ class Interactive(unittest.TestCase):
             try:
                 with patch.object(job._process, 'wait', side_effect=timeout_once):
                     job.run()
-                self.assertEqual(job.document()['state'], 'cancelled')
+                self.assertEqual(job.document()['state'], 'cancelled', job_diagnostics(job))
                 self.assertFalse(job.document()['active'])
                 self.assertEqual(job._process.returncode, 130)
             finally:
@@ -265,11 +271,7 @@ class Interactive(unittest.TestCase):
                     application.stop_auto_sense({'action': 'cancel'})
                 application._auto_thread.join(timeout=5)
                 job = application._auto_job
-                self.assertEqual(job.document()['state'], 'cancelled',
-                                 {'mode': stop, 'returncode': job._process.returncode,
-                                  'prepared': job._prepared, 'requested': job._requested,
-                                  'sent': job._sent, 'protocol_error': job._protocol_error,
-                                  'log': job._log_path.read_text(errors='replace')})
+                self.assertEqual(job.document()['state'], 'cancelled', {'mode': stop, **job_diagnostics(job)})
                 if stop not in ('close', 'close-early'):
                     self.assertFalse(application.snapshot()['busy'])
             finally:

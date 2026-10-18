@@ -90,9 +90,12 @@ With verified bounded RTKit SCHED_RR priority 5, all ten sources pass at
 44.1/48/96 kHz with 128/512 frames: ten-second streams, 16,929,000 checked
 samples and complete raw/rate recovery. Longer-duration performance remains open.
 
-Immediate Auto-Sens shutdown has one unreproduced offline lifecycle failure.
-Failure diagnostics retain child exit status, readiness, requested/sent signal
-and stderr. The cause remains unresolved.
+The offline Auto-Sens test peer used `threading.Event.set()` inside a signal
+handler; a deterministic interrupted-lock probe demonstrates a deadlock. The
+peer now uses flag-only handlers. Earlier peer exit-2 timeouts still lack captured
+signal timing, so their cause remains unresolved; no production lifecycle defect
+is established. Failure diagnostics retain child exit status, readiness,
+requested/sent signal and stderr.
 
 One native control-stress run failed while restoring a raw snapshot. Independent
 outer recovery restored and verified the complete original state and rate.
