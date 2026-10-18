@@ -18,6 +18,7 @@ if (( $# > 1 )); then
 fi
 server_log=${1:-build/gui/server.log}
 if [[ " ${arguments[*]} " == *' --playwright '* ]]; then
+    node test/GuiShortcuts.mjs "$server_log"
     exec node test/GuiBrowser.mjs "$server_log" playwright "${arguments[@]}"
 fi
 umask 077

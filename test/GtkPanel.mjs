@@ -13,6 +13,29 @@ function checkFooter(documentState, check) {
   }
 }
 
+async function checkModalShortcuts(id, check) {
+  const before = [...document.querySelectorAll('dialog[open]')].map(dialog=>dialog.id);
+  const picker = document.querySelector('#load-file'), originalFetch = window.fetch;
+  let fileRequests = 0, fileClicks = 0;
+  const clicked = () => { fileClicks++; };
+  picker.addEventListener('click', clicked);
+  window.fetch = (...args) => {
+    if (new URL(args[0], location.href).pathname === '/api/preset') fileRequests++;
+    return originalFetch.apply(window, args);
+  };
+  try {
+    for (const key of ['s', 'o', 'p']) {
+      document.dispatchEvent(new KeyboardEvent('keydown', {key, ctrlKey: true, bubbles: true, cancelable: true}));
+    }
+    check(fileRequests === 0 && fileClicks === 0, `${id} blocks file commands in WebKit`);
+    check(JSON.stringify([...document.querySelectorAll('dialog[open]')].map(dialog=>dialog.id)) === JSON.stringify(before),
+      `${id} retains modal ownership in WebKit`);
+  } finally {
+    window.fetch = originalFetch;
+    picker.removeEventListener('click', clicked);
+  }
+}
+
 export async function checkPanel(write) {
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   const until = async (predicate, name) => {
@@ -92,6 +115,7 @@ export async function checkPanel(write) {
   for (const id of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about', 'readme', 'port-warning']) {
     const dialog = document.querySelector(`#${id}`);
     dialog.showModal(); check(dialog.open, `${id} opened`);
+    await checkModalShortcuts(id, check);
     const box = dialog.getBoundingClientRect();
     check(box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth,
       `${id} fits the GTK viewport`);

@@ -146,6 +146,13 @@ Initialize and context menus have keyboard-accessible submenus. Mixer level/send
 All Ch. affects ten strips; pan offers alternating Left/Right or Center. Compressor
 Bypass Off All Ch. enables compression; Bypass On All Ch. disables it.
 
+Ctrl+S/O/P and their menu items share Save/Load/Patch Bay availability. Modal
+dialogs, busy/disconnected state, pending writes and active file operations
+block them; Patch Bay also remains unavailable at 192 kHz. Extra Shift/Alt
+modifiers do not invoke these commands, and key repeat cannot duplicate Save.
+Windows Ctrl bindings and modal behavior are checked against the original GUI
+using the offline device model; this is not Windows hardware verification.
+
 Recovery files are created privately under `$XDG_STATE_HOME/octa-capture`
 (default `~/.local/state/octa-capture`), or `--data-dir`. Keep them after an
 interrupted operation. The bridge releases CTRL after an explicit disconnect,
@@ -272,6 +279,14 @@ tools/check-gui.sh --playwright --write --rates --matrix
 readback, multiple-mixer routing, panel commands, ten-channel context actions and
 Auto-Sens finish/cancel, and restores fresh raw snapshots, then checks release of CTRL. The
 checker saves private screenshots and recovery files under `build/gui/`.
+`--playwright` first runs `test/GuiShortcuts.mjs`: real Save/Open/Patch Bay keys,
+menu eligibility, file-choice confirmation cancellation and repeated-key guards.
+Busy, pending-write and missing-device cases use explicit response simulation;
+the simulated write never reaches hardware. Deliberate missing-state HTTP 503
+replies require exact endpoint/status/console correspondence. Native Debian
+passes these checks at all four actual rates with complete raw/rate preservation.
+The GTK checker also checks modal command suppression in WebKit, alongside its
+actual X11 keyboard and native Save/Open checks.
 `--rates` also checks immediate sample-rate selection, Close/Escape semantics, kernel/bulk rate agreement,
 channel availability, 192 kHz menu/dialog restrictions and PCM meter recovery,
 then restores the original rate. The Initialize submenu stays available at 192

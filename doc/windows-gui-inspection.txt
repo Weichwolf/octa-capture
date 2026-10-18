@@ -108,6 +108,12 @@ direct-mixer-offline-model.png, patchbay-offline-model.png and
 reverb-offline-model.png. Only our own HTML/CSS/vector artwork is shipped.
 Native Windows font rendering and full visual parity remain unverified.
 
+In the connected offline model, Ctrl+S/Ctrl+O/Ctrl+P open Save/Open/Patch Bay
+from the main panel. Auto-Sens and Patch Bay modal dialogs suppress these file
+shortcuts; Ctrl+Shift+S does not invoke Save. Accelerator resource 128 confirms
+Ctrl-only O/S/P commands 0x8053/0x8054/0x805C (flags 0x0B, no Shift/Alt).
+Its additional Space/0x807B entry has no established command behavior yet.
+
 Auto-Sens selection also opens against the offline model (local capture:
 auto-sens-selection-offline-model.png, 294x146 client pixels). It has two rows
 of four inputs, Select All/Clear All at the right and Start/Cancel below. Empty

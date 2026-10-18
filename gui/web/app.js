@@ -737,8 +737,8 @@ function cancelAutoSense() {
   } else $('#auto-sens').close();
 }
 
-function closeMenus() {
-  popups.close();
+function closeMenus(restore = false) {
+  popups.close(restore);
 }
 
 function openMenu(items, x, y) {
@@ -785,13 +785,28 @@ function controlMenu(event, control) {
   if (items.length) openMenu(items, event.clientX, event.clientY);
 }
 
+function canRunPanelCommand(command) {
+  return canOperate() && !inFlight.has('save') && !inFlight.has('file') && !document.querySelector('dialog[open]') &&
+    (command !== 'patchbay' || documentState.state.payload_hex.slice(4, 6) !== '03');
+}
+
+function runPanelCommand(command) {
+  if (!canRunPanelCommand(command)) return;
+  closeMenus(true);
+  if (command === 'save') void saveSettings();
+  else if (command === 'load') $('#load-file').click();
+  else showDialog('patchbay');
+}
+
 async function saveSettings() {
+  if (!canRunPanelCommand('save') || !enter('save')) return;
   try {
     const data = await api('/api/preset', undefined, true);
     const url = URL.createObjectURL(new Blob([data], {type: 'application/octet-stream'}));
     const link = el('a'); link.href = url; link.download = 'OCTA-CAPTURE.octa'; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (error) { notify(error.message); }
+  finally { leave('save'); }
 }
 
 function menu(name, anchor) {
@@ -808,9 +823,9 @@ function menu(name, anchor) {
       window.close(); setConnected(false, 'The control panel is closed. You can close this browser tab.');
     }},
   ] : [
-    {label: 'Save settings…', shortcut: 'Ctrl+S', run: saveSettings},
-    {label: 'Load settings…', shortcut: 'Ctrl+O', run: () => $('#load-file').click()}, null,
-    {label: 'Open the Patch Bay…', shortcut: 'Ctrl+P', disabled: highestRate, run: () => showDialog('patchbay')}, null,
+    {label: 'Save settings…', shortcut: 'Ctrl+S', disabled: !canRunPanelCommand('save'), run: () => runPanelCommand('save')},
+    {label: 'Load settings…', shortcut: 'Ctrl+O', disabled: !canRunPanelCommand('load'), run: () => runPanelCommand('load')}, null,
+    {label: 'Open the Patch Bay…', shortcut: 'Ctrl+P', disabled: !canRunPanelCommand('patchbay'), run: () => runPanelCommand('patchbay')}, null,
     {label: 'Directly Output the Inputs', disabled: highestRate, run: () => operation({action: 'direct-out'}, 'This will change the patchbay and direct mixer settings. Do you want to continue?')}, null,
     {label: 'Initialize…', children:
       [['all', 'All'], ['preamps', 'MIC PRE'], ['direct-mix', 'DIRECT MIX'], ['reverb', 'REVERB'], ['patchbay', 'PATCHBAY']].map(([target, label]) =>
@@ -900,7 +915,9 @@ function setupDialogs() {
   }
   $('#load-file').addEventListener('change', async event => {
     const input = event.currentTarget, file = input.files[0];
-    if (!file || !enter('file')) return;
+    if (!file) return;
+    if (!canRunPanelCommand('load')) { resetFile(input); return; }
+    if (!enter('file')) return;
     input.disabled = true;
     try {
       if (file.size !== 1639) throw new Error('Choose a valid OCTA-CAPTURE .octa settings file.');
@@ -920,12 +937,10 @@ function setupEvents() {
   document.addEventListener('click', event => { if (!event.target.closest('.menu')) closeMenus(); });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') closeMenus();
-    if ((event.ctrlKey || event.metaKey) && ['s', 'o', 'p'].includes(event.key.toLowerCase())) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
+        ['s', 'o', 'p'].includes(event.key.toLowerCase())) {
       event.preventDefault();
-      const command = event.key.toLowerCase();
-      if (command === 's') void saveSettings();
-      else if (command === 'o') $('#load-file').click();
-      else showDialog('patchbay');
+      if (!event.repeat) runPanelCommand({s: 'save', o: 'load', p: 'patchbay'}[event.key.toLowerCase()]);
     }
   });
   $('#view-switch').addEventListener('click', () => {
