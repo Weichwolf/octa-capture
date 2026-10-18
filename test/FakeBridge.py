@@ -16,6 +16,11 @@ for line in sys.stdin:
     if sys.argv[1] == 'eof':
         break
     identifier = int(serial) + (1 if sys.argv[1] == 'bad-id' else 0)
+    if sys.argv[1] == 'auto-sense':
+        channels = 1 if operation == 'state' else 0
+        emit({'event': 'auto-sense', 'channels': channels, 'active': bool(channels)})
+    if sys.argv[1] == 'auto-sense-bad' and operation == 'state':
+        emit({'event': 'auto-sense', 'channels': 1, 'active': False})
     if operation == 'meters' and arguments == ['1']:
         emit({'event': 'meters', 'input_levels': [0] * 8, 'input_db': [-96] * 8})
     emit({'id': identifier, 'ok': True,

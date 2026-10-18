@@ -508,6 +508,8 @@ function update(result) {
   documentState = result;
   setConnected(true);
   busy = localBusy || Boolean(result.busy);
+  $('#busy-message').textContent = result.auto_sense_activity?.active && !result.auto_sense?.active ?
+    'Auto-Sens is running. Finish or cancel it on the device.' : 'Applying settings…';
   $('#busy-message').hidden = !busy;
   const state = result.state;
   const rateIndex = parseInt(state.payload_hex.slice(4, 6), 16);
@@ -689,22 +691,25 @@ function syncDialogs(state, rateIndex) {
 
 function syncAutoSense(rateIndex) {
   const job = documentState.auto_sense, active = Boolean(job?.active);
+  const external = !active && documentState.auto_sense_activity?.active;
   if (autoSenseWasActive && !active && ['completed', 'cancelled'].includes(job?.state)) $('#auto-sens').close();
   autoSenseWasActive = active;
   const messages = {starting: 'Starting Auto-Sens…', running: 'Running...',
     finishing: 'Finishing Auto-Sens…', cancelling: 'Cancelling and restoring settings…',
     failed: job?.error};
-  $('#auto-status').textContent = messages[job?.state] || '';
+  $('#auto-status').textContent = external ? 'Finish or cancel Auto-Sens on the device.' : messages[job?.state] || '';
   $('#auto-status').classList.toggle('running', job?.state === 'running');
   $('#auto-start').textContent = active ? 'Finish' : 'Start';
   for (const check of all('#auto-channels input')) {
     if (active) check.checked = Boolean(job.channels & 1 << Number(check.value));
-    check.disabled = active || (rateIndex === 3 && Number(check.value) >= 4);
+    if (external) check.checked = Boolean(documentState.auto_sense_activity.channels & 1 << Number(check.value));
+    check.disabled = active || external || (rateIndex === 3 && Number(check.value) >= 4);
   }
   $('#auto-start').disabled = inFlight.has('auto-sense') || !documentState.capabilities?.auto_sense || writing || localBusy ||
     (active ? job.state !== 'running' : busy || autoSenseChannels() === 0);
   $('#auto-cancel').disabled = inFlight.has('auto-sense') || job?.state === 'cancelling';
-  $('#auto-all').disabled = active; $('#auto-none').disabled = active;
+  $('#auto-cancel').textContent = external ? 'Close' : 'Cancel';
+  $('#auto-all').disabled = active || external; $('#auto-none').disabled = active || external;
 }
 
 function autoSenseChannels() {

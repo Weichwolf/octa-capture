@@ -67,6 +67,7 @@ Output is newline-delimited JSON:
 {"event":"ready"}
 {"id":1,"ok":true,"state":{"payload_hex":"...","preamps":[],"mixers":[]}}
 {"event":"meters","input_levels":[0,0,0,0,0,0,0,0],"input_db":[-96,-96,-96,-96,-96,-96,-96,-96]}
+{"event":"auto-sense","channels":1,"active":true}
 {"id":2,"ok":true}
 {"id":3,"ok":false,"code":-5,"error":"Device command failed."}
 ```
@@ -173,6 +174,24 @@ inject a hardware failure. `tools/verify-auto-sense-ui.py WINDOWS-GUI MAC-GUI`
 executes 3,072 selection/gating cases per original binary with host controls
 stubbed. Adopting calibration started outside this backend remains unimplemented;
 device activity notifications are separate from the bulk state.
+
+`GET /api/state` separately exposes `auto_sense_activity`: either `null` (not yet
+observed on this connection) or `{channels, active, observed_age_ms}`. The bridge
+forwards both selection and completion notifications, including an inactive
+notification that changes no bits. Unknown/malformed MIDI emits no activity JSON;
+invalid subprocess events fail the connection. Observation age measures time
+since the latest notification; it is not a freshness/expiry threshold. Disconnect,
+process failure and reconnect discard the observation. This telemetry does not
+create an owned calibration job or yet implement external-operation adoption.
+While observed active, the backend rejects conflicting writes and a second start;
+the GUI shows a device-operation hint and disables those controls. An already
+open Auto-Sens dialog shows the observed channels and offers Close, without
+promising to cancel the device operation. Finish/cancel on the device until
+external-operation takeover is implemented.
+Native Debian verifies a valid test-program start through actual device MIDI,
+C++ serialization, the Python reader and the authenticated HTTP response, followed
+by an acknowledged cancel and complete raw restoration. This is not a physical
+front-panel-button test.
 
 The independently authored web assets use the original parameter values and
 reference-derived behavior, not extracted manufacturer images. Unimplemented

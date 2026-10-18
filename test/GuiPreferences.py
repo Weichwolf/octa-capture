@@ -83,6 +83,7 @@ class Storage(unittest.TestCase):
     def test_application_preferences_remain_usable_without_an_audio_device(self):
         application = Application('/missing/bin', self.root)
         application.bridge = Mock()
+        application.bridge.auto_sense_activity.return_value = None
         self.assertTrue(application.preferences()['show_port_warning'])
         self.assertFalse(application.set_preferences({'show_port_warning': False})['show_port_warning'])
         application.bridge.request.assert_not_called()

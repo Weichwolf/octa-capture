@@ -130,6 +130,8 @@ class Bridge:
         self._meter_time = None
         self._pcm = None
         self._pcm_time = None
+        self._auto_activity = None
+        self._auto_activity_time = None
         self._meter_history = deque(maxlen=64)
         self._meter_serial = 0
 
@@ -150,17 +152,39 @@ class Bridge:
                     self._update_meter(response)
                 elif response.get('event') == 'pcm-meters':
                     self._update_pcm(response.get('pcm'))
+                elif response.get('event') == 'auto-sense':
+                    self._update_auto_sense(response)
                 else:
                     self._replies.put_nowait(response)
         except (OSError, ValueError, queue.Full, DeviceError) as error:
             self._failure = str(error)
         finally:
+            with self._data_lock:
+                self._auto_activity = None
+                self._auto_activity_time = None
             self._failure = self._failure or 'Device connection closed.'
             self._ready.set()
             try:
                 self._replies.put_nowait({'id': 0, 'ok': False})
             except queue.Full:
                 pass
+
+    def _update_auto_sense(self, response):
+        channels, active = response.get('channels'), response.get('active')
+        if (set(response) != {'event', 'channels', 'active'} or response['event'] != 'auto-sense' or
+                type(channels) is not int or not 0 <= channels <= 255 or
+                type(active) is not bool or active != bool(channels)):
+            raise DeviceError('Invalid Auto-Sens activity event.')
+        with self._data_lock:
+            self._auto_activity = {'channels': channels, 'active': active}
+            self._auto_activity_time = time.monotonic()
+
+    def auto_sense_activity(self):
+        with self._data_lock:
+            if self._auto_activity is None:
+                return None
+            return {**self._auto_activity,
+                    'observed_age_ms': int((time.monotonic() - self._auto_activity_time) * 1000)}
 
     def _update_meter(self, response):
         levels, decibels = response.get('input_levels'), response.get('input_db')
@@ -266,6 +290,8 @@ class Bridge:
             self._meter_time = None
             self._pcm = None
             self._pcm_time = None
+            self._auto_activity = None
+            self._auto_activity_time = None
             self._meter_history.clear()
 
     def _exchange(self, operation, arguments):

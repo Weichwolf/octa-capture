@@ -85,6 +85,7 @@ class Interactive(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             application = Application('/missing/bin', directory)
             application.bridge = Mock()
+            application.bridge.auto_sense_activity.return_value = None
             application.bridge.meters.return_value = None
             application.bridge.request.return_value = {'state': {'payload_hex': '000001'}}
             application._clock_status = Mock(return_value=None)
@@ -125,6 +126,7 @@ class Interactive(unittest.TestCase):
     def test_invalid_requests_never_open_device(self):
         application = Application('/missing/bin', '/unused')
         application.bridge = Mock()
+        application.bridge.auto_sense_activity.return_value = None
         for body in ({}, {'channels': True}, {'channels': 0}, {'channels': 256},
                      {'channels': 1, 'command': 'id'}, {'channels': '1'}):
             with self.subTest(body=body), self.assertRaises(InvalidControl):
@@ -147,6 +149,7 @@ class Interactive(unittest.TestCase):
             with self.subTest(method=method):
                 application = Application('/missing/bin', '/unused')
                 application.bridge = Mock()
+                application.bridge.auto_sense_activity.return_value = None
                 checked = threading.Event()
                 errors = []
                 require_available = application._require_no_auto_sense

@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gui.application import Application
-from gui.backend import InvalidControl, validate_control
+from gui.backend import DeviceError, InvalidControl, validate_control
 from gui.server import LocalServer
 
 
@@ -267,9 +267,29 @@ class Http(unittest.TestCase):
 
 
 class Operations(unittest.TestCase):
+    def test_observed_activity_is_separate_from_owned_calibration(self):
+        application = Application('/missing/bin', '/unused')
+        application.bridge = Mock()
+        application.bridge.meters.return_value = None
+        application._remember({'test': True})
+        for activity in (None, {'channels': 1, 'active': True, 'observed_age_ms': 0},
+                         {'channels': 0, 'active': False, 'observed_age_ms': 1000}):
+            application.bridge.auto_sense_activity.return_value = activity
+            document = json.loads(json.dumps(application._document()))
+            self.assertEqual(document['auto_sense_activity'], activity)
+            self.assertIsNone(document['auto_sense'])
+            self.assertEqual(document['busy'], bool(activity and activity['active']))
+            if activity and activity['active']:
+                with self.assertRaises(DeviceError):
+                    application.change({'kind': 'preamp', 'channel': 0, 'parameter': 'sensitivity', 'value': 20})
+                with self.assertRaises(DeviceError):
+                    application.start_auto_sense({'channels': 1})
+        application.bridge.request.assert_not_called()
+
     def test_short_queries_do_not_lock_the_panel(self):
         application = Application('/missing/bin', '/unused')
         application.bridge = Mock()
+        application.bridge.auto_sense_activity.return_value = None
         application.bridge.meters.return_value = None
         application._remember({'test': True})
         entered, release = threading.Event(), threading.Event()
@@ -294,6 +314,7 @@ class Operations(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             application = Application('/missing/bin', Path(directory) / 'recovery')
             application.bridge = Mock()
+            application.bridge.auto_sense_activity.return_value = None
             for body in ({'action': 'shell', 'command': 'id'}, {'action': 'initialize', 'target': '../all'},
                          {'action': 'routing', 'preset': None}, {'action': 'memory-store', 'extra': True},
                          {'action': 'sample-rate', 'rate': True}, {'action': 'sample-rate', 'rate': 50000}):

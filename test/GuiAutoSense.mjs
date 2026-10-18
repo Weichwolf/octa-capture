@@ -29,10 +29,15 @@ export async function checkAutoSenseSelection(browser) {
 export async function checkAutoSenseFailure(browser) {
   if (!browser.page) return;
   // Change only browser responses. No calibration or failed recovery is sent to hardware.
-  let phase = 'cancelling';
+  let phase = 'external';
   const simulated = async route => {
     const response = await route.fetch();
     const original = await response.json();
+    if (phase === 'external') {
+      await route.fulfill({response, json: {...original, busy: true, auto_sense: null,
+        auto_sense_activity: {channels: 1, active: true, observed_age_ms: 0}}});
+      return;
+    }
     const active = phase === 'cancelling';
     await route.fulfill({response, json: {...original, busy: active,
       auto_sense: {state: phase, active, channels: 1, error: active ? null : 'Simulated recovery failure'}}});
@@ -40,6 +45,10 @@ export async function checkAutoSenseFailure(browser) {
   await browser.click('#header-action');
   await browser.page.route('**/api/state', simulated);
   try {
+    await until(() => browser.evaluate('document.querySelector("#auto-cancel").textContent === "Close"'), 'observed external activity warning');
+    assert.equal(await browser.evaluate('document.querySelector("#auto-start").disabled && document.querySelector("#footer-rate").disabled && document.querySelector("#auto-all").disabled && document.querySelector("#auto-none").disabled'), true, 'External activity blocks competing operations');
+    assert.match(await browser.evaluate('document.querySelector("#busy-message").textContent'), /Finish or cancel it on the device/);
+    phase = 'cancelling';
     await until(() => browser.evaluate('document.querySelector("#auto-cancel").disabled'), 'simulated pending cancellation');
     assert.deepEqual(await browser.evaluate('[...document.querySelectorAll("#auto-channels input:checked")].map(node=>Number(node.value))'), [0], 'Active checks are populated from the backend job');
     phase = 'failed';
@@ -50,5 +59,5 @@ export async function checkAutoSenseFailure(browser) {
     await until(() => browser.evaluate('document.querySelector("#auto-status").textContent === "" && !document.querySelector("#auto-cancel").disabled'), 'real idle state restored after response simulation');
     await browser.click('#auto-cancel');
   }
-  console.log('PASS browser-only Auto-Sens active-channel adoption and failed-recovery dialog preservation simulation');
+  console.log('PASS browser-only external activity busy guards, owned active-channel adoption and failed-recovery dialog preservation simulation');
 }

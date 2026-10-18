@@ -89,12 +89,14 @@ class Selection(unittest.TestCase):
     def setUp(self):
         self.application = Application('/missing/bin', '/unused', 'hw:0,0,1')
         self.old = Mock()
+        self.old.auto_sense_activity.return_value = None
         self.application.bridge = self.old
         self.devices = (Device('1-1', 'OCTACAPTURE', 0, 'FIRST'),
                         Device('1-2', 'OCTACAPTURE_1', 2, 'SECOND'))
 
     def test_selection_closes_old_peer_and_queries_only_new_card(self):
         new = Mock()
+        new.auto_sense_activity.return_value = None
         new.request.return_value = {'state': {'new': True}}
         new.meters.return_value = None
         self.application._remember({'old': True})
@@ -144,6 +146,7 @@ class Selection(unittest.TestCase):
 
     def test_open_failure_drops_old_state_and_retains_selected_card_for_retry(self):
         new = Mock()
+        new.auto_sense_activity.return_value = None
         new.request.side_effect = DeviceError('Disconnected during selection.')
         self.application._remember({'old': True})
         with patch('gui.application.discover', return_value=self.devices), \
@@ -159,6 +162,7 @@ class Selection(unittest.TestCase):
         self.application._selected_identity = 'serial:FIRST'
         replacement = Device('serial:FIRST', 'OCTACAPTURE_2', 3, 'FIRST')
         new = Mock()
+        new.auto_sense_activity.return_value = None
         new.request.return_value = {'state': {'reconnected': True}}
         new.meters.return_value = None
         self.application._clock_status = Mock(return_value=None)

@@ -75,6 +75,48 @@ class Controls(unittest.TestCase):
 
 
 class Transport(unittest.TestCase):
+    def test_auto_sense_is_unknown_until_observed_and_invalidated_on_close(self):
+        peer = self.bridge('auto-sense')
+        self.assertIsNone(peer.auto_sense_activity())
+        peer.request('state')
+        observed = peer.auto_sense_activity()
+        self.assertEqual((observed['channels'], observed['active']), (1, True))
+        self.assertGreaterEqual(observed['observed_age_ms'], 0)
+        observed['channels'] = 255
+        self.assertEqual(peer.auto_sense_activity()['channels'], 1)
+        peer.request('preamp', [0, 4, 20])
+        self.assertEqual(peer.auto_sense_activity()['channels'], 0)
+        self.assertIs(peer.auto_sense_activity()['active'], False)
+        peer.close()
+        self.assertIsNone(peer.auto_sense_activity())
+        peer.request('state')
+        self.assertIs(peer.auto_sense_activity()['active'], True)
+        peer._process.terminate()
+        peer._reader.join(timeout=3)
+        self.assertFalse(peer._reader.is_alive())
+        self.assertIsNone(peer.auto_sense_activity())
+
+    def test_auto_sense_event_bounds_and_atomic_rejection(self):
+        peer = Bridge(Path('/nonexistent/backend'))
+        valid = {'event': 'auto-sense', 'channels': 1, 'active': True}
+        peer._update_auto_sense(valid)
+        for changes in ({'channels': True}, {'channels': -1}, {'channels': 256}, {'channels': 1.0},
+                        {'active': 1}, {'active': False}, {'event': 'other'}, {'extra': 0}):
+            with self.subTest(changes=changes), self.assertRaises(DeviceError):
+                peer._update_auto_sense({**valid, **changes})
+            self.assertEqual(peer.auto_sense_activity()['channels'], 1)
+        for key in valid:
+            with self.subTest(missing=key), self.assertRaises(DeviceError):
+                peer._update_auto_sense({name: value for name, value in valid.items() if name != key})
+        peer._update_auto_sense({'event': 'auto-sense', 'channels': 0, 'active': False})
+        self.assertIs(peer.auto_sense_activity()['active'], False)
+
+    def test_bad_auto_sense_event_fails_the_transport(self):
+        peer = self.bridge('auto-sense-bad')
+        with self.assertRaises(DeviceError):
+            peer.request('state')
+        self.assertIsNone(peer.auto_sense_activity())
+
     def bridge(self, mode='normal'):
         peer = Bridge(Path(__file__).with_name('FakeBridge.py'), mode)
         self.addCleanup(peer.close)

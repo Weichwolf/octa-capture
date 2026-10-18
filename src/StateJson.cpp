@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "octa/StateJson.hpp"
 
+#include "octa/AutoSense.hpp"
 #include "octa/Dsp.hpp"
 #include "octa/Preamp.hpp"
 #include "octa/Protocol.hpp"
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <iomanip>
 #include <ios>
 #include <ostream>
@@ -87,6 +89,18 @@ void print_preamp(std::ostream &out, const octa::PreampState &preamp) {
 }
 
 namespace octa {
+
+bool write_auto_sense_activity_json(std::ostream &out, const Message &message) {
+  AutoSenseChannels channels{};
+  if (!apply_auto_sense_update(channels, message)) { return false; }
+  std::uint32_t mask = 0;
+  for (std::size_t channel = 0; channel < channels.size(); ++channel) {
+    if (channels[channel]) { mask |= 1U << channel; }
+  }
+  out << std::dec << R"({"event":"auto-sense","channels":)" << mask << R"(,"active":)"
+      << std::boolalpha << (mask != 0) << '}';
+  return out.good();
+}
 
 bool write_state_json(std::ostream &out, const Message &message) {
   const auto bank = decode_preamps(message);

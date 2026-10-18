@@ -12,6 +12,7 @@
 #include "octa/Preset.hpp"
 #include "octa/PresetState.hpp"
 #include "octa/Protocol.hpp"
+#include "octa/StateJson.hpp"
 
 #include <algorithm>
 #include <array>
@@ -20,6 +21,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <sstream>
 #include <vector>
 
 namespace {
@@ -165,6 +167,12 @@ void check_dsp(octa::DspState &state, const octa::Message &message) {
 void check_auto_sense(octa::AutoSenseChannels &channels, const octa::Message &message) {
   const auto previous = channels;
   const auto changed = octa::apply_auto_sense_update(channels, message);
+  std::ostringstream event;
+  const bool emitted = octa::write_auto_sense_activity_json(event, message);
+  require(emitted == changed.has_value());
+  require(emitted != event.view().empty());
+  constexpr std::size_t maximum_event_size = 64;
+  require(event.view().size() < maximum_event_size);
   if (!changed) {
     require(channels == previous);
     return;

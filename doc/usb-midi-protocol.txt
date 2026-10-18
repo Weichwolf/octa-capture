@@ -908,6 +908,10 @@ TxASensStop at 0x10002888a sends one byte to 00 02 01 05: 00 finishes,
 01 cancels (CDlgASens::Stop/Cancel callers). A completion notification at
 00 02 01 05 clears all eight activity flags regardless of its data byte
 (CCplDev::SetEach1 at 0x10000a8e0). Activity is not part of the bulk bank.
+The shared octa-bridge forwards valid selection/completion notifications as
+auto-sense JSON events, preserving inactive and repeated notifications. HTTP
+auto_sense_activity is unknown until observed and is discarded on connection
+loss; its observation age does not imply a periodic notification cadence.
 src/AutoSense.cpp implements these bounded codecs and atomic activity
 updates. Offline fixtures check the wire bytes, all 255 nonempty channel
 masks, reserved flag bits, repeated updates and rejection without mutation.

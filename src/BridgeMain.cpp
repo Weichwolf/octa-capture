@@ -60,6 +60,10 @@ void error_reply(std::uint32_t serial, octa::MidiError error) {
 }
 
 void notification(const octa::Message &message) {
+  if (octa::write_auto_sense_activity_json(std::cout, message)) {
+    std::cout << '\n' << std::flush;
+    return;
+  }
   const auto meters = octa::decode_input_meters(message);
   if (!meters) { return; }
   std::cout << R"({"event":"meters","input_levels":[)";

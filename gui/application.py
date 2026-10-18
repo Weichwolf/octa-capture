@@ -70,10 +70,13 @@ class Application:
             transaction = self._transaction
         if state is None:
             raise DeviceError('The OCTA-CAPTURE device is not available.')
-        return {'connected': True, 'busy': transaction if busy is None else busy, 'state': state,
+        activity = self.bridge.auto_sense_activity()
+        external_active = bool(activity and activity['active'])
+        return {'connected': True, 'busy': (transaction if busy is None else busy) or external_active, 'state': state,
                 'status': self._status, 'meters': self.bridge.meters(),
                 'preferences': self._preferences.document(),
                 'capabilities': {'auto_sense': True},
+                'auto_sense_activity': activity,
                 'auto_sense': self._auto_job.document() if self._auto_job else None}
 
     def snapshot(self):
@@ -319,6 +322,9 @@ class Application:
     def _require_no_auto_sense(self):
         if self._auto_job:
             self._auto_job.require_available()
+        activity = self.bridge.auto_sense_activity()
+        if activity and activity['active']:
+            raise DeviceError('Auto-Sens is running on the device. Finish or cancel it on the device.')
 
     def start_auto_sense(self, body):
         if type(body) is not dict or set(body) != {'channels'}:
