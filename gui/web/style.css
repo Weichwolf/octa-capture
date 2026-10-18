@@ -86,10 +86,10 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .disconnected .preamp-strip { filter: saturate(.5); }
 .unavailable-channel { opacity: .3; pointer-events: none; }
 .mixer-view { height: 350px; }
-.mixer-tabs { display: flex; align-items: center; height: 20px; gap: 1px; padding-left: 4px; background: #b1b1b1; color: #333; }
-.mixer-tabs button { height: 19px; min-width: 45px; border: 1px solid #696969; background: linear-gradient(#838383,#565656); color: white; padding: 1px 9px; font-size: 11px; }
-.mixer-tabs button[aria-selected=true] { background: linear-gradient(#d2c68f,#83754d); }
-.mixer-tabs .routing-summary { margin-left: auto; margin-right: 6px; font-size: 10px; }
+.mixer-tabs { display: flex; align-items: flex-end; height: 20px; gap: 0; padding-left: 10px; background: #292929; color: #ccc; }
+.mixer-tabs button { height: 19px; width: 130px; flex-shrink: 0; border: 1px solid #999; border-bottom: 0; border-radius: 7px 7px 0 0; background: linear-gradient(#505050,#343434); color: #bbb; padding: 1px 7px; font-size: 12px; }
+.mixer-tabs button[aria-selected=true] { background: linear-gradient(#424242,#252525); color: #fff; font-weight: bold; }
+.mixer-tabs .routing-summary { margin-left: auto; margin-right: 6px; align-self: center; font-size: 10px; }
 .mixer-groups { display: grid; grid-template-columns: 1fr 1fr 106px; gap: 7px; padding: 0 2px; height: 328px; }
 .mixer-group { min-width: 0; }
 .group-title { display: block; background: #858891; text-align: center; height: 17px; font-size: 12px; font-weight: bold; }

@@ -403,7 +403,7 @@ function fader(control, read, label, channel = null, source = null) {
 
 function makeMixers() {
   for (const [index, letter] of [...'ABCD'].entries()) {
-    const tab = el('button', '', letter);
+    const tab = el('button', '', `DIRECT MIXER ${letter}`);
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-selected', String(index === bus));
     tab.addEventListener('click', () => {
