@@ -110,9 +110,9 @@ class Check:
                 self.strip(channel, parameter, value)
         self.verify_silence()
 
-    def measure(self, channel, amplitude, pattern=False):
+    def measure(self, channel, amplitude, pattern=False, duration=2):
         self.verify_silence()
-        rate, duration = self.rate, 2
+        rate = self.rate
         sample = (pattern_cycle(channel) if pattern else
                   b''.join((amplitude if index == channel else 0).to_bytes(3, 'little', signed=True)
                            for index in range(10)))
@@ -134,7 +134,7 @@ class Check:
                 playback = subprocess.Popen(['aplay', *common, '-c10'], stdin=generated,
                                             stdout=subprocess.DEVNULL, stderr=playback_errors)
                 processes.append(playback)
-                audio, errors = capture.communicate(timeout=15)
+                audio, errors = capture.communicate(timeout=duration + 15)
                 playback.wait(timeout=5)
                 playback_errors.seek(0)
                 output_errors = playback_errors.read(4096)
@@ -145,7 +145,7 @@ class Check:
                 for offset in (30, 33):
                     full_values = [int.from_bytes(audio[index + offset:index + offset + 3], 'little', signed=True)
                                    for index in range(0, len(audio), 36)]
-                    values = full_values[rate // 2:rate * 3 // 2]
+                    values = full_values[rate // 2:rate * duration - rate // 2]
                     if pattern and offset == 30:
                         state = values[0] + TAG
                         if not 1 <= state <= PATTERN_PERIOD:
@@ -195,6 +195,16 @@ class Check:
         print(json.dumps({'rate_hz': self.rate, 'case': label, 'source_channel': channel + 1,
                           'return_11_12': result, 'tolerance_lsb': tolerance}), flush=True)
 
+    def pattern(self, channel, duration=2):
+        self.cases += 1
+        try:
+            result = self.measure(channel, TAG, pattern=True, duration=duration)
+            print(json.dumps({'rate_hz': self.rate, 'case': 'PRBS11 sample integrity',
+                              'source_channel': channel + 1, 'checked_samples': self.rate * (duration - 1),
+                              'return_11_12': result}), flush=True)
+        except AudioMismatch as error:
+            self.audio_failure(f'PRBS11 channel {channel + 1}', error)
+
     def channels(self):
         for channel in range(10):
             for pan in (0, PAN_RIGHT // 4, PAN_RIGHT // 2, PAN_RIGHT * 3 // 4, PAN_RIGHT):
@@ -202,14 +212,7 @@ class Check:
                 expected = (TAG * (PAN_RIGHT - pan) // PAN_RIGHT, TAG * pan // PAN_RIGHT)
                 self.expect(f'channel map/pan {pan}', expected, channel=channel)
             self.strip(channel, 'pan', 0)
-            self.cases += 1
-            try:
-                result = self.measure(channel, TAG, pattern=True)
-                print(json.dumps({'rate_hz': self.rate, 'case': 'PRBS11 sample integrity',
-                                  'source_channel': channel + 1, 'checked_samples': self.rate,
-                                  'return_11_12': result}), flush=True)
-            except AudioMismatch as error:
-                self.audio_failure(f'PRBS11 channel {channel + 1}', error)
+            self.pattern(channel)
             self.expect('signed negative sample', (-TAG, 0), channel=channel, amplitude=-TAG)
             self.strip(channel, 'mute', 1)
             self.expect('channel mute', (0, 0), channel=channel)
@@ -266,12 +269,15 @@ def main():
     parser.add_argument('--write', action='store_true', help='temporarily change mixers/routes and play isolated quiet tags')
     parser.add_argument('--rates', action='store_true', help='44.1/48/96 kHz; requires --write and restores the original rate')
     parser.add_argument('--keep-going', action='store_true', help='collect sample mismatches; I/O/safety failures still stop immediately')
+    parser.add_argument('--integrity-seconds', type=int, help='only check ten longer PRBS11 streams per rate (2..60 seconds each)')
     parser.add_argument('--recovery-dir', type=Path, default=ROOT / 'build/hardware')
     args = parser.parse_args()
     if args.rates and not args.write:
         parser.error('--rates requires --write.')
     if args.keep_going and not args.write:
         parser.error('--keep-going requires --write.')
+    if args.integrity_seconds is not None and (not args.write or not 2 <= args.integrity_seconds <= 60):
+        parser.error('--integrity-seconds requires --write and a value from 2 to 60.')
     check = Check(args.bin_dir, keep_going=args.keep_going)
     before = check.json('octa-state')
     original_rate = check.json('octa-status')['sample_rate_hz']
@@ -295,9 +301,13 @@ def main():
             check.rate = rate
             check.prepare_return()
             print(f'Mixer A prepared at {rate} Hz; physical outputs remain silent.', flush=True)
-            check.channels()
-            check.gains()
-            check.solo()
+            if args.integrity_seconds is not None:
+                for channel in range(10):
+                    check.pattern(channel, args.integrity_seconds)
+            else:
+                check.channels()
+                check.gains()
+                check.solo()
     finally:
         try:
             check.bridge.close()

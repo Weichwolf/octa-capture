@@ -57,6 +57,10 @@ capture samples in RAM, and restores the original rate and complete raw state.
 A durable private recovery frame is written before changing settings. At
 192 kHz this return is unavailable; the checker refuses its write test there.
 Digital return checks do not establish analog or compressor response.
+`--write --integrity-seconds 30` instead checks a continuous PRBS11 stream
+on each playback source, including sample order across the middle 29 seconds.
+The bound is 2..60 seconds per source. Add `--rates` for the three return-capable
+rates. As with short checks, any mismatch makes the final result fail.
 
 The tested WSL USB/IP path has produced intermittent zero samples and a PRBS
 sequence jump inside otherwise correct digital returns, even without an ALSA

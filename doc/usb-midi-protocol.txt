@@ -345,6 +345,17 @@ bulk reply to observe coupled device changes. The reference fader's CVrTbl::m_vr
 CCtrlLevelBase::SetRange at 0x10002151a uses control positions 0..1024.
 This implementation uses raw coefficients rather than copying that table.
 
+Mixer A's USB capture return 11/12 allows digital signal checks at 44.1/48/96
+kHz, with all physical outputs isolated on silent Mixer B. The ten playback
+sources and pan points 0000/2000/4000/6000/8000 give linear left/right weights
+(8000-pan)/8000 and pan/8000. Tested strip/master gains follow coefficient/
+200000 (within one S24 LSB for the tested nonintegral strip products). A soloed
+strip suppresses nonsoloed strips; mute also suppresses a soloed strip. The
+checker tools/check-mixer-audio.py restores the complete raw state and original
+rate. WSL USB/IP has intermittent return-sample discontinuities, including
+without an ALSA XRUN; nominal DSP values do not establish streaming integrity.
+These tests do not measure analog paths, compressors or mixers B-D.
+
 Master bulk fields:
   404..407 input master stereo links, one byte per bus, bit 0
   408..437 input master L/R volumes, six nibbles per channel

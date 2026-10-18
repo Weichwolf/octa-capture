@@ -14,7 +14,8 @@ Windows and macOS binaries.
 
 **Complete parity is not established.** Device writes/readback, browser controls,
 GTK/native Save and timed audio transfers have passed on the connected WSL
-unit. Small-period WSL audio has produced underruns. Native Debian hardware,
+unit. WSL audio has produced underruns and digital sample discontinuities even
+without reported XRUNs. Native Debian hardware,
 physical signal quality, external clock, DIN loopback, persistent memory and
 two-unit operation still need verification. Windows host-buffer/ASIO policies
 have no complete Linux equivalent here. See the [function inventory](doc/function-inventory.md)
@@ -82,6 +83,7 @@ a runtime backup cannot undo an overwritten device-memory preset.
 python3 tools/check-status.py --stress --binary build/strict/octa-status
 ./build/strict/octa-audio-check 48000 capture  # quiet, timed transfer
 python3 tools/check-pcm-meters.py --rates    # quiet meter/PCM lifecycle checks
+python3 tools/check-mixer-audio.py --write --rates --keep-going  # digital DSP/signal checks
 ./tools/check-gui.sh                        # running-panel browser checks
 ./tools/fuzz.sh 120                         # offline protocol fuzzing
 ./tools/fuzz-midi.sh 120                    # simulated ALSA transport
