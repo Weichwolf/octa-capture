@@ -47,6 +47,17 @@ def preamp_state(snapshot):
     return snapshot['preamps'], snapshot['stereo_links']
 
 
+def require_silent_outputs(snapshot, active):
+    routes = snapshot['output_routes']
+    buses = range(1 if active == 4 else 4)
+    if len(routes) != 5 or any(route not in buses for route in routes):
+        raise RuntimeError('Full-range checks require every output routed to an available silent mixer')
+    for bus in routes:
+        if any(snapshot['mixers'][bus][source + '_master']['volume'] != [0, 0]
+               for source in ('input', 'playback')):
+            raise RuntimeError('Full-range checks require both input/playback masters at zero on every output mixer')
+
+
 def check_parameter(args, baseline, channel, parameter, path, maximum):
     target = baseline['preamps'][channel]
     for key in path[:-1]:
@@ -113,6 +124,8 @@ def main():
         raise RuntimeError('Automatic channel isolation checks require unlinked preamps')
     if any(baseline['preamps'][channel]['phantom'] for channel in hi_z_channels):
         raise RuntimeError('Hi-Z checks require phantom power already off on inputs 1/2')
+    if args.all_values:
+        require_silent_outputs(baseline, active)
     snapshot = root / 'build/hardware/preamp-before.json'
     snapshot.parent.mkdir(parents=True, exist_ok=True)
     snapshot.write_text(json.dumps(baseline, indent=2) + '\n')

@@ -21,10 +21,33 @@ def fixture(rate=2):
     payload[2] = rate
     return {'preamps': [{'low_cut': False, 'phantom': False, 'hi_z': False,
                          'compressor': {'ratio_index': 5}} for _ in range(8)],
-            'stereo_links': [False] * 4, 'payload_hex': payload.hex()}
+            'stereo_links': [False] * 4, 'payload_hex': payload.hex(),
+            'output_routes': [0] * 5, 'mixers': [
+                {source + '_master': {'volume': [0x200000, 0x200000]}
+                 for source in ('input', 'playback')} for _ in range(4)]}
 
 
 class Sweeps(unittest.TestCase):
+    def test_full_range_requires_all_outputs_to_available_silent_mixers(self):
+        silent = {'output_routes': [1] * 5, 'mixers': [
+            {source + '_master': {'volume': [0, 0]} for source in ('input', 'playback')}
+            for _ in range(4)]}
+        check.require_silent_outputs(silent, 8)
+        with self.assertRaises(RuntimeError):
+            check.require_silent_outputs(silent, 4)
+        silent['output_routes'] = [0] * 5
+        check.require_silent_outputs(silent, 4)
+        for source in ('input', 'playback'):
+            for channel in range(2):
+                changed = copy.deepcopy(silent)
+                changed['mixers'][0][source + '_master']['volume'][channel] = 1
+                with self.assertRaises(RuntimeError):
+                    check.require_silent_outputs(changed, 8)
+        for routes in ([0] * 4, [0, 0, 0, 0, 4], [0, 0, 0, 0, -1]):
+            changed = {**silent, 'output_routes': routes}
+            with self.assertRaises(RuntimeError):
+                check.require_silent_outputs(changed, 8)
+
     def run_check(self, all_values=True, failure=None):
         baseline = fixture()
         current = copy.deepcopy(baseline)
@@ -82,6 +105,14 @@ class Sweeps(unittest.TestCase):
                 check.main()
             self.assertEqual(result.exception.code, 2)
             read.assert_not_called()
+
+    def test_live_outputs_block_full_range_before_any_write(self):
+        with patch.object(sys, 'argv', ['check-preamps.py', '--write', '--all-values']), \
+                patch.object(check, 'state', return_value=fixture()), \
+                patch.object(check, 'set_value') as write:
+            with self.assertRaises(RuntimeError):
+                check.main()
+            write.assert_not_called()
 
 
 if __name__ == '__main__':
