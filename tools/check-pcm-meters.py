@@ -33,15 +33,16 @@ class Check:
             time.sleep(0.05)
         raise AssertionError(f'Timeout: {description}; last frame: {frame}')
 
-    def start(self):
+    def start(self, idle=True):
         if self.monitor is not None:
             raise AssertionError('A monitor is already running.')
         self.output.seek(0)
         self.output.truncate()
         self.monitor = subprocess.Popen([str(self.directory / 'octa-pcm-meters'), '60'],
                                         stdout=self.output)
-        self.wait(lambda frame: frame['enabled'] and frame['idle_stream'] and frame['error'] == 0
-                  and frame['capture']['fresh'] and frame['playback']['fresh'], 'idle PCM engine')
+        self.wait(lambda frame: frame['enabled'] and frame['idle_stream'] == idle and frame['error'] == 0
+                  and (not idle or (frame['capture']['fresh'] and frame['playback']['fresh'])),
+                  'idle PCM engine' if idle else 'meters on normal PCM streams')
 
     def stop(self, kill=False):
         process, self.monitor = self.monitor, None
@@ -60,32 +61,60 @@ class Check:
         if not kill and result != 0:
             raise AssertionError(f'Meter process exited with {result}.')
 
-    def capture(self, close_meter=False):
-        # A real PCM file, different period/buffer sizes from the idle engine.
-        rate = self.frame()['capture']['rate']
-        channels = 4 if rate == 192000 else 12
-        process = subprocess.Popen(['arecord', '-q', '-D', 'hw:CARD=OCTACAPTURE',
-                                    '-r', str(rate), '-f', 'S24_3LE', '-c', str(channels),
-                                    '--period-size=256', '--buffer-size=2048', '-d2',
-                                    '-t', 'raw', '/dev/null'], stderr=subprocess.PIPE)
+    def streams(self, directions, close_meter=False):
+        # Normal PCM files must own their endpoints across meter close/reopen.
+        rate = json.loads(self.run('octa-status'))['sample_rate_hz']
+        processes = []
         try:
-            self.wait(lambda frame: frame['enabled'] and not frame['idle_stream'] and
-                      frame['capture']['fresh'], 'real PCM takes priority')
+            for direction in directions:
+                capture = direction == 'capture'
+                channels = 4 if rate == 192000 else (12 if capture else 10)
+                error = tempfile.TemporaryFile()
+                processes.append({'error': error, 'process': None})
+                process = subprocess.Popen(['arecord' if capture else 'aplay', '-q',
+                                            '-D', 'hw:CARD=OCTACAPTURE', '-r', str(rate),
+                                            '-f', 'S24_3LE', '-c', str(channels),
+                                            '--period-size=1024', '--buffer-size=8192', '-d4',
+                                            '-t', 'raw', '/dev/null' if capture else '/dev/zero'],
+                                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=error)
+                processes[-1]['process'] = process
+            self.normal_progress(directions, rate)
             if close_meter:
                 self.stop()
-            _, error = process.communicate(timeout=8)
-            assert process.returncode == 0, error.decode()
-            assert not error, error.decode()
+                self.wait(lambda frame: not frame['enabled'] and not frame['idle_stream'],
+                          'meter close releases only its own engine')
+                time.sleep(0.12)
+                assert all(item['process'].poll() is None for item in processes), 'normal PCM stopped with meters'
+                self.start(idle=False)
+                self.normal_progress(directions, rate)
+            for item in processes:
+                process = item['process']
+                process.wait(timeout=10)
+                item['error'].seek(0)
+                error = item['error'].read(4096).decode(errors='replace')
+                assert process.returncode == 0, error
+                assert not error, error
         finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait(timeout=5)
-        if close_meter:
-            self.wait(lambda frame: not frame['enabled'] and not frame['idle_stream'],
-                      'meter close leaves normal capture running')
-        else:
-            self.wait(lambda frame: frame['idle_stream'] and frame['capture']['fresh'] and
-                      frame['playback']['fresh'], 'idle engine resumes after PCM close')
+            for item in processes:
+                process = item['process']
+                if process is not None and process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+                item['error'].close()
+        self.wait(lambda frame: frame['idle_stream'] and frame['capture']['fresh'] and
+                  frame['playback']['fresh'], 'idle engine resumes after PCM close')
+        mode = '/'.join(directions)
+        action = 'meter close/reopen and normal PCM preservation' if close_meter else 'idle handover/resumption'
+        print(f'PASS {rate} Hz {mode}: {action}, no XRUNs', flush=True)
+
+    def normal_progress(self, directions, rate):
+        first = self.wait(lambda frame: frame['enabled'] and not frame['idle_stream'] and
+                          all(frame[name]['fresh'] and frame[name]['rate'] == rate for name in directions),
+                          'real PCM takes priority')
+        self.wait(lambda frame: frame['enabled'] and not frame['idle_stream'] and
+                  all(frame[name]['fresh'] and frame[name]['rate'] == rate and
+                      frame[name]['sequence'] != first[name]['sequence'] for name in directions),
+                  'normal PCM advances each requested meter direction')
 
     def rates(self, rates, peaks=False):
         for rate in rates:
@@ -104,6 +133,9 @@ class Check:
             first = frame['capture']['sequence']
             time.sleep(0.08)
             assert self.frame()['capture']['sequence'] != first, 'capture sequence stalled'
+            for directions in (('capture',), ('playback',), ('capture', 'playback')):
+                self.streams(directions)
+                self.streams(directions, close_meter=True)
             print(f'PASS {rate} Hz: quiet capture/playback, fresh peaks and idle handover', flush=True)
 
 
@@ -120,11 +152,6 @@ def main():
     try:
         check.start()
         assert json.loads(check.run('octa-state')) == before, 'starting meters changed state'
-        check.capture()
-        print('PASS different PCM period sizes take priority; idle engine resumes', flush=True)
-        check.capture(close_meter=True)
-        print('PASS closing meters preserves an already running PCM capture', flush=True)
-        check.start()
         check.rates((44100, 48000, 96000, 192000) if arguments.rates else (original_rate,),
                     peaks=arguments.peaks)
         check.stop(kill=True)
@@ -134,10 +161,15 @@ def main():
                    'dead client lease expires')
         print('PASS killed meter client releases idle streams through kernel lease', flush=True)
     finally:
-        check.stop()
-        check.run('octa-audio-check', original_rate, 'capture')
-        check.output.close()
-    assert json.loads(check.run('octa-state')) == before, 'complete raw device state changed'
+        try:
+            check.stop()
+        finally:
+            try:
+                check.run('octa-audio-check', original_rate, 'capture')
+                assert json.loads(check.run('octa-state')) == before, 'complete raw device state changed'
+                print('Original rate and complete raw state restored and independently verified.', flush=True)
+            finally:
+                check.output.close()
     signal = 'only very quiet channel tags' if arguments.peaks else 'no generated audio'
     print(f'PASS original rate and complete raw state restored; {signal}', flush=True)
 

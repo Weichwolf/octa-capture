@@ -60,7 +60,8 @@ and plays zeros by default. `--peaks` additionally uses isolated channel tags of
 one to ten S24 LSBs (at most -118 dBFS). It verifies exact playback peaks after
 over 200 ms of subsequent zeros, read-clear behavior and negative rejection.
 It checks both directions at all rates, different period
-sizes, idle/normal PCM handover, close while capture continues, client death,
+sizes, idle/normal PCM handover, close/reopen during capture, playback and
+duplex, continued meter progress in each active direction, client death,
 and restoration of the original rate and complete raw state. These checks pass
 on the connected WSL device with strict and release builds. Active idle-stream
 module unload/reload also passes. Native Debian, physical signal calibration,
