@@ -722,9 +722,12 @@ function controlMenu(event, control) {
   } else if (control.kind === 'preamp' && control.parameter === 'compressor') {
     items.push({label: 'Bypass Off All Ch.', run: () => allChannels(1)},
       {label: 'Bypass On All Ch.', run: () => allChannels(0)});
-  } else if (control.kind !== 'master' && ['phantom', 'low-cut', 'phase', 'compressor', 'stereo-link', 'link', 'mono', 'solo', 'mute'].includes(control.parameter)) {
-    if (control.parameter !== 'phantom') items.push({label: 'On All Ch.', run: () => allChannels(1)});
-    items.push({label: 'Off All Ch.', run: () => allChannels(0)});
+  } else if (control.kind !== 'master' && ['phantom', 'low-cut', 'phase', 'stereo-link', 'link', 'mono', 'solo', 'mute'].includes(control.parameter)) {
+    const prefix = {phantom: 'Phantom', 'low-cut': 'Lo-Cut', phase: 'Phase', 'stereo-link': 'Link',
+      link: 'Link', mono: 'Mono', solo: 'Solo', mute: 'Mute'}[control.parameter];
+    const upper = ['solo', 'mute'].includes(control.parameter);
+    if (control.parameter !== 'phantom') items.push({label: `${prefix} ${upper ? 'ON' : 'On'} All Ch.`, run: () => allChannels(1)});
+    items.push({label: `${prefix} ${upper ? 'OFF' : 'Off'} All Ch.`, run: () => allChannels(0)});
   }
   if (items.length) openMenu(items, event.clientX, event.clientY);
 }

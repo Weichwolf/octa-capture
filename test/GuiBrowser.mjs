@@ -49,6 +49,12 @@ async function hardware(predicate, description) {
   await until(async () => predicate((await api('/api/state')).state), description);
 }
 
+async function contextLabels(selector, labels) {
+  await browser.click(selector, 1, 'right');
+  assert.deepEqual(await browser.evaluate('[...document.querySelectorAll("#menus button")].map(node=>node.textContent)'), labels);
+  await browser.key('#menus button', 'Escape');
+}
+
 try {
   await browser.blank();
   await browser.call('Page.navigate', {url: launch});
@@ -84,10 +90,14 @@ try {
     return pcm?.enabled && pcm.error === 0 && pcm.capture.fresh && pcm.playback.fresh &&
       pcm.received_age_ms < 500;
   }, 'actual kernel capture and playback PCM meters');
-  await browser.click('[aria-label="Input 1 compressor bypass"]', 1, 'right');
-  assert.deepEqual(await browser.evaluate('[...document.querySelectorAll("#menus button")].map(node=>node.textContent)'),
-    ['Bypass Off All Ch.', 'Bypass On All Ch.']);
-  await browser.key('#menus button', 'Escape');
+  for (const [selector, labels] of [
+    ['[aria-label="Input 1 compressor bypass"]', ['Bypass Off All Ch.', 'Bypass On All Ch.']],
+    ['[aria-label="Input 1 +48"]', ['Phantom Off All Ch.']],
+    ['[aria-label="Input 1 LO-CUT"]', ['Lo-Cut On All Ch.', 'Lo-Cut Off All Ch.']],
+    ['[aria-label="Input 1 PHASE"]', ['Phase On All Ch.', 'Phase Off All Ch.']],
+    ['[aria-label="Compressor stereo link 1-2"]', ['Link On All Ch.', 'Link Off All Ch.']]]) {
+    await contextLabels(selector, labels);
+  }
   if (write) {
     const sensitivity = '#preamp-view .preamp-strip:first-child .sensitivity';
     const original = before.preamps[0].sensitivity_index;
@@ -143,6 +153,15 @@ try {
   }
   await browser.click('#view-switch');
   assert.equal(await browser.evaluate('document.querySelector("#mixer-view").hidden'), false);
+  for (const source of ['input', 'playback']) {
+    const strip = `.mixer-strip[data-source="${source}"][data-channel="0"]`;
+    for (const [selector, labels] of [
+      ['.mixer-pair-link', ['Link On All Ch.', 'Link Off All Ch.']],
+      ['.mixer-switches > button:first-of-type', ['Mute ON All Ch.', 'Mute OFF All Ch.']],
+      ['.mixer-switches > button:nth-of-type(2)', ['Solo ON All Ch.', 'Solo OFF All Ch.']]]) {
+      await contextLabels(`${strip} ${selector}`, labels);
+    }
+  }
   assert.equal(await browser.evaluate('document.querySelectorAll(".mixer-strip").length'), 20);
   await until(() => browser.evaluate('document.querySelectorAll(".level-lane:not(.stale)").length === 20'), 'all input and playback mixer meters use fresh PCM');
   await browser.screenshot(path.join(directory, 'mixer.png'));

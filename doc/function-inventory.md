@@ -22,6 +22,9 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
 - `tools/ghidra/ExportReferenceInventory.java` exports function and call-site TSVs
   from an analyzed program. Indirect calls remain explicitly unresolved. Outputs,
   extracted resources and decompilation stay under ignored `doc/local/`.
+- `ExportSelectedReferences.java` exports analyzed references into bounded address
+  ranges, including their source functions/instructions. Missing references do
+  not prove that an indirect target is unreachable.
 
 ## Functional comparison
 
@@ -38,7 +41,7 @@ it does not imply calibrated audio response or native Debian validation.
 | Phantom power and Hi-Z | macOS setters; Windows controls; manual | Encoders and selector bounds implemented; power switching not hardware-tested. |
 | Compressor enable and six parameters | macOS transmitters/table lookups; Windows eight-channel view | Raw-index writes/readback tested. Nonlinear tables and inverse faders match both references; 1,440 filled-curve/line cases match original CPU execution. Both drawing palettes/pen widths match. GUI controls and rendered pixels tested in Chromium/GTK. Physical dynamics response remains. |
 | Compressor stereo link | macOS `TxPreLink`, manual | All four link cycles and 160 scalar coupling cases per build WSL tested; ADC controls stay independent. |
-| Compressor presets and knee | Windows menu 132 has five preset labels; macOS has preset/knee data | Inspected compressor context handlers dispatch only Bypass Off/On All Ch., not the five preset labels. Other call paths and knee applicability remain unresolved. |
+| Generic compressor presets and knee data | Windows MENU 132 submenu 0; macOS data tables | Windows explicitly displays submenu 1 (Bypass), and macOS builds only the two bypass commands. Full macOS preset/knee tables have no analyzed references. No established preset/knee feature; unresolved indirect paths remain. |
 | Auto-Sens | macOS start/stop and dialog selection code; Windows dialog 289/handlers | Selection, notification flow, finish/cancel, bounds and signal recovery implemented/tested. Interactive browser start/finish/cancel and complete restoration also WSL tested; early signals, client loss and shutdown have offline lifecycle tests. Calibrated sensitivity and every original dialog state remain. |
 | Four direct mixers, input/playback strips | macOS state/write/control code; Windows panels | Typed controls and bounds; scalar and stereo/mono/master-coupling WSL tests. Physical mixing, solo precedence and automation remain. |
 | Mixer A–D selection on device display | macOS `TxDMix`, mixer button logic | Typed API, CLI and browser tab commands implemented; all four frames match original CPU execution. WSL sends preserve audio state; physical LCD confirmation remains. |
@@ -68,8 +71,9 @@ nor a successful four-channel transfer proves them.
 
 The Windows resource set also contains generic compressor-preset/16-user-preset
 strings and controls with hidden styles. They require command/call-path evidence
-before being classified as OCTA-CAPTURE features. The macOS knee table likewise
-has no identified scalar transmitter in the current command inventory.
+before being classified as OCTA-CAPTURE features; the active compressor popup
+selects the separate Bypass submenu. The unreferenced macOS knee table has no
+identified scalar transmitter in the current command inventory.
 
 USB interface 4, some status bits, external-clock policy and remaining platform
 properties are still unresolved. Complete the kernel/property and GUI dispatch

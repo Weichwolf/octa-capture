@@ -260,6 +260,16 @@ coordinates. These are reference display values, not calibrated DSP
 measurements; complete Windows formatting and typed-input behavior still
 need comparison.
 
+The active compressor context menu is limited to Bypass Off/On All Ch.
+Windows handler 0x14001dd90 calls popup builder 0x140019f10 with submenu 1
+of MENU 132; only command IDs 8021/8022 are handled. The five named presets
+are in submenu 0, not that displayed menu. macOS CCplMenuComp::Create
+(0x100015330) likewise adds only its two bypass commands. The full macOS
+knee-string table (0x10005e120, 80 bytes) and preset table (0x10005e230,
+432 bytes) have no analyzed references; the active dB table has twelve.
+ExportSelectedReferences.java reproduces these range checks. This does not
+resolve every indirect target or establish presets/knee as device features.
+
 Write bounds recovered from the reference GUI ranges/tables:
   Boolean switches: 0..1; sensitivity: 0..100; gate/threshold: 0..50;
   attack: 0..25; release: 0..45; ratio: 0..8; compressor gain: 0..74.
