@@ -64,8 +64,20 @@ export async function checkPanel(write) {
   document.querySelector('#readme [data-close]').click();
   for (const id of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about', 'readme', 'port-warning']) {
     const dialog = document.querySelector(`#${id}`);
-    dialog.showModal(); check(dialog.open, `${id} opened`); dialog.close();
+    dialog.showModal(); check(dialog.open, `${id} opened`);
+    const box = dialog.getBoundingClientRect();
+    check(box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth,
+      `${id} fits the GTK viewport`);
+    for (const button of dialog.querySelectorAll('footer button')) {
+      const r = button.getBoundingClientRect();
+      check(r.top >= 0 && r.bottom <= innerHeight &&
+        document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === button,
+      `${id} footer button remains visible and clickable`);
+    }
+    dialog.close();
   }
+  await until(() => document.querySelector('#diagram img').complete &&
+    document.querySelector('#diagram img').naturalWidth === 945, 'GTK local schematic decoded');
   if (write) {
     const preferences = await api('/api/preferences');
     try {

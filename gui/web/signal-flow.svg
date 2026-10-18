@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-only -->
+<!-- Independently drawn functional schematic; no manufacturer artwork. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="945" height="500" viewBox="0 0 945 500" role="img" aria-labelledby="title description">
+  <title id="title">OCTA-CAPTURE signal flow</title>
+  <desc id="description">Eight analog inputs pass through sensitivity, conversion, phase, high-pass filtering and compression.
+    USB audio feeds four direct mixers, combining input and computer playback. Mixer A has reverb.
+    Patchbay sources feed the analog and coaxial outputs; MIDI passes separately between USB and the DIN ports.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 8 4 0 8Z" fill="#383838"/>
+    </marker>
+    <g id="analog-input">
+      <circle cx="46" cy="0" r="7"/><circle cx="46" cy="0" r="3"/>
+      <path d="M53 0H97M118 0H124M145 0H151M172 0H178M199 0H205M226 0H302"/>
+      <g fill="white"><rect x="97" y="-10" width="21" height="20"/><rect x="124" y="-10" width="21" height="20"/>
+        <rect x="151" y="-10" width="21" height="20"/><rect x="178" y="-10" width="21" height="20"/>
+        <rect x="205" y="-10" width="21" height="20"/></g>
+      <g stroke="none" fill="#282828" font-size="6.5" text-anchor="middle">
+        <text x="107.5" y="2">SENS</text><text x="134.5" y="2">A/D</text><text x="161.5" y="2">PHASE</text>
+        <text x="188.5" y="-1">HPF</text><text x="188.5" y="6">100 Hz</text><text x="215.5" y="2">COMP</text>
+      </g>
+    </g>
+    <g id="input-hiz">
+      <use href="#analog-input"/>
+      <rect x="70" y="-10" width="21" height="20" fill="white"/>
+      <g stroke="none" fill="#282828" font-size="6.5" text-anchor="middle"><text x="80.5" y="-1">Hi-Z/</text><text x="80.5" y="6">Lo-Z</text></g>
+    </g>
+    <g id="output-pair">
+      <path d="M760 0H766M789 0H850V-11H857M850 0V11H857"/>
+      <rect x="766" y="-10" width="23" height="20" fill="white"/>
+      <circle cx="863" cy="-11" r="5"/><circle cx="863" cy="11" r="5"/>
+      <circle cx="863" cy="-11" r="2.5"/><circle cx="863" cy="11" r="2.5"/>
+      <text x="777.5" y="2.5" stroke="none" fill="#282828" font-size="7" text-anchor="middle">D/A</text>
+    </g>
+    <g id="mixer-frame"><rect x="0" y="0" width="159" height="252" fill="white"/></g>
+  </defs>
+  <rect width="945" height="500" fill="white"/>
+  <g fill="none" stroke="#57524f" stroke-width=".8">
+    <use href="#input-hiz" y="143"/><use href="#input-hiz" y="176"/>
+    <use href="#analog-input" y="209"/><use href="#analog-input" y="242"/>
+    <use href="#analog-input" y="275"/><use href="#analog-input" y="308"/>
+    <use href="#analog-input" y="341"/><use href="#analog-input" y="374"/>
+    <path d="M302 143V158H308M302 176V163H308M302 209V226H308M302 242V231H308
+      M302 275V292H308M302 308V297H308M302 341V358H308M302 374V363H308"/>
+    <path d="M239 143V96H543M244 176V91H543M249 209V86H543M254 242V81H543
+      M259 275V76H543M264 308V71H543M269 341V66H543M274 374V61H543M279 409V56H543"/>
+    <path d="M59 112V135L53 140M59 151V168L53 173M59 184V201L53 206M59 217V234L53 239
+      M59 250V267L53 272M59 283V300L53 305M59 316V333L53 338M59 349V366L53 371"/>
+    <path d="M408 158H543M408 163H422V169H543M408 226H428V174H543M408 231H434V179H543
+      M408 292H440V184H543M408 297H446V189H543M408 358H452V194H543M408 363H458V199H543
+      M408 409H464V204H543M408 414H470V209H543"/>
+    <path d="M408 414H743M408 409H743M408 363H743M408 358H743M408 297H743M408 292H743
+      M408 231H743M408 226H743M408 163H743M408 158H743" stroke="#9b9590"/>
+    <rect x="308" y="102" width="100" height="357" fill="white" stroke="#282828" stroke-width="1.5"/>
+    <use href="#mixer-frame" x="558" y="38"/><use href="#mixer-frame" x="553" y="33"/>
+    <use href="#mixer-frame" x="548" y="28"/><use href="#mixer-frame" x="543" y="23"/>
+    <rect x="549" y="38" width="97" height="94"/>
+    <rect x="554" y="95" width="88" height="32"/>
+    <rect x="549" y="144" width="97" height="95"/>
+    <path d="M646 84H684V192H743M646 192H743"/>
+    <circle cx="687" cy="192" r="5" fill="white"/><path d="M687 188V196M683 192H691"/>
+    <path d="M646 84H659M659 78 671 84 659 90Z M646 192H659M659 186 671 192 659 198Z" fill="white"/>
+    <path d="M665 78V68M665 186V176"/><circle cx="665" cy="71" r="4"/><circle cx="665" cy="179" r="4"/>
+    <path d="M661 75 669 66M661 183 669 174"/>
+    <path d="M702 201H743M707 206H743M712 211H743"/>
+    <rect x="743" y="135" width="17" height="292" fill="white"/>
+    <use href="#output-pair" y="222"/><use href="#output-pair" y="288"/><use href="#output-pair" y="355"/>
+    <path d="M760 155H766M789 155H825M846 155H850V144H857M850 155V166H857M802 155V117H857"/>
+    <rect x="766" y="145" width="23" height="20" fill="white"/>
+    <rect x="825" y="145" width="21" height="20" fill="white"/>
+    <circle cx="863" cy="144" r="5"/><circle cx="863" cy="166" r="5"/><circle cx="863" cy="117" r="5"/>
+    <path d="M51 409H308M760 409H858"/><circle cx="46" cy="409" r="5"/><circle cx="46" cy="409" r="2.5"/>
+    <circle cx="863" cy="409" r="5"/><circle cx="863" cy="409" r="2.5"/>
+    <path d="M53 443H308M408 443H856"/><circle cx="46" cy="443" r="7"/><circle cx="863" cy="443" r="7"/>
+    <rect x="308" y="464" width="100" height="33" stroke="#282828" stroke-width="1.5"/>
+    <path d="M358 455V470" stroke="#282828" stroke-width="5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  </g>
+  <g fill="#282828" font-family="Arial, Liberation Sans, sans-serif" font-weight="bold" font-size="8">
+    <text x="4" y="146">INPUT 1</text><text x="4" y="179">INPUT 2</text><text x="4" y="212">INPUT 3</text>
+    <text x="54" y="107">+48V</text>
+    <text x="4" y="245">INPUT 4</text><text x="4" y="278">INPUT 5</text><text x="4" y="311">INPUT 6</text>
+    <text x="4" y="344">INPUT 7</text><text x="4" y="377">INPUT 8</text>
+    <text x="4" y="411">COAX IN</text><text x="18" y="422">9–10</text><text x="8" y="446">MIDI IN</text>
+    <text x="314" y="122" font-size="10">MAIN</text><text x="358" y="143" text-anchor="middle" font-size="11">AUDIO</text>
+    <text x="314" y="164">IN 1/2</text><text x="365" y="164">OUT 1/2</text>
+    <text x="314" y="232">IN 3/4</text><text x="365" y="232">OUT 3/4</text>
+    <text x="314" y="298">IN 5/6</text><text x="365" y="298">OUT 5/6</text>
+    <text x="314" y="364">IN 7/8</text><text x="365" y="364">OUT 7/8</text>
+    <text x="314" y="410">DIGITAL</text><text x="365" y="410">DIGITAL</text>
+    <text x="314" y="419">IN 9/10</text><text x="365" y="419">OUT 9/10</text>
+    <text x="314" y="447">IN</text><text x="358" y="441" text-anchor="middle" font-size="11">MIDI</text><text x="381" y="447">OUT</text>
+    <text x="358" y="486" text-anchor="middle" font-size="12">HI-SPEED USB</text>
+    <text x="549" y="35" font-size="10">DIRECT MIXER A</text>
+    <text x="597" y="68" text-anchor="middle" font-size="10">INPUT MIXER A</text>
+    <text x="673" y="51" font-size="7" font-weight="normal">INPUT</text><text x="680" y="59" font-size="7" font-weight="normal">MIX</text>
+    <text x="560" y="111" font-size="10">Reverb</text><text x="560" y="124" font-size="8" font-weight="normal">Only INPUT MIXER A</text>
+    <text x="597" y="174" text-anchor="middle" font-size="10">OUTPUT MIXER A</text>
+    <text x="548" y="270">MIXER A</text><text x="590" y="275">MIXER B</text>
+    <text x="635" y="280">MIXER C</text><text x="677" y="285">MIXER D</text>
+    <text x="747" y="256" transform="rotate(90 747 256)" font-size="11">PATCHBAY</text>
+    <text x="874" y="120">PHONES</text><text x="874" y="147">OUTPUT 1</text><text x="874" y="169">OUTPUT 2</text>
+    <text x="800" y="188" font-size="7" font-weight="normal">PHONES + MAIN</text><text x="800" y="197" font-size="7" font-weight="normal">PHONES</text>
+    <text x="874" y="214">OUTPUT 3</text><text x="874" y="236">OUTPUT 4</text>
+    <text x="874" y="280">OUTPUT 5</text><text x="874" y="302">OUTPUT 6</text>
+    <text x="874" y="347">OUTPUT 7</text><text x="874" y="369">OUTPUT 8</text>
+    <text x="874" y="410">COAX OUT</text><text x="874" y="421">9–10</text><text x="874" y="446">MIDI OUT</text>
+    <text x="777.5" y="158" text-anchor="middle" font-size="7" font-weight="normal">D/A</text>
+    <text x="835.5" y="158" text-anchor="middle" font-size="6" font-weight="normal">MUTE</text>
+  </g>
+</svg>

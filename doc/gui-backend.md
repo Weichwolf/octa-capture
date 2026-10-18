@@ -205,6 +205,11 @@ finally block after successful unload.
 Driver → Show README opens an independently written local usage guide. It loads
 no external content and is available in both the browser and GTK host.
 
+The signal-flow dialog uses our own SVG drawing of the reference topology
+(Windows bitmap 246 and macOS `PNL_DIAGRAM.bmp` agree). Dialog bodies scroll
+independently of their footers; Chromium and WebKit checks verify visible,
+clickable footer buttons at the desktop host's 978×408 viewport.
+
 The original 192 kHz audio-port warning appears once on entering that rate,
 including an initial connection at 192 kHz. Other open dialogs defer it. The
 warning uses the original macOS counts, four inputs/four outputs. About's Show

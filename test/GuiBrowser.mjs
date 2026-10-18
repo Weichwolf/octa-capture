@@ -234,6 +234,20 @@ try {
     await fs.writeFile(path.join(directory, `${name}.png`), Buffer.from(screenshot.data, 'base64'));
     await browser.evaluate(`document.querySelector('#${name}').close()`);
   }
+  await until(() => browser.evaluate('document.querySelector("#diagram img").complete && document.querySelector("#diagram img").naturalWidth === 945'), 'local signal-flow schematic decoded');
+  await browser.call('Emulation.setDeviceMetricsOverride', {width: 978, height: 408, deviceScaleFactor: 1, mobile: false});
+  for (const name of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about', 'readme', 'port-warning']) {
+    await browser.evaluate(`document.querySelector('#${name}').showModal()`);
+    assert.equal(await browser.evaluate(`(() => {
+      const dialog=document.querySelector('#${name}'), box=dialog.getBoundingClientRect();
+      return box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth &&
+        [...dialog.querySelectorAll('footer button')].every(node=>{const r=node.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===node;});
+    })()`), true, `${name} footer remains visible and clickable at the desktop window size`);
+    if (name === 'diagram') await browser.screenshot(path.join(directory, 'diagram-desktop.png'));
+    await browser.evaluate(`document.querySelector('#${name}').close()`);
+  }
+  await browser.call('Emulation.setDeviceMetricsOverride', {width: 1100, height: 650, deviceScaleFactor: 1, mobile: false});
+  console.log('PASS local schematic and all dialog footers at the GTK viewport size');
   await browser.call('Page.setDownloadBehavior', {behavior: 'allow', downloadPath: directory});
   await browser.click('[data-menu="device"]');
   await browser.click('#menus .menu > button:first-of-type');

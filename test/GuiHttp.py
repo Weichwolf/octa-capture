@@ -116,6 +116,10 @@ class Http(unittest.TestCase):
         self.assertEqual(headers['Cache-Control'], 'no-store')
         self.assertEqual(self.application.calls, [])
         self.assertEqual(self.request('HEAD', '/')[2], b'')
+        status, headers, body = self.request('GET', '/signal-flow.svg', authorized=False)
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['Content-Type'], 'image/svg+xml')
+        self.assertIn(b'OCTA-CAPTURE signal flow', body)
 
     def test_auth_host_origin(self):
         self.assertEqual(self.request('GET', '/api/state', authorized=False)[0], 403)

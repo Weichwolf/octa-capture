@@ -130,10 +130,11 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .menu .submenu-arrow { align-self: center; font-size: 9px; }
 #toast { position: fixed; z-index: 60; bottom: 18px; left: 50%; transform: translateX(-50%); max-width: 600px; padding: 12px 18px; color: #fff; background: #342b25; border: 1px solid #917c58; box-shadow: 0 3px 16px #0008; }
 dialog { min-width: 240px; max-width: 650px; padding: 0; border: 2px ridge #ccc; background: #eee; color: #111; box-shadow: 0 8px 30px #0009; font: 12px Arial,sans-serif; }
+dialog[open] { display: flex; flex-direction: column; max-height: calc(100dvh - 16px); }
 dialog::backdrop { background: #0004; }
-dialog h2 { margin: 0; padding: 6px 10px; background: #d3d3d3; font-size: 12px; font-weight: normal; border-bottom: 1px solid #aaa; }
-.dialog-content { padding: 12px 16px; }
-dialog footer { display: flex; justify-content: flex-end; gap: 7px; padding: 8px 12px; }
+dialog h2 { flex-shrink: 0; margin: 0; padding: 6px 10px; background: #d3d3d3; font-size: 12px; font-weight: normal; border-bottom: 1px solid #aaa; }
+.dialog-content { padding: 12px 16px; min-height: 0; overflow: auto; }
+dialog footer { flex-shrink: 0; display: flex; justify-content: flex-end; gap: 7px; padding: 8px 12px; }
 dialog button, dialog select, dialog input { color-scheme: light; color: #111; }
 dialog button { min-width: 64px; padding: 3px 9px; border: 1px solid #999; background: linear-gradient(#fff,#ddd); }
 dialog label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 7px 0; }
@@ -146,8 +147,9 @@ dialog select, dialog input[type=number] { min-width: 100px; padding: 2px 4px; f
 .settings-fields output { margin-left: auto; }
 .auto-channels { display: flex; gap: 14px; }
 .auto-channels label { flex-direction: column; gap: 4px; }
-.signal-flow { text-align: center; line-height: 2; }
-.signal-flow > div { padding: 8px 20px; border: 1px solid #aaa; margin-bottom: 7px; }
+#diagram { width: 945px; max-width: calc(100vw - 24px); }
+.signal-flow { text-align: center; background: white; }
+.signal-flow img { display: block; width: 100%; height: auto; }
 .signal-flow p { font-size: 11px; color: #555; }
 .readme-content { width: 440px; max-height: 65vh; overflow: auto; line-height: 1.5; }
 @media (max-width: 998px) { body { padding-inline: 0; min-width: 978px; } .panel { margin: 0; } }
