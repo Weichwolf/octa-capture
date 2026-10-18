@@ -313,8 +313,12 @@ def main():
             check.bridge.close()
         finally:
             if modified:
-                check.json('octa-audio-check', original_rate, 'capture')
-                check.run('octa-preset', 'restore', recovery)
+                try:
+                    check.json('octa-audio-check', original_rate, 'capture')
+                finally:
+                    # A competing PCM owner must not skip restoring mixer/routing
+                    # settings. Any clock or raw verification failure still fails.
+                    check.run('octa-preset', 'restore', recovery)
                 require(check.json('octa-state') == before, f'Full-state restoration failed. Recovery: {recovery}')
                 print('Original rate and complete raw state restored and independently verified.', flush=True)
     require(not check.failures, f'{len(check.failures)} of {check.cases} digital audio comparisons failed; see diagnostics.')

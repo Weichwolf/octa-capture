@@ -130,6 +130,8 @@ add_test(NAME usb-prbs COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test
 set_tests_properties(usb-prbs PROPERTIES TIMEOUT 10)
 add_test(NAME preamp-check COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/PreampCheck.py")
 set_tests_properties(preamp-check PROPERTIES TIMEOUT 10)
+add_test(NAME mixer-audio-check COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/MixerAudioCheck.py")
+set_tests_properties(mixer-audio-check PROPERTIES TIMEOUT 10)
 add_test(NAME gui-auto-sense COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiAutoSense.py")
 add_test(NAME gui-navigation COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiNavigation.py")
 add_test(NAME gui-devices COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiDevices.py")
