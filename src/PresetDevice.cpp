@@ -306,10 +306,11 @@ std::expected<void, MidiError> update_auto_sense(AutoSenseProgress &progress,
 std::expected<void, MidiError> wait_auto_sense(MidiSession &session,
                                                AutoSenseProgress &progress,
                                                Clock::time_point deadline,
-                                               bool allow_finish = false) {
+                                               bool allow_finish = false,
+                                               bool allow_interrupt = true) {
   constexpr auto poll_interval = std::chrono::milliseconds(50);
   while (Clock::now() < deadline && !progress.completed) {
-    if (interrupted != 0) {
+    if (allow_interrupt && interrupted != 0) {
       return std::unexpected(MidiError{.code = -EINTR, .operation = "Auto-Sens interrupted"});
     }
     if (allow_finish && finish_requested != 0 && progress.started) { return {}; }
@@ -363,15 +364,19 @@ attempt_auto_sense(AutoSenseOptions request, ApplyState &state, AutoSenseProgres
   if (!started) { return std::unexpected(started.error()); }
   const auto observed =
       wait_auto_sense(*session, progress, Clock::now() + request.duration, request.interactive);
-  if (!observed) { return std::unexpected(observed.error()); }
-  if (!progress.started) {
+  const bool cancelled = !observed && observed.error().code == -EINTR;
+  if (!observed && !cancelled) { return std::unexpected(observed.error()); }
+  if (!progress.started && !cancelled) {
     return std::unexpected(
         MidiError{.code = -ETIMEDOUT, .operation = "Auto-Sens start notification"});
   }
+  if (cancelled) { request.action = AutoSenseAction::cancel; }
   const auto stopped = session->stop_auto_sense(request.action);
   if (!stopped) { return std::unexpected(stopped.error()); }
   constexpr auto completion_timeout = std::chrono::seconds(3);
-  const auto completed = wait_auto_sense(*session, progress, Clock::now() + completion_timeout);
+  // Keep CTRL ownership until cancellation is acknowledged before restoring raw state.
+  const auto completed =
+      wait_auto_sense(*session, progress, Clock::now() + completion_timeout, false, !cancelled);
   if (!completed) { return std::unexpected(completed.error()); }
   if (!progress.completed) {
     return std::unexpected(
@@ -505,7 +510,14 @@ int run_auto_sense(AutoSenseOptions request, ApplyOptions options) {
       .active = {}, .selected = request.channels, .interactive = request.interactive};
   auto result = attempt_auto_sense(request, state, progress);
   if (result && interrupted != 0) {
-    result = std::unexpected(MidiError{.code = -EINTR, .operation = "Auto-Sens interrupted"});
+    // A late signal after Finish still requires restoring the original settings.
+    if (!state.snapshot.has_value() || *result != *state.snapshot) {
+      return failed_change(
+          {.code = -EINTR, .operation = "Auto-Sens interrupted"}, state, true, true);
+    }
+    std::cerr << "Original raw state restored and verified.\n";
+    constexpr int interrupted_status = 130;
+    return interrupted_status;
   }
   if (!result) { return failed_change(result.error(), state, true, true); }
   const auto preamps = decode_preamps(*result);

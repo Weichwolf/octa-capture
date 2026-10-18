@@ -58,8 +58,11 @@ struct FakeIo {
   int read_error = 0;
   std::vector<std::uint8_t> auto_start_reply;
   std::vector<std::uint8_t> auto_stop_reply;
+  std::vector<std::uint8_t> auto_stop_pending;
   int auto_signal = 0;
   bool auto_fail_stop = false;
+  bool require_auto_completion = false;
+  std::size_t auto_completion_end = 0;
   unsigned int route_commands = 0;
   unsigned int fail_route = 0;
   unsigned int interrupt_route = 0;
@@ -605,6 +608,8 @@ bool prepare_auto_sense(octa::AutoSenseAction action,
   }
   io.auto_fail_stop = scenario == AutoSenseScenario::partial_stop;
   io.auto_signal = scenario == AutoSenseScenario::interruption ? SIGTERM : 0;
+  io.require_auto_completion = scenario == AutoSenseScenario::interruption ||
+                               scenario == AutoSenseScenario::interactive_interruption;
   if (interactive_auto_sense(scenario)) {
     io.auto_signal = scenario == AutoSenseScenario::interactive_interruption ? SIGTERM : SIGUSR1;
   }
@@ -649,7 +654,9 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
   const bool raw_tail =
       io.outgoing.size() >= expected_tail.size() &&
       std::ranges::equal(std::span(io.outgoing).last(expected_tail.size()), expected_tail);
-  const unsigned int connections = failed ? 2U : 1U;
+  const bool cancelled = scenario == AutoSenseScenario::interruption ||
+                         scenario == AutoSenseScenario::interactive_interruption;
+  const unsigned int connections = failed && !cancelled ? 2U : 1U;
   const bool recovery_verified =
       !failed || errors.str().contains("Original raw state restored and verified.");
   const bool removed_file = unlink(path.c_str()) == 0;
@@ -1325,6 +1332,10 @@ int handle_fake_route(const octa::Message &message) {
 
 int handle_fake_data(const octa::Message &message) {
   if (message.command != octa::Command::data) { return 0; }
+  if (message.address == octa::bulk_address && io.require_auto_completion &&
+      io.position < io.auto_completion_end) {
+    return -EIO;
+  }
   if (message.address == octa::Address{0, 0, 0, 1}) {
     if (io.fail_after_memory) { ++io.read_failures; }
     if (io.memory_signal != 0 && kill(getpid(), io.memory_signal) != 0) { return -errno; }
@@ -1341,7 +1352,12 @@ int handle_fake_data(const octa::Message &message) {
     if (io.auto_signal != 0 && kill(getpid(), io.auto_signal) != 0) { return -errno; }
   }
   if (message.address == octa::Address{0, 2, 1, 5}) {
-    append_bytes(io.incoming, io.auto_stop_reply);
+    if (io.require_auto_completion) {
+      io.auto_stop_pending = io.auto_stop_reply;
+      io.auto_completion_end = io.incoming.size() + io.auto_stop_pending.size();
+    } else {
+      append_bytes(io.incoming, io.auto_stop_reply);
+    }
   }
   return handle_fake_route(message);
 }
@@ -1355,7 +1371,7 @@ void handle_fake_request(const octa::Message &message) {
 }
 
 // Test-only ALSA symbol implementations interpose the dynamically linked library.
-// No hardware handle is opened. The real poll uses an empty pipe for timeouts.
+// No hardware handle is opened. The real poll uses a pipe for readiness/timeouts.
 extern "C" int snd_rawmidi_open(snd_rawmidi_t **in_rmidi,
                                 snd_rawmidi_t **out_rmidi,
                                 const char * /*name*/,
@@ -1409,6 +1425,13 @@ snd_rawmidi_write(snd_rawmidi_t * /*rmidi*/, const void *buffer, std::size_t siz
 }
 
 extern "C" int snd_rawmidi_poll_descriptors_count(snd_rawmidi_t * /*rmidi*/) {
+  // A nonblocking drain cannot observe this delayed cancellation reply.
+  if (!io.auto_stop_pending.empty()) {
+    append_bytes(io.incoming, io.auto_stop_pending);
+    io.auto_stop_pending.clear();
+    constexpr char ready = 1;
+    if (write(wake_pipe.back(), &ready, 1) != 1) { return -EIO; }
+  }
   return 1;
 }
 
@@ -1425,6 +1448,10 @@ extern "C" int snd_rawmidi_poll_descriptors_revents(snd_rawmidi_t * /*rawmidi*/,
                                                     unsigned short *revent) {
   if (nfds != 1) { return -EINVAL; }
   *revent = static_cast<unsigned short>(pfds->revents);
+  if ((pfds->revents & POLLIN) != 0) {
+    char ready = 0;
+    if (read(wake_pipe.front(), &ready, 1) != 1) { return -EIO; }
+  }
   return 0;
 }
 

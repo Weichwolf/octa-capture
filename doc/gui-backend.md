@@ -131,7 +131,9 @@ its running notification requires actual selected-channel device activity.
 SIGUSR1 finishes early, while SIGINT/SIGTERM cancel with recovery. Completion
 still requires device notifications and verified state bounds. A cancellation is
 reported as successful only when the CLI confirms unchanged state or verified
-raw restoration. The 60-second maximum prevents an abandoned calibration from
+raw restoration. A running calibration keeps its CTRL session until the device
+acknowledges cancellation, then restores and verifies the snapshot before closing
+the session. The 60-second maximum prevents an abandoned calibration from
 running indefinitely. Other controls stay disabled while calibration is active.
 
 The independently authored web assets use the original parameter values and
