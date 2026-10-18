@@ -33,7 +33,7 @@ it does not imply calibrated audio response or native Debian validation.
 
 | Function | Original evidence | Current implementation / remaining work |
 | --- | --- | --- |
-| Four sample rates, channel packing, capture/playback | macOS audio driver; Windows settings/readme | Standalone module; WSL timing tests at all four rates. Native Debian, signal/channel integrity and long-run stress remain. |
+| Four sample rates, channel packing, capture/playback | macOS audio driver; Windows settings/readme | Standalone module; WSL timing and ten-minute duplex checks at each rate with 1024/8192-frame period/buffer. Smaller periods have produced WSL underruns. Native Debian, signal/channel integrity and broader stress remain. |
 | Clock status and rate changes | macOS USB/status/property code; Windows settings handlers | Kernel rate negotiation and read-only status API. External clock transitions and lock-loss behavior need hardware tests. |
 | DIGITAL AUTO/OFF | macOS `Fsc_SetDIN`; device manual | Setting values and state transitions unresolved; no live write API. |
 | MIDI DIN, CTRL isolation and endpoint routing | macOS MIDI plugin; Windows package/INF | ALSA MIDI endpoints and exclusive CTRL sessions. Physical DIN loopback, scheduling and transport fault coverage remain. |

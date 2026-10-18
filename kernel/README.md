@@ -2,7 +2,7 @@
 
 The driver is built as **`snd-octa-capture.ko`**, using an isolated copy of ALSA's USB audio implementation. Debian's kernel and its source tree remain untouched. The module matches only `0582:0120`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` module to coexist for other devices. It uses the kernel's existing MIDI helper.
 
-The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. CTRL MIDI communication and ALSA stream preparation with independent clock readback have passed at 44.1/48/96/192 kHz under WSL. Timed single-direction streaming checks pass at all four rates under WSL after the host workaround below. Native Debian hardware tests, signal/channel verification and long-duration streaming remain pending.
+The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. CTRL communication, independent clock readback and timed streaming pass at 44.1/48/96/192 kHz under WSL after the host workaround below. Simultaneous capture/zero-playback passes ten minutes per rate with 1024-frame periods and an 8192-frame buffer. Smaller 256-frame periods have produced WSL underruns at 96/192 kHz; their cause is not isolated. Native Debian, physical signal quality and broader latency/stability testing remain required.
 
 Use source matching the target kernel and its prepared build files, including `Module.symvers`:
 
@@ -21,6 +21,13 @@ sudo ./tools/install-module.sh build/module-build/snd-octa-capture.ko
 On native Debian, build files normally come from `linux-headers-$(uname -r)`; source comes from the corresponding `linux-source` package. The full kernel build in the WSL setup supplies its missing build files; normal Debian installation needs only the module build. The installer configures module loading order so the dedicated driver takes precedence while `snd-usb-audio` remains available for other devices.
 
 `kernel/*.patch` files modify only the private module copy. Imported Linux files retain their original copyright and license notices; original additions use GPL-2.0-only.
+
+`tools/check-audio-soak.py --duration 600 --period-size 1024 --rate 192000`
+repeats an isolated quiet duplex run; `--rates` instead cycles all four rates.
+It checks timing, XRUN diagnostics and clock state, stops its streams on errors
+or normal signals, then restores the original rate and complete raw state.
+A private raw recovery file is saved before any rate change. A forced kill or
+disconnect can prevent automatic restoration; retain the reported snapshot.
 
 ## DKMS package
 

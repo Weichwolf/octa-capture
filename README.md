@@ -1,158 +1,107 @@
 # octa-capture
 
-Linux support for the **Roland OCTA-CAPTURE / UA-1010** (`0582:0120`), with device controls modeled on the Windows interface.
+Linux driver and control panel for the **Roland OCTA-CAPTURE / UA-1010**
+(`0582:0120`). Native Debian is the target; development also uses Debian 13 in
+WSL2 with USB/IP. Original project code is **GPL-2.0-only**.
 
-The target platform is native Debian. Development and local functional testing also take place on Debian 13 under WSL2 using USB/IP.
+The standalone ALSA module supports all four descriptor rates and separates MIDI
+from CTRL. Debian users load `snd-octa-capture`; they do not patch their kernel.
+The HTML panel runs against a real C++ backend and also embeds in GTK4/WebKitGTK.
+It includes eight preamp/compressor strips, four mixers, routing, reverb,
+Auto-Sens, settings import/export, device selection and live MIDI/PCM meters.
+Nonlinear parameter tables and display math are checked against both original
+Windows and macOS binaries.
 
-## Status
+**Complete parity is not established.** Device writes/readback, browser controls,
+GTK/native Save and timed audio transfers have passed on the connected WSL
+unit. Small-period WSL audio has produced underruns. Native Debian hardware,
+physical signal quality, external clock, DIN loopback, persistent memory and
+two-unit operation still need verification. Windows host-buffer/ASIO policies
+have no complete Linux equivalent here. See the [function inventory](doc/function-inventory.md)
+for implemented behavior and remaining gaps.
 
-Protocol analysis and implementation are in progress. Available: a SysEx codec, an experimental USB clock probe, a bulk-state reader for preamps, four direct mixers, reverb and output routing, and validated preamp/compressor and DSP writes with readback through the CTRL MIDI port. The standalone module builds for Debian and WSL and loads under WSL. Timed audio capture/playback checks pass at all four rates under WSL after a [USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation). GUI integration is proceeding on the verified backend; signal integrity and the remaining driver controls still need completion and hardware verification.
-
-The [standalone kernel module](kernel/README.md) also exposes a read-only ALSA device-status control. Debian users do not need to patch or rebuild their kernel.
-
-## Local control panel
-
-The HTML/CSS/JavaScript panel runs against the real C++ device backend. It includes eight preamp/compressor strips, interactive Auto-Sens, four direct mixers, reverb, patchbay, settings import/export and driver status. Nonlinear compressor displays and all 1025 fader coefficients match both reference binaries. Controls use fresh hardware readback; input meters show actual device data.
+## Run the panel
 
 ```bash
 make release
 python3 tools/serve-gui.py --open
-# Development build: add --bin-dir build/strict
+# Development binaries: add --bin-dir build/strict
 ```
 
-Open the private launch link printed by the server. It listens only on `127.0.0.1`; its token, Host/Origin checks and local-only content policy protect device operations. Use an account with ALSA device access. The backend and audio streaming remain independent; closing the panel releases its exclusive CTRL connection.
+Use an account with ALSA device access. The server binds only to `127.0.0.1`;
+open its private launch link. Token authentication, Host/Origin checks and a
+local-only content policy protect device operations. Audio stays in the kernel
+and continues when the panel closes.
 
-Right-click the device name (or press Shift+F10) to select a discovered OCTA-CAPTURE. The selector stays available while disconnected. Selected serial identities survive ALSA card renumbering; the panel reconnects automatically when the unit returns.
-
-This is a working panel with real input, compressor OUT and mixer PCM meters; complete GUI interaction parity and multi-unit behavior remain in progress. Physical audio response and native Debian validation are also outstanding. See the [function inventory](doc/function-inventory.md), [PCM meters](doc/pcm-meters.md) and [backend documentation](doc/gui-backend.md).
-
-The same panel also runs in a GTK4/WebKitGTK desktop window (Debian 13,
-GTK 4.10 or later):
+For the desktop window on Debian 13 (GTK 4.10 or later):
 
 ```bash
 sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-webkit-6.0
 python3 tools/desktop-gui.py
 ```
 
-The desktop host keeps the WebKit sandbox enabled, uses an ephemeral session,
-blocks external navigation and handles settings downloads with a native Save
-dialog. It runs as a regular user and uses the same device/backend checks.
+The GTK host keeps the WebKit sandbox enabled, blocks external navigation and
+uses a native Save dialog. Right-click the panel's device name, press Shift+F10
+or use Driver Settings to select a discovered unit. Serial identities survive
+ALSA card renumbering, with automatic same-unit reconnection.
 
-Install the GUI/tools outside the checkout after `make release`:
+## Build and install
 
-```bash
-cmake --install build/release --prefix "$HOME/.local"
-~/.local/bin/octa-capture          # GTK desktop window
-~/.local/bin/octa-capture-http --open
-```
-
-For system installation, see the [Debian/DKMS packages](kernel/README.md#dkms-package).
-The package includes both launchers, device tools and a desktop menu entry.
-
-## Development
-
-The local setup script installs development/analysis tools, configures device permissions, and prepares WSL and native Debian build targets:
+Userspace uses C++23, CMake/Ninja, LLVM 19, ALSA and libusb; kernel additions use
+C/Kbuild. Development packages include `clang-19`, `clang-tidy-19`,
+`clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`,
+`pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, `alsa-utils`, `shellcheck`,
+`python3`, `nodejs`, `node-undici` and `eslint`. Browser checks use `chromium`.
 
 ```bash
-sudo bash /tmp/setup-octa-capture.sh --user "$USER"
-# After successful completion:
-source /etc/octa-capture-dev.env
-```
-
-The script currently exists only in `/tmp` and is not part of the repository. The WSL kernel build takes time and several GB of disk space. Modules must match the kernel version of each test system.
-
-The native userspace code uses C++23, CMake/Ninja, LLVM 19, libusb, and ALSA. Debian packages are `clang-19`, `clang-tidy-19`, `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`, `pkg-config`, `libusb-1.0-0-dev`, `libasound2-dev`, `alsa-utils`, `shellcheck`, `python3`, `nodejs`, `node-undici`, and `eslint`. Browser integration checks additionally use `chromium`.
-
-`VERSION` is the shared userspace/package version. CPack produces the userspace
-Debian package and a source archive; private build files and manufacturer inputs
-are excluded.
-
-```bash
-make test       # strict warnings, clang-tidy, ASan/UBSan, and protocol tests
-make lint       # format and full native static analysis
+make test       # strict warnings, clang-tidy, ASan/UBSan and offline tests
+make lint       # formatting and full native static analysis
 make release    # optimized build and tests
-./tools/fuzz.sh 120  # offline protocol libFuzzer campaign, seconds after build
-./tools/fuzz-midi.sh 120  # offline persistent CTRL session with simulated ALSA I/O
-./build/strict/octa-probe   # read-only clock status, requires USB device access
-./build/strict/octa-state   # query CTRL port 1; print validated bulk payload as JSON
-./build/strict/octa-status  # kernel-owned rate/source/display status as JSON
-./build/strict/octa-panel display 0  # select Mixer A on the device LCD
-./build/strict/octa-panel identify   # original identification/blink command
-./build/strict/octa-preset inspect settings.octa  # offline Ver100 file summary
-./build/strict/octa-preset export > current.octa  # read current device state and export
-./build/strict/octa-preset normalize settings.octa > normalized.octa
-./build/strict/octa-preset prepare settings.octa current.syx > prepared.syx  # offline
-./build/strict/octa-preset apply settings.octa recovery.syx  # recovery file must be new
-./build/strict/octa-preset restore recovery.syx  # restore complete raw state
-./build/strict/octa-auto-sense 1 1000 cancel auto-recovery.syx  # input 1, then restore
-./build/strict/octa-preset restore-auto auto-recovery.syx  # cancel Auto-Sens before recovery
-./build/strict/octa-preset routing multi-monitor routing-recovery.syx  # four monitor mixes
-./build/strict/octa-preset routing playback playback-recovery.syx  # standard playback routes
-./build/strict/octa-preset direct-out direct-recovery.syx  # original Directly Output the Inputs
-./build/strict/octa-preset initialize reverb before-init.syx  # all/preamps/direct-mix/reverb/patchbay
-./build/strict/octa-preset memory-store before-store.syx  # overwrite device memory
-./build/strict/octa-preset memory-load before-load.syx  # load device memory
-./build/strict/octa-meters 2000  # observe eight input levels for 2000 ms as JSON lines
-python3 tools/check-meters.py   # hardware checks for meter shutdown and exclusive CTRL access
-./build/strict/octa-session-check  # share meters, bulk queries and same-value DSP writes
-./build/strict/octa-control 1 attack 8  # set channel 1 attack index, verify fresh bulk reply
-./build/strict/octa-control --dry-run 3 stereo-link 1  # first channel of compressor pair 3/4
-./build/strict/octa-dsp --dry-run mixer input A 3 pan 16384  # encode without MIDI access
-python3 tools/check-dsp.py            # read-only check; --write changes/restores DSP controls
-python3 tools/check-mixer-links.py    # read-only; --write checks switches and master coupling
-python3 tools/check-preamps.py        # read-only check; --write tests and restores 80 values
-python3 tools/check-preamp-links.py   # read-only; --write checks compressor coupling and ADC isolation
-python3 tools/check-auto-sense.py     # read-only; --write checks finish/cancel and signal recovery
-python3 tools/check-routing-presets.py  # read-only; --write checks both presets and restores state
-python3 tools/check-direct-out.py     # read-only; --write checks Direct Out and restores state
-python3 tools/check-initialization.py  # read-only; --write checks three DSP reset groups and restores
-python3 tools/check-status.py --stress --binary build/strict/octa-status  # kernel/C++ status
-./build/strict/octa-audio-check 48000 prepare-capture  # configure/prepare without streaming
-./build/strict/octa-audio-check 48000 capture          # transfer one second and check timing
+cmake --install build/release --prefix "$HOME/.local"
+~/.local/bin/octa-capture
+# HTTP-only launcher: ~/.local/bin/octa-capture-http --open
 ```
 
-Warnings and clang-tidy findings are errors. Sanitizer failures stop the tests. The separate `thread` preset is available for concurrent code. Userspace flags are not applied to kernel builds.
+[Kernel and Debian/DKMS instructions](kernel/README.md) cover matching headers,
+module activation and packages. `VERSION` controls CMake/CPack versions. The
+runtime package includes both GUI launchers, device tools and a desktop entry.
+The DKMS package builds only the external module for its supported kernel
+series. [WSL requires the documented USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation)
+on the tested usbipd/VBoxUSB combination.
 
-`octa-status` reads the kernel-owned ALSA status control through a validated, read-only C++ API. It reports rate, reference clock-source/display state and the unchanged raw packet; external-clock transitions remain hardware-unverified.
+## Verification
 
-Device controls use the exclusive CTRL MIDI port. `MidiSession` shares it between meters, bulk queries, typed writes and Auto-Sens; it is confined to one thread and requires reopening after an unresolved query. `octa-meters` emits raw levels and reference dB values as JSON lines. `octa-session-check` checks shared meter/query traffic without changing the final bulk state.
-
-The [persistent GUI bridge](doc/gui-backend.md) shares one C++ device session between meter events and serialized control requests. `tools/check-bridge.py --write` checks its live control/readback and recovery path. The local HTTP panel uses this bridge for live controls and meters. `tools/check-gui.sh` checks the running panel in disposable headless Chromium; `--write` additionally exercises hardware changes, settings download/upload and complete raw recovery.
-
-`octa-dsp` controls mixer buses A–D, masters, reverb and individual output routes. Channels and output pairs start at 1; values are decimal wire indices/coefficients. `--dry-run` opens no device. Writes validate control bounds and verify readback; see the [protocol reference](doc/usb-midi-protocol.txt).
-
-`octa-panel display 0..3|identify` sends the original LCD-selection or identification command and checks that audio settings remain unchanged. Mixer B–D selection is rejected at 192 kHz. A bulk reply does not confirm the physical LCD or blink.
-
-The [Ver100 preset tools](doc/preset-format.txt) support original `.octa` files, current-state export, offline preparation, live application and raw recovery. Live changes require a new private recovery file. `routing multi-monitor|playback` applies the original five-route presets, checks the entire state after every route and attempts recovery on failure/interruption. Patchbay presets are unavailable at 192 kHz. `memory-store/load` send persistent-memory commands, but persistence remains hardware-unverified; a runtime snapshot cannot undo overwritten device memory.
-
-`direct-out` reproduces the original 206-command sequence, verifies each control and the complete final state, and attempts raw recovery on error/interruption. It assigns the four analog output pairs to their respective direct mixes and preserves the coaxial route, preamps and playback strips. Active input/output master links also propagate unity master levels to playback. It requires 44.1, 48 or 96 kHz and a new private recovery file.
-
-`initialize all|preamps|direct-mix|reverb|patchbay` sends the original initialization sequence after saving a new private raw snapshot. All/Patch Bay also send the original Mixer A selection command; bulk readback does not confirm the LCD selection. The backend checks state bounds, preservation outside the selected group and repeated identical readback; failures/signals attempt complete recovery. Firmware supplies the defaults. This is the control-panel Initialize menu, distinct from the device's power-on Factory Reset procedure.
-
-`octa-control` accepts wire indices, with Hi-Z on inputs 1/2 and stereo-link on inputs 1/3/5/7. `--dry-run` encodes without opening MIDI. Stereo linking copies the left compressor settings to the right and couples subsequent compressor changes in both directions; sensitivity, polarity and low-cut remain independent.
-
-`octa-auto-sense` requires selected-input activity and completion notifications. Finish permits sensitivity changes only on selected inputs, including when compressors are stereo-linked; cancel restores the full raw snapshot. Errors/signals attempt cancellation and verified recovery on a fresh connection. `octa-preset restore-auto` provides manual cancel/recovery.
-
-Hardware checkers are read-only by default; `--write` changes parameters and restores snapshots. Scalar checks exclude phantom-power/Hi-Z/link/mono changes; the dedicated preamp/mixer-link checkers exercise coupling with raw recovery. Check their reported recovery result and retain snapshots: disconnection or forced termination can prevent restoration. Current WSL evidence and remaining signal-quality/native-Debian requirements are in the protocol reference. Audio smoke checks discard input or play zeros and verify gross transfer timing at all four supported rates.
-
-Fuzzing uses [LLVM libFuzzer](https://llvm.org/docs/LibFuzzer.html) with ASan/UBSan, including test-only ALSA transport symbols; no malformed traffic reaches hardware. Corpora/artifacts stay in `build/fuzz/`. Kernel robustness still requires separate KASAN/UBSAN, fault-injection and descriptor/URB tests.
-
-## Documentation
-
-[Function inventory and remaining reference gaps](doc/function-inventory.md) distinguish recovered behavior, implementation and hardware verification.
-
-[Environment findings](doc/environment.txt) are dated snapshots. The [download manifest](doc/drivers-manifest.json) and [checksums](doc/SHA256SUMS) document the official Windows and macOS drivers downloaded locally. Verify the archives with:
+Hardware checkers are read-only by default unless their purpose explicitly
+requires streaming. `--write` checks change device parameters and use recovery
+snapshots. Power switching and persistent memory require separate attention;
+a runtime backup cannot undo an overwritten device-memory preset.
 
 ```bash
-(cd doc && sha256sum -c SHA256SUMS)
+./build/strict/octa-state             # complete CTRL state
+./build/strict/octa-status            # kernel-owned clock status
+python3 tools/check-status.py --stress --binary build/strict/octa-status
+./build/strict/octa-audio-check 48000 capture  # quiet, timed transfer
+python3 tools/check-pcm-meters.py --rates    # quiet meter/PCM lifecycle checks
+./tools/check-gui.sh                        # running-panel browser checks
+./tools/fuzz.sh 120                         # offline protocol fuzzing
+./tools/fuzz-midi.sh 120                    # simulated ALSA transport
+./tools/fuzz-clock.sh 120                   # actual clock C with USB adapters
+./tools/fuzz-kernel-status.sh 120           # actual status C with fault adapters
 ```
 
-[Windows GUI inspection](doc/windows-gui-inspection.txt) records the original interface observed under Wine and the remaining gaps.
+Fuzzing uses LLVM libFuzzer with ASan/UBSan and sends no malformed traffic to
+hardware. Kernel code retains separate Kbuild/Sparse checks; host fuzzing does
+not replace kernel sanitizers, USB fault injection or physical lifecycle tests.
 
-[USB/MIDI protocol](doc/usb-midi-protocol.txt) documents message framing, parameter addresses, and the distinction between static findings and hardware verification.
+## References
 
-Manufacturer archives are local references and must not be included in project releases. Repository documentation, code comments, and UI text are written in English.
+[USB/MIDI protocol](doc/usb-midi-protocol.txt), [GUI/backend](doc/gui-backend.md),
+[PCM meters](doc/pcm-meters.md), [preset format](doc/preset-format.txt) and
+[Windows GUI inspection](doc/windows-gui-inspection.txt) describe recovered
+behavior, commands and evidence limits.
 
-## License
-
-Original project code is licensed under the **GNU General Public License, version 2 only** (`GPL-2.0-only`); see [LICENSE](LICENSE). Roland files are excluded and retain their own license terms.
+Official manufacturer downloads are listed in [the manifest](doc/drivers-manifest.json)
+and [checksums](doc/SHA256SUMS). Downloads, extracted assets and decompilation
+remain local references and are excluded from Git and releases. The interface
+ships our own assets. Manufacturer files retain their original terms; see
+[LICENSE](LICENSE) for project code.
