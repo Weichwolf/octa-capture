@@ -651,6 +651,18 @@ the global reverb return are represented. Unmapped master flags are rejected.
 src/DspControl.cpp validates typed writes against these bounds, uses
 canonical selectors, and encodes the DT1. octa-dsp supports dry runs;
 the MIDI backend verifies each write against a fresh decoded bulk reply.
+
+tools/verify-dsp-transmitters.py independently executes 14 original macOS
+transmitters on x86_64 and ARM64. Each architecture matches 3932 complete
+frames and C++ octa-dsp --dry-run results: all represented source/bus/channel
+selectors and boolean values, all 45 routes, and every legal active-bank
+reverb index. Pan/volume/send/return checks sample bounds, nibble carries,
+unity and asymmetric nibble patterns; their large scalar ranges are not
+exhaustive. The isolated transport never opens USB or MIDI. Reproduce with:
+  python3 tools/verify-dsp-transmitters.py gui-x86_64
+  python3 tools/verify-dsp-transmitters.py gui-arm64 --architecture arm64
+These are encoder checks, not physical DSP response or complete driver parity.
+
 Readback from the connected device and synthetic boundary tests validate
 the layout. Under WSL, 361 scalar DSP changes passed write/readback and
 restoration checks: mute, solo, pan and volume on all four buses and both

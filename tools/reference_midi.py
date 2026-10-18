@@ -32,7 +32,7 @@ def verify(executable, cases):
     def capture(engine, _address, _size, _context):
         data = engine.reg_read(registers.UC_X86_REG_RSI)
         size = engine.reg_read(registers.UC_X86_REG_RDX)
-        if size not in (14, 15):
+        if size not in (14, 15, 17, 19):
             raise RuntimeError('Unexpected reference MIDI transmission length')
         frames.append(bytes(engine.mem_read(data, size)))
         position = engine.reg_read(registers.UC_X86_REG_RSP)

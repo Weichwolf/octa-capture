@@ -33,7 +33,7 @@ def verify(executable, cases):
     def capture(engine, _address, _size, _context):
         data = engine.reg_read(registers.UC_ARM64_REG_X1)
         size = engine.reg_read(registers.UC_ARM64_REG_X2)
-        if engine.reg_read(registers.UC_ARM64_REG_X0) != endpoint or size not in (14, 15) or frames:
+        if engine.reg_read(registers.UC_ARM64_REG_X0) != endpoint or size not in (14, 15, 17, 19) or frames:
             raise RuntimeError('Unexpected ARM64 reference MIDI transmission')
         if not stack <= data <= stack + 0x4000 - size:
             raise RuntimeError('ARM64 reference MIDI data is outside its stack')
