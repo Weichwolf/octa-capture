@@ -53,6 +53,7 @@ is visible when that channel's compressor is enabled.
 ./build/strict/octa-pcm-meters 2       # enable, observe, disable after two seconds
 python3 tools/check-pcm-meters.py --rates
 python3 tools/check-pcm-meters.py --rates --peaks
+python3 tools/check-bridge.py --pause
 ```
 
 The hardware checker requires exclusive control-panel access, records no audio
@@ -66,6 +67,9 @@ and restoration of the original rate and complete raw state. These checks pass
 on the connected WSL device with strict and release builds. Active idle-stream
 module unload/reload also passes. Native Debian, physical signal calibration,
 system suspend/unplug and kernel sanitizer/fault-injection coverage remain.
+The bridge pause check suspends its child process beyond the subscription lease,
+checks that idle audio stops, then resumes it and requires fresh meters without
+changing device settings. This models a stalled client, not system suspend.
 
 The panel uses the original 290 nonlinear meter thresholds, a 30 ms tick,
 0.72 dB fall per tick, 50-tick peak hold and 133-tick clip hold. Preamp input

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
@@ -59,12 +60,40 @@ def check_controls(bridge, before):
     print('PASS ten safe preamp changes/restorations and four typed DSP command families', flush=True)
 
 
+def check_pause(bridge, before, args):
+    def fresh():
+        meters = bridge.meters()
+        pcm = meters.get('pcm') if meters else None
+        return (pcm and pcm['enabled'] and pcm['capture']['fresh'] and pcm['playback']['fresh']
+                and pcm['received_age_ms'] < 500)
+
+    def wait_fresh():
+        deadline = time.monotonic() + 5
+        while not fresh() and time.monotonic() < deadline:
+            time.sleep(0.03)
+        require(fresh(), 'No fresh PCM subscription before/after client pause')
+
+    wait_fresh()
+    process = bridge._process
+    process.send_signal(signal.SIGSTOP)
+    try:
+        time.sleep(2.4)
+        pcm = json.loads(run([args.bin_dir / 'octa-pcm-meters', '--read', args.port.split(',')[0]]))
+        require(not pcm['enabled'] and not pcm['idle_stream'], 'Paused client did not release its PCM lease')
+    finally:
+        process.send_signal(signal.SIGCONT)
+    require(bridge.request('state')['state'] == before, 'Client pause changed device settings')
+    wait_fresh()
+    print('PASS client pause expires its PCM lease; resumed bridge reacquires fresh meters', flush=True)
+
+
 def main():
     root = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bin-dir', type=Path, default=root / 'build/strict')
     parser.add_argument('--port', default='hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1')
     parser.add_argument('--write', action='store_true')
+    parser.add_argument('--pause', action='store_true', help='verify PCM lease expiry and recovery across SIGSTOP/SIGCONT')
     args = parser.parse_args()
     bridge = Bridge(args.bin_dir / 'octa-bridge', args.port)
     before = json.loads(run([args.bin_dir / 'octa-state', args.port]))
@@ -94,6 +123,8 @@ def main():
         else:
             raise RuntimeError('Invalid selector was accepted')
         require(bridge.request('state')['state'] == before, 'Rejected control changed state')
+        if args.pause:
+            check_pause(bridge, before, args)
         if args.write:
             check_controls(bridge, before)
         require(bridge.meters()['age_ms'] < 1000, 'Meter stream stalled during control queries')
