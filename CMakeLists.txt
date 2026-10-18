@@ -89,6 +89,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(OCTA_NODE NAMES node REQUIRED)
 find_program(OCTA_ESLINT NAMES eslint REQUIRED)
 enable_testing()
+include(cmake/ClockTests.cmake)
 add_executable(initialization_test test/Initialization.cpp)
 target_link_libraries(initialization_test PRIVATE octa_protocol)
 add_test(NAME initialization COMMAND initialization_test)
@@ -224,6 +225,7 @@ set(octa_bridge_sources
 
 add_custom_target(format-check
   COMMAND "${OCTA_CLANG_FORMAT}" --dry-run --Werror
+    ${octa_clock_sources} ${octa_clock_shims}
     ${octa_bridge_sources}
     ${octa_peak_sources}
     ${octa_fuzz_sources}
@@ -293,6 +295,7 @@ add_custom_target(format-check
 
 add_custom_target(format
   COMMAND "${OCTA_CLANG_FORMAT}" -i
+    ${octa_clock_sources} ${octa_clock_shims}
     ${octa_bridge_sources}
     ${octa_peak_sources}
     ${octa_fuzz_sources}
@@ -362,6 +365,7 @@ add_custom_target(format
 
 add_custom_target(lint
   COMMAND "${OCTA_CLANG_TIDY}" -p "${CMAKE_BINARY_DIR}" --warnings-as-errors=*
+    ${octa_clock_sources}
     ${octa_bridge_sources}
     ${octa_peak_sources}
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"

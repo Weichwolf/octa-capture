@@ -102,6 +102,14 @@ make -C "$KDIR" M="$PWD/build/module-build" CC="$KERNEL_CC" \
 This static check passes for 6.12 and 6.18. Native hardware, suspend/unplug,
 KASAN/UBSAN and malformed USB/fault-injection tests remain required.
 
+The `clock` CTest compiles the actual `kernel/octa.c` as host C against test-only
+USB/sleep adapters. It checks all rate pairs, same-rate negotiation, clock flags,
+readiness, bounded polling and USB errors/short/oversized replies at each stage.
+`tools/fuzz-clock.sh 120` fuzzes that same C state machine with ASan/UBSan,
+including invalid rates and status bytes. No hardware is opened and no malformed
+traffic reaches USB. Host flags never enter Kbuild; these checks do not cover
+kernel locking, URB lifetime or real kernel sanitizer behavior.
+
 The portable `kernel/pcm-peaks.h` scanner is also compiled as kernel C with
 W=1/-Werror and Sparse, and exercised offline by strict userspace tests,
 original-driver CPU comparisons and `tools/fuzz-pcm-peaks.sh`. Streaming callbacks

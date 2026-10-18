@@ -76,7 +76,7 @@ int snd_usb_octa_capture_current_rate(struct snd_usb_audio *chip,
 		return err;
 	if (ready != 1)
 		return -EAGAIN;
-	*rate = current_rate;
+	*rate = (unsigned int)current_rate;
 	return 0;
 }
 
@@ -105,16 +105,16 @@ int snd_usb_octa_capture_set_rate(struct snd_usb_audio *chip, int rate)
 
 	/* 0x40 changes the clock; 0x01 only negotiates the current rate. */
 	data[0] = current_rate == rate ? 1 : 0x40;
-	data[1] = rate;
-	data[2] = rate >> 8;
-	data[3] = rate >> 16;
+	data[1] = (u8)rate;
+	data[2] = (u8)(rate >> 8);
+	data[3] = (u8)(rate >> 16);
 	err = snd_usb_ctl_msg(chip->dev, usb_sndctrlpipe(chip->dev, 0),
 			      OCTA_CLOCK_REQUEST,
 			      USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE,
 			      8, 0, data, sizeof(data));
 	if (err < 0)
 		return err;
-	if (err != sizeof(data))
+	if (err != (int)sizeof(data))
 		return -EIO;
 
 	for (attempt = 0; attempt < OCTA_POLL_ATTEMPTS; attempt++) {
