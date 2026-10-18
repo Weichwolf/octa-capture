@@ -1,19 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Compile the actual clock C state machine against offline USB/sleep shims.
 # This is a host test, separate from Kbuild and real kernel instrumentation.
-find_program(OCTA_CLOCK_CLANG NAMES clang-19 clang REQUIRED)
-set(octa_clock_c_flags -std=c11 -O1 -g -fPIC
-  -Wall -Wextra -Wpedantic -Werror -Wconversion -Wsign-conversion -Wshadow
-  -Wformat=2 -Wundef -Wcast-align -Wcast-qual -Wdouble-promotion -Wnull-dereference
-  -Wimplicit-fallthrough -Wvla -Wstrict-prototypes -Wmissing-prototypes
-  -fstack-protector-strong -fstack-clash-protection -ffp-contract=off -fno-omit-frame-pointer
-  -D_FORTIFY_SOURCE=3)
-if(DEFINED octa_sanitizers)
-  list(APPEND octa_clock_c_flags "-fsanitize=${octa_sanitizers}" -fno-sanitize-recover=all)
-endif()
-if(OCTA_FUZZING)
-  list(APPEND octa_clock_c_flags -fsanitize=fuzzer-no-link)
-endif()
 set(octa_clock_shims
   "${CMAKE_SOURCE_DIR}/test/clock-shims/ClockTypes.h"
   "${CMAKE_SOURCE_DIR}/test/clock-shims/linux/usb.h"
@@ -25,7 +12,7 @@ set(octa_clock_sources "${CMAKE_SOURCE_DIR}/test/Clock.cpp"
   "${CMAKE_SOURCE_DIR}/test/ClockTransport.cpp" "${CMAKE_SOURCE_DIR}/test/ClockTransport.hpp")
 set(octa_clock_object "${CMAKE_BINARY_DIR}/clock-host.o")
 add_custom_command(OUTPUT "${octa_clock_object}"
-  COMMAND "${OCTA_CLOCK_CLANG}" ${octa_clock_c_flags}
+  COMMAND "${OCTA_KERNEL_HOST_CLANG}" ${octa_kernel_host_c_flags}
     "-I${CMAKE_SOURCE_DIR}/test/clock-shims" "-I${CMAKE_SOURCE_DIR}/kernel"
     -c "${CMAKE_SOURCE_DIR}/kernel/octa.c" -o "${octa_clock_object}"
   DEPENDS "${CMAKE_SOURCE_DIR}/kernel/octa.c" "${CMAKE_SOURCE_DIR}/kernel/octa.h"

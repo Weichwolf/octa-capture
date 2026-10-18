@@ -110,6 +110,14 @@ including invalid rates and status bytes. No hardware is opened and no malformed
 traffic reaches USB. Host flags never enter Kbuild; these checks do not cover
 kernel locking, URB lifetime or real kernel sanitizer behavior.
 
+The `kernel-status` CTest and `tools/fuzz-kernel-status.sh 120` likewise execute
+the actual `octa-status.c` with test-only USB/ALSA/allocator adapters. They check
+phase ordering, malformed/short replies, descriptor validation, interrupted
+guards, allocation/control-registration failures, heap DMA buffers, unchanged
+caller output on failure and balanced resource ownership. Simulated guards check
+cleanup paths; real locking, power management and USB fault behavior still need
+kernel tests. All malformed traffic stays offline.
+
 The portable `kernel/pcm-peaks.h` scanner is also compiled as kernel C with
 W=1/-Werror and Sparse, and exercised offline by strict userspace tests,
 original-driver CPU comparisons and `tools/fuzz-pcm-peaks.sh`. Streaming callbacks

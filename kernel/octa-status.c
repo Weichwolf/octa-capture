@@ -81,6 +81,7 @@ static int octa_status_read(struct snd_usb_audio *chip, u8 *packet)
 static int octa_status_info(struct snd_kcontrol *kcontrol,
 			    struct snd_ctl_elem_info *uinfo)
 {
+	(void)kcontrol;
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_BYTES;
 	uinfo->count = OCTA_STATUS_BYTES;
 	return 0;
