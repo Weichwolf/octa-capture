@@ -93,6 +93,7 @@ class Check(Desktop):
             retained[4] = bytes.fromhex(self.result['initial']['payload_hex'])[4]
             self.import_expected.add(bytes(retained))
         self.phase = 'open-focus'
+        self.open_focused = False
         self.deadline = time.monotonic() + 45
         self.view.grab_focus()
         self.focus_window()
@@ -111,15 +112,23 @@ class Check(Desktop):
             identifier = subprocess.run(['xdotool', 'search', '--all', '--onlyvisible', '--pid',
                                          str(os.getpid()), '--name', title],
                                         capture_output=True, text=True, check=True, timeout=3).stdout.splitlines()[0]
+            if not self.open_focused:
+                subprocess.run(['xdotool', 'windowfocus', identifier], check=True, timeout=3)
+                self.open_focused = True
+                self.phase = 'open-layout'
+                self.GLib.timeout_add(100, self.open_layout_ready)
+                return
             widgets, rows = [window], []
             while widgets:
                 widget = widgets.pop()
                 if isinstance(widget, (self.Gtk.Label, self.Gtk.Inscription)) and widget.get_mapped() and widget.get_text() == self.saved.name:
                     valid, bounds = widget.compute_bounds(window)
-                    if valid:
+                    if valid and bounds.get_width() > 1 and bounds.get_height() > 1:
                         x = bounds.get_x() + bounds.get_width() / 2
                         y = bounds.get_y() + bounds.get_height() / 2
-                        if 0 <= x < window.get_width() and 0 <= y < window.get_height():
+                        picked = window.pick(x, y, self.Gtk.PickFlags.DEFAULT)
+                        visible = picked is not None and (picked == widget or widget.is_ancestor(picked))
+                        if visible and 0 <= x < window.get_width() and 0 <= y < window.get_height():
                             rows.append((y, x))
                 child = widget.get_first_child()
                 while child:
@@ -131,8 +140,22 @@ class Check(Desktop):
             subprocess.run(['xdotool', 'windowfocus', identifier, 'mousemove', '--window', identifier,
                             str(int(x)), str(int(y)), 'click', '--repeat', '2', '--delay', '100', '1'],
                            check=True, timeout=3)
-            self.phase = 'load-confirm'
+            self.native_open_dialog = window
+            self.native_open_identifier = identifier
+            self.phase = 'open-accept'
+            self.GLib.timeout_add(150, self.accept_load_file)
             return
+
+    def open_layout_ready(self):
+        self.phase = 'open-dialog'
+        return False
+
+    def accept_load_file(self):
+        if self.native_open_dialog.get_visible():
+            subprocess.run(['xdotool', 'windowfocus', self.native_open_identifier, 'key', 'Return'],
+                           check=True, timeout=3)
+        self.phase = 'load-confirm'
+        return False
 
     def file_chooser(self, _view, request):
         self.open_request = request
