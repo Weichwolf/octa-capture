@@ -123,6 +123,42 @@ def mac_layout(cpu, layout):
                 'macOS nominal USB frame geometry differs from Windows layout')
 
 
+def mac_transfer_allocation(cpu, layout):
+    request = HELPERS['REQUEST']
+    for capture in (False, True):
+        cpu.mem_write(CONTEXT, bytes(0x1000))
+        cpu.mem_write(PROPS, bytes(0x1000))
+        write(cpu, PROPS, PROPS + 0x100, 'Q')
+        write(cpu, PROPS + 8, int(capture), 'B')
+        write(cpu, PROPS + 0x114, layout['rate'])
+        write(cpu, PROPS + 0x139, 1, 'B')  # High-speed fixture, default device index 0.
+        stride = layout['capture_stride' if capture else 'playback_stride']
+        packet_bytes = ((layout['rate'] + 7999) // 8000) * stride
+        write(cpu, request + 4, packet_bytes, 'H')
+        allocations = []
+
+        def dependency(engine, address, _size, _context):
+            if address == 0x1d60:
+                allocations.append(engine.reg_read(registers.UC_X86_REG_RDX))
+            returned(engine, request if address == 0x2010 else 1)
+
+        # Supply a synthetic endpoint descriptor and successful host allocations.
+        # The original packet batching, byte sizing and channel branches execute.
+        hooks = [cpu.hook_add(UC_HOOK_CODE, dependency, begin=address, end=address)
+                 for address in (0x11bec, 0x2010, 0x1d60, 0x11a90)]
+        try:
+            HELPERS['execute'](cpu, 0x11af6, (CONTEXT, PROPS, PROPS + 0x200, PROPS + 0x300))
+            require(cpu.reg_read(registers.UC_X86_REG_RAX) == 1, 'macOS packet allocation failed')
+            require(read(cpu, CONTEXT + 0x40) == 32 and read(cpu, CONTEXT + 0x44) == 256,
+                    'macOS default high-speed batching differs from 32 ms / 256 microframes')
+            require(read(cpu, CONTEXT + 0x48) == packet_bytes and read(cpu, CONTEXT + 0x4c) == stride,
+                    'macOS transfer packet size or channel stride differs')
+            require(allocations == [packet_bytes * 256], 'macOS host allocation size differs')
+        finally:
+            for hook in hooks:
+                cpu.hook_del(hook)
+
+
 def descriptor_layout(path):
     raw, position, interface = path.read_bytes(), 0, None
     result = {}
@@ -180,6 +216,7 @@ def main():
             layout = windows_layout(windows, rate, capture, playback)
         windows_packet_accounting(windows, layout)
         mac_layout(mac, layout)
+        mac_transfer_allocation(mac, layout)
         layouts.append(layout)
     if args.descriptors:
         cached = descriptor_layout(args.descriptors)
@@ -191,6 +228,7 @@ def main():
     if args.windows_gui:
         windows_warning(args.windows_gui)
     print('PASS original CPU execution: 12 Windows stream-builder, 4 short-packet and 8 macOS nominal USB-frame cases')
+    print('PASS 8 original macOS transfer allocations: default index 0, high speed, 32 ms / 256 microframes')
     print('Host dependencies are stubbed; no USB transfer, IRP allocation or audio signal is exercised.')
     print(json.dumps(layouts, indent=2))
 

@@ -20,7 +20,10 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
 - Windows stream construction/channel strides and the channel counts derived
   from macOS nominal USB-frame geometry agree in isolated CPU execution at all four rates, also matching the
   cached device descriptors. Windows short-capture-packet accounting is exercised
-  separately. Host allocation/setup dependencies are stubbed; this is not audio
+  separately. Original macOS packet allocation also executes at each rate in both
+  directions: high-speed default index 0 uses 32 ms / 256 microframes per transfer,
+  with rate-dependent channel strides and buffer sizes. Host allocation/setup
+  dependencies are stubbed; this is not audio
   signal or kernel fault validation.
 - Windows x86 and macOS arm64 have not received an independent behavior comparison.
   Shared artwork does not establish shared control logic.

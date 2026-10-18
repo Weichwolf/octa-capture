@@ -98,11 +98,16 @@ class Records(unittest.TestCase):
         self.assertEqual(self.decoder.input.frames, 0)
 
     def test_large_iso_transfer_remains_valid_and_bounded(self):
-        header, data = packet(samples(500))
+        header, data = packet(samples(288))
+        # 24 high-speed microframes, each containing twelve 12-channel samples.
+        descriptors = b''.join(struct.pack('<iIII', 0, index * 432, 432, 0) for index in range(24))
+        data = descriptors + data[16:]
+        struct.pack_into('<I', header, 36, len(data))
+        struct.pack_into('<I', header, 60, 24)
         self.assertGreater(len(data), 8192)
         self.assertLessEqual(len(data), usb.CAPACITY)
         self.decoder.event(header, data)
-        self.assertEqual(self.decoder.input.verified, 437)
+        self.assertEqual(self.decoder.input.verified, 225)
         self.assertEqual(self.decoder.invalid, 0)
         self.assertEqual(self.reports, [])
 
