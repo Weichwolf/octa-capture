@@ -37,15 +37,25 @@ python3 tools/package-dkms.py /path/to/linux-6.12-source build/packages/driver
 # On the native Debian target with a matching-series kernel:
 sudo apt install "linux-headers-$(uname -r)"
 sudo apt install ./build/packages/runtime/*.deb ./build/packages/driver/*.deb
+sudo octa-capture-activate
 ```
 
-Reconnect the unit after installation, then run `octa-capture` or
+Close audio/control applications before activation, then run `octa-capture` or
 `octa-capture-http --open` as a regular user. The module package installs its
 loading priority and device-specific audio-group/uaccess rules. DKMS rebuilds
 only the external module when matching-series headers change. Each source package
 is restricted to its prepared kernel series; `SOURCE-KERNEL` records its ALSA
 baseline and `BUILD-SERIES` defines the supported headers. Other series are skipped.
 Source generation and module builds also support the WSL 6.18 adapter.
+`octa-capture-activate --check` reports binding without root or device writes.
+Activation loads the installed module and rebinds only `0582:0120` if generic
+`snd-usb-audio` already owns it. Other USB audio devices stay attached. The loading
+priority handles subsequent boots; installing a modprobe soft dependency alone
+does not replace an already bound generic driver.
+`python3 test/ModuleActivation.py` checks activation, other-device isolation and
+failure paths in user/mount namespaces using bubblewrap and fake sysfs. It cannot
+write host sysfs or load a real module. Physical binding lifecycle tests remain
+separate.
 
 The Debian 6.12.113 DKMS build and signing passed in an unprivileged development
 tree with matching headers. The WSL 6.18 DKMS artifact also passed actual module

@@ -59,6 +59,10 @@ def prepare(stage, source, version, series, baseline):
     rules = stage / 'usr/lib/udev/rules.d/70-octa-capture.rules'
     rules.parent.mkdir(parents=True)
     shutil.copyfile(ROOT / 'packaging/70-octa-capture.rules', rules)
+    activation = stage / 'usr/sbin/octa-capture-activate'
+    activation.parent.mkdir(parents=True)
+    shutil.copyfile(ROOT / 'tools/activate-module.sh', activation)
+    activation.chmod(0o755)
     write(stage / 'DEBIAN/control', f'''Package: octa-capture-dkms
 Version: {version}
 Architecture: all
@@ -82,7 +86,9 @@ The complete module source is installed in /usr/src/snd-octa-capture-{version}.
 Original Linux/ALSA copyright and license notices remain in each source file.
 DKMS rebuilds this external module when matching-series kernel headers change.
 Builds use the kernel compiler, W=1 and -Werror. Other kernel series are skipped.
-The package configures module priority; reconnect the unit after installation.
+Close audio/control applications, then run sudo octa-capture-activate.
+This loads the module and binds only 0582:0120; other USB audio devices remain bound.
+octa-capture-activate --check is read-only and works without root.
 GUI/device tools are provided by the separate octa-capture package.
 ''')
 
