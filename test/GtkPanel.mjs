@@ -30,7 +30,13 @@ export async function checkPanel(write) {
   const panel = document.querySelector('#panel').getBoundingClientRect();
   check(panel.left >= 0 && panel.top >= 0 && panel.right <= innerWidth && panel.bottom <= innerHeight,
     `Complete panel fits the GTK viewport: ${JSON.stringify({panel:panel.toJSON(), width:innerWidth, height:innerHeight})}`);
-  const initial = (await api('/api/state')).state;
+  const documentState = await api('/api/state');
+  const initial = documentState.state;
+  const mixerChannels = initial.payload_hex.slice(4, 6) === '03' ? 4 : 10;
+  if (mixerChannels === 4 && documentState.preferences.show_port_warning) {
+    await until(() => document.querySelector('#port-warning').open, 'GTK 192 kHz port warning');
+    document.querySelector('#port-warning [data-close]').click();
+  }
   const palette = initial.preamps[0].compressor.enabled ? [208, 155, 66] : [99, 77, 66];
   await until(() => {
     const pixel = document.querySelector('.preamp-strip:first-child canvas').getContext('2d').getImageData(11, 11, 1, 1).data;
@@ -56,7 +62,7 @@ export async function checkPanel(write) {
   document.querySelector('#view-switch').click();
   check(!document.querySelector('#mixer-view').hidden, 'Direct Mixer opened');
   check(document.querySelectorAll('.mixer-strip').length === 20, 'Twenty mixer strips');
-  await until(() => document.querySelectorAll('.level-lane:not(.stale)').length === 20,
+  await until(() => document.querySelectorAll('.level-lane:not(.stale)').length === mixerChannels * 2,
     'all input/playback PCM meter lanes');
   document.querySelector('[data-menu="driver"]').click();
   [...document.querySelectorAll('#menus button')].find(node=>node.textContent === 'Show README').click();

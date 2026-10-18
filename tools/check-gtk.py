@@ -59,13 +59,75 @@ class Check(Desktop):
             try:
                 value = view.call_async_javascript_function_finish(result)
                 self.result = json.loads(value.to_json(0))
-                self.phase = 'download'
-                window = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(os.getpid())],
-                                        capture_output=True, text=True, check=True, timeout=3).stdout.splitlines()[0]
-                subprocess.run(['xdotool', 'windowfocus', window, 'key', 'ctrl+s'], check=True, timeout=3)
+                if self.write:
+                    self.start_native_control()
+                else:
+                    self.start_save()
             except Exception as error:
                 self.fail(error)
         self.view.call_async_javascript_function(source, -1, None, None, None, None, finished, None)
+
+    def focus_window(self):
+        window = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(os.getpid())],
+                                capture_output=True, text=True, check=True, timeout=3).stdout.splitlines()[0]
+        subprocess.run(['xdotool', 'windowfocus', window], check=True, timeout=3)
+
+    def key(self, key, focus=True):
+        if focus:
+            self.focus_window()
+        subprocess.run(['xdotool', 'key', '--clearmodifiers', key], check=True, timeout=3)
+
+    def start_save(self):
+        self.phase = 'download'
+        self.key('ctrl+s')
+
+    def start_native_control(self):
+        self.native_original = self.result['initial']['preamps'][0]['sensitivity_index']
+        self.native_delta = 1 if self.native_original < 100 else -1
+        self.phase = 'native-focus'
+        self.view.grab_focus()
+        self.focus_window()
+        # Process X11/GTK FocusIn before setting the DOM slider focus.
+        self.GLib.timeout_add(100, self.focus_native_dom)
+
+    def focus_native_dom(self):
+        script = "document.querySelector('#view-switch').click();" \
+                 "document.querySelector('.preamp-strip .sensitivity').focus();" \
+                 "document.activeElement.matches('.sensitivity');"
+
+        def focused(view, result, _data):
+            try:
+                if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
+                    raise RuntimeError('Native control did not receive WebKit focus.')
+                self.phase = 'native-change'
+                self.key('Up' if self.native_delta > 0 else 'Down', focus=False)
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, focused, None)
+        return False
+
+    def native_progress(self):
+        value = self.server.application.snapshot()['state']['preamps'][0]['sensitivity_index']
+        expected = self.native_original + self.native_delta if self.phase == 'native-change' else self.native_original
+        if value != expected:
+            return
+        if self.phase == 'native-change':
+            self.phase = 'native-restore'
+            self.key('Down' if self.native_delta > 0 else 'Up', focus=False)
+            return
+        self.phase = 'native-complete'
+
+        def mixer(view, result, _data):
+            try:
+                if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
+                    raise RuntimeError('Native control did not return to Direct Mixer.')
+                print('PASS actual X11/WebKit key events, hardware change and restoration.', flush=True)
+                self.start_save()
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript("document.querySelector('#view-switch').click();"
+                                      "!document.querySelector('#mixer-view').hidden;",
+                                      -1, None, None, None, mixer, None)
 
     def tick(self):
         try:
@@ -78,6 +140,8 @@ class Check(Desktop):
         if time.monotonic() > self.deadline:
             self.fail(f'GTK check timed out in {self.phase}.')
             return False
+        if self.phase in ('native-change', 'native-restore'):
+            self.native_progress()
         if self.phase == 'download':
             for window in self.Gtk.Window.list_toplevels():
                 if window.get_visible() and window.get_title() == 'Save OCTA-CAPTURE settings':
