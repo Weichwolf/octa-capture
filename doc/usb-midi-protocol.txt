@@ -17,7 +17,8 @@ layout has been read at 480 Mbit/s through USB/IP and direct native USB.
   1          85 IN            isochronous input with implicit feedback usage
   2          06 OUT / 86 IN   MIDI; bulk at alternate 0, interrupt at alternate 1
   3          82 IN            interrupt, 8-byte maximum packet at alternate 1
-  4          81 IN            interrupt, 8-byte maximum packet at alternate 1
+  4          81 IN            interrupt, 8-byte packets at alternates 1..4;
+                             bInterval=1..4 respectively
 
 Interface 3 is the reference driver's status polling interface: CuDevPoll::Open
 selects alternate 1 and reads its interrupt pipe. Eight-byte packets are
@@ -36,7 +37,18 @@ uses heap-backed USB buffers and checks exact lengths, phase bytes and a
 nonzero rate. Each call attempts at most four interrupt reads, each with a
 250 ms timeout, seeking phase 0 then phase 1. Interface selection/PM may
 add latency. It does not detach interfaces or change audio/CTRL settings.
-Interface 4's meaning is not yet established.
+Interface 4's meaning is not yet established. Executing the original Windows
+x64/macOS x86_64 descriptor parsers on the native cached descriptors confirms
+all four rates and packet sizes. The traced pipe constructors/port-opening
+paths select capture 1, playback 0, MIDI 2 and status 3; they do not select
+interface 4. This does not rule out another untraced path. The macOS parser
+is CuDscLeastInfo::GetAllIFInfo (0x12598), its selectors are GetConfPort
+(0x169A0) and CuUsbPorts::Open (0x16A5E); Windows uses 0x140014EA0 and
+pipe wrappers 0x14001E860..0x14001E8D0. Reproduce offline with:
+  python3 tools/verify-interface-selection.py audio-x86_64 RDWM1110.SYS descriptors.bin
+The checker uses hash-pinned binaries and cached descriptors (a sysfs
+descriptors file is also accepted). It checks 35 selector cases and five
+macOS open sequences; host interface opening is stubbed, with no USB transfers.
 WSL hardware reads report the matching rate at 44.1/48/96/192 kHz, with
 capture/playback timing checks still passing. Four concurrent status
 readers also passed alongside 48 kHz duplex audio, meters and shared CTRL
