@@ -90,6 +90,10 @@ With verified bounded RTKit SCHED_RR priority 5, all ten sources pass at
 44.1/48/96 kHz with 128/512 frames: ten-second streams, 16,929,000 checked
 samples and complete raw/rate recovery. Longer-duration performance remains open.
 
+Immediate Auto-Sens shutdown has one unreproduced offline lifecycle failure.
+Failure diagnostics retain child exit status, readiness, requested/sent signal
+and stderr. The cause remains unresolved.
+
 One native control-stress run failed while restoring a raw snapshot. Independent
 outer recovery restored and verified the complete original state and rate.
 An identical-fixture repeat and the full 304-case monitor sweep then passed;

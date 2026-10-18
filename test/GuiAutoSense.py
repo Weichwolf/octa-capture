@@ -264,7 +264,12 @@ class Interactive(unittest.TestCase):
                 else:
                     application.stop_auto_sense({'action': 'cancel'})
                 application._auto_thread.join(timeout=5)
-                self.assertEqual(application._auto_job.document()['state'], 'cancelled')
+                job = application._auto_job
+                self.assertEqual(job.document()['state'], 'cancelled',
+                                 {'mode': stop, 'returncode': job._process.returncode,
+                                  'prepared': job._prepared, 'requested': job._requested,
+                                  'sent': job._sent, 'protocol_error': job._protocol_error,
+                                  'log': job._log_path.read_text(errors='replace')})
                 if stop not in ('close', 'close-early'):
                     self.assertFalse(application.snapshot()['busy'])
             finally:
