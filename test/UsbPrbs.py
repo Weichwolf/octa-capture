@@ -97,6 +97,15 @@ class Records(unittest.TestCase):
         self.assertEqual(self.decoder.events, {})
         self.assertEqual(self.decoder.input.frames, 0)
 
+    def test_large_iso_transfer_remains_valid_and_bounded(self):
+        header, data = packet(samples(500))
+        self.assertGreater(len(data), 8192)
+        self.assertLessEqual(len(data), usb.CAPACITY)
+        self.decoder.event(header, data)
+        self.assertEqual(self.decoder.input.verified, 437)
+        self.assertEqual(self.decoder.invalid, 0)
+        self.assertEqual(self.reports, [])
+
     def test_truncation_and_descriptor_bounds(self):
         header, data = packet(samples(128))
         self.decoder.event(header[:63], data)

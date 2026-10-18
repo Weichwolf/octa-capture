@@ -19,7 +19,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent.parent
-CAPACITY = 8192
+CAPACITY = 32768
 HEADER_SIZE = 64
 MAX_ERRORS = 100
 MAX_PENDING_URBS = 1024
