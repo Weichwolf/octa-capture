@@ -25,6 +25,11 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   with rate-dependent channel strides and buffer sizes. Host allocation/setup
   dependencies are stubbed; this is not audio
   signal or kernel fault validation.
+- Windows host-buffer policy is traced through the actual Light/VS EXPAND
+  callback and all ten levels at each supported rate. Isolated execution checks
+  160 kernel combinations and 482 public ASIO getter cases, including output
+  clearing on failure. These host settings do not define Linux buffer policy
+  or prove streaming latency.
 - Windows x86 and macOS arm64 have not received an independent behavior comparison.
   Shared artwork does not establish shared control logic.
 - `tools/ghidra/ExportReferenceInventory.java` exports function and call-site TSVs

@@ -13,9 +13,13 @@ from unicorn import UC_HOOK_CODE
 from unicorn import x86_const as registers
 
 HELPERS = runpy.run_path(str(Path(__file__).with_name('verify-pcm-peaks.py')))
+MONITOR = runpy.run_path(str(Path(__file__).with_name('verify-input-monitor.py')))
 GUI_SHA256 = '634c140bc4e49b0d65c70d5156be19573ad3d440ac5ea24e24d3ad59974da406'
 CONTEXT, PROPS, DATA, STACK, STOP = (HELPERS[name] for name in ('CONTEXT', 'PROPS', 'DATA', 'STACK', 'STOP'))
 PROPERTY_SIZE = 0x158
+RATES = (44100, 48000, 96000, 192000)
+BASE_BUFFERS = (48, 48, 64, 96, 128, 256, 384, 512, 1024, 2048)
+LIGHT_BUFFERS = (32, 48, 64, 96, 128, 256, 384, 512, 1024, 2048)
 
 
 def require(condition, message):
@@ -140,11 +144,39 @@ class Kernel:
             HELPERS['write'](self.cpu, address, target, 'Q')
             self.cpu.hook_add(UC_HOOK_CODE, self.spinlock, begin=target, end=target)
         self.cpu.hook_add(UC_HOOK_CODE, self.rebuild, begin=0x14000d680, end=0x14000d680)
+        HELPERS['write'](self.cpu, 0x14002b248, STOP + 0x130, 'Q')
+        self.cpu.hook_add(UC_HOOK_CODE, self.callback, begin=STOP + 0x130, end=STOP + 0x130)
 
     @staticmethod
     def spinlock(cpu, _address, _size, _context):
-        require(cpu.reg_read(registers.UC_X86_REG_RCX) == CONTEXT + 0x371b8, 'Wrong stream lock')
+        require(cpu.reg_read(registers.UC_X86_REG_RCX) in (CONTEXT + 0x371b8, CONTEXT + 0x18),
+                'Wrong stream/property callback lock')
         returned(cpu, 0)
+
+    @staticmethod
+    def callback(cpu, _address, _size, _context):
+        # The original initializer 0x140001850 stores this exact callback and
+        # its active property context. Reproduce only the CFG tail dispatch;
+        # execute the actual 0x1c policy branch rather than stubbing its result.
+        require(cpu.reg_read(registers.UC_X86_REG_RAX) == 0x140004310, 'Unexpected original callback')
+        require(cpu.reg_read(registers.UC_X86_REG_RDX) == 0x1c, 'Unexpected callback selector')
+        require(cpu.reg_read(registers.UC_X86_REG_RCX) == PROPS + 0x400, 'Wrong callback property context')
+        cpu.reg_write(registers.UC_X86_REG_RIP, 0x140004310)
+
+    def buffer(self, rate, level, expand, light):
+        self.cpu.mem_write(CONTEXT, bytes(0x40000))
+        HELPERS['write'](self.cpu, CONTEXT + 8, 0x140004310, 'Q')
+        HELPERS['write'](self.cpu, CONTEXT + 0x10, PROPS + 0x400, 'Q')
+        HELPERS['write'](self.cpu, CONTEXT + 0x28, PROPS + 0x400, 'Q')
+        for offset, value in ((0x120, level), (0x13c, int(expand)), (0x140, int(light))):
+            HELPERS['write'](self.cpu, PROPS + 0x400 + offset, value)
+        HELPERS['execute'](self.cpu, 0x140001b50, (CONTEXT, DATA, rate, 0), windows=True)
+        actual = struct.unpack('<4I', self.cpu.mem_read(DATA, 16))
+        scale = 1 if rate <= 48000 else rate // 48000
+        size = (LIGHT_BUFFERS if light and not expand else BASE_BUFFERS)[level] * scale
+        expected = (size, size, size, 0)
+        require(actual == expected, f'Original buffer policy mismatch: {rate=}, {level=}, {expand=}, {light=}')
+        return actual
 
     def rebuild(self, cpu, _address, _size, _context):
         self.calls.append(tuple(cpu.reg_read(register) for register in
@@ -171,10 +203,56 @@ class Kernel:
                 'Cached WDM rate updated without successful rebuild')
 
 
+class Asio:
+    def __init__(self, path, kernel):
+        self.cpu = HELPERS['cpu_image'](path, MONITOR['ASIO_SHA256'], windows=True)
+        self.kernel = kernel
+        self.configuration = None
+        self.success = True
+        self.requests = 0
+        HELPERS['write'](self.cpu, CONTEXT + 0xca8, PROPS, 'Q')
+        HELPERS['write'](self.cpu, PROPS + 0x108, 0x55, 'Q')
+        HELPERS['write'](self.cpu, 0x1800180e0, STOP + 0x100, 'Q')
+        self.cpu.hook_add(UC_HOOK_CODE, self.ioctl, begin=STOP + 0x100, end=STOP + 0x100)
+
+    def ioctl(self, cpu, _address, _size, _context):
+        require(cpu.reg_read(registers.UC_X86_REG_RCX) == 0x55, 'Wrong synthetic ASIO handle')
+        require(cpu.reg_read(registers.UC_X86_REG_RDX) == 0x222130, 'Unexpected ASIO buffer IOCTL')
+        stack = cpu.reg_read(registers.UC_X86_REG_RSP)
+        buffer = cpu.reg_read(registers.UC_X86_REG_R8)
+        require(cpu.reg_read(registers.UC_X86_REG_R9) == 16 and read(cpu, stack + 0x30, 'Q') == 16,
+                'Unexpected buffer IOCTL sizes')
+        require(read(cpu, stack + 0x28, 'Q') == buffer, 'ASIO buffer request is not in place')
+        self.requests += 1
+        if self.success:
+            values = self.kernel.buffer(*self.configuration)
+            cpu.mem_write(buffer, struct.pack('<4I', *values))
+            HELPERS['write'](cpu, read(cpu, stack + 0x38, 'Q'), 16)
+        returned(cpu, int(self.success))
+
+    def buffer(self, configuration, capture=1, playback=1, success=True):
+        self.configuration, self.success, self.requests = configuration, success, 0
+        for offset, value in ((0x3cbc, capture), (0x3cb0, playback)):
+            HELPERS['write'](self.cpu, CONTEXT + offset, value)
+        self.cpu.mem_write(DATA, bytes([0xa5] * 32))
+        HELPERS['write'](self.cpu, STACK + 0x28, DATA + 24, 'Q')
+        HELPERS['execute'](self.cpu, 0x180008140, (CONTEXT, DATA, DATA + 8, DATA + 16), windows=True)
+        opened = capture > 0 or playback > 0
+        expected = self.kernel.buffer(*configuration) if opened and success else (0, 0, 0, 0)
+        status = self.cpu.reg_read(registers.UC_X86_REG_RAX) & 0xffffffff
+        require(status == (0 if opened and success else 0xfffffc18), 'Public ASIO buffer result differs')
+        require(self.requests == int(opened), 'Closed ASIO device unexpectedly attempted host I/O')
+        guarded = bytearray([0xa5] * 32)
+        for index, value in enumerate(expected):
+            struct.pack_into('<I', guarded, index * 8, value)
+        require(bytes(self.cpu.mem_read(DATA, 32)) == guarded, 'ASIO output or adjacent memory differs')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('windows_gui', type=Path)
     parser.add_argument('windows_kernel', type=Path)
+    parser.add_argument('--asio', type=Path, help='also execute the public RDAS1110.DLL buffer getter')
     args = parser.parse_args()
     gui, kernel = Gui(args.windows_gui), Kernel(args.windows_kernel)
     staged = 0
@@ -197,8 +275,24 @@ def main():
             disabled, host, present, same_rate, success = flags
             kernel.gate(disabled, host, capture, playback, present, same_rate, success)
             gated += 1
-    print('PASS original Windows host-property staging, Apply transport and WDM rate synchronization gate.')
+    buffers, asio_cases = 0, 0
+    asio = Asio(args.asio, kernel) if args.asio else None
+    for configuration in itertools.product(RATES, range(10), (False, True), (False, True)):
+        kernel.buffer(*configuration)
+        buffers += 1
+        if asio is not None:
+            for capture, playback in ((1, 0), (0, 1), (1, 1)):
+                asio.buffer(configuration, capture, playback)
+                asio_cases += 1
+    if asio is not None:
+        asio.buffer((48000, 5, False, True), capture=0, playback=0)
+        asio.buffer((48000, 5, False, True), success=False)
+        asio_cases += 2
+    print('PASS original Windows host-property staging, Apply transport, buffer policy and WDM rate synchronization gate.')
+    if asio is not None:
+        print('PASS public ASIO buffer getter through memory-only IOCTL transport to the original kernel policy.')
     print(json.dumps({'staged_property_cases': staged, 'apply_cases': applied, 'wdm_rate_gate_cases': gated,
+                      'kernel_buffer_policy_cases': buffers, 'public_asio_buffer_cases': asio_cases,
                       'host_dependencies': 'memory-only UI, handle, IOCTL, lock and WDM-rebuild stubs',
                       'hardware_validation': False}))
 

@@ -202,6 +202,21 @@ Full property bytes are compared, including unrelated data. UI, host handles,
 IOCTL completion, locks and the final WDM rebuild use memory-only stubs; these
 checks do not exercise USB, actual Windows endpoints or multiple devices.
 
+The original callback 0x140004310, installed by 0x140001850/0x140026260,
+returns ASIO in Light for selector 0x1c only when VS EXPAND is off. The
+buffer getter 0x140001b50 reaches this through 0x140002590. At 44.1/48 kHz
+its ten normal buffer levels are 48,48,64,96,128,256,384,512,1024,2048
+frames; Light mode uses 32,48,64,96,128,256,384,512,1024,2048 instead.
+At 96/192 kHz the respective tables are multiplied by two/four. The result
+has min=max=preferred and granularity zero, not a freely variable range.
+RDAS1110.DLL's public getBufferSize at 0x180008140 obtains this tuple through
+IOCTL 0x222130 and zeros all four outputs on a closed device or I/O failure.
+tools/verify-host-policy.py executes 160 kernel policy combinations; adding
+--asio RDAS1110.DLL also executes 482 public getter cases. The property
+callback and getters execute original code; host I/O and locks are isolated
+memory stubs. This does not establish achievable streaming latency or define
+an ALSA period/buffer restriction.
+
 The owner's manual describes CLOCK as INTERNAL or synchronization to a
 signal at the coaxial input. DIGITAL=AUTO receives that input and follows
 its sampling frequency; DIGITAL=OFF disables it. This does not establish
