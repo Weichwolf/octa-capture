@@ -173,6 +173,35 @@ worker 0x1400253a0 calls 0x140005fb0 and 0x140005b00, which sends the same
 Default instead manage staged Windows host properties; Cancel does not undo
 the sample rate and keeps the settings dialog open (GUI 0x14002c1b0).
 
+Windows host settings are distinct from USB/device state. GUI 0x14002b7d0
+collects a 344-byte property structure; 0x14002d0f0 sends that structure plus
+a result DWORD through IOCTL 0x2221ec to each available driver slot (up to
+eight). The relevant zero-based property offsets are:
+  118: Use ASIO Direct Monitor, stored directly (registry AsioMonitor)
+  120: buffer slider index, clamped to 0..9 (registry BufSize2)
+  128: inverse Match with the ASIO sample rate (registry FsSyncOff)
+  13C: VS EXPAND flag
+  140: ASIO in Light, retained while VS EXPAND is enabled (registry AsioLL2)
+  148: inverse Use Multichannel WDM Audio Port
+VS EXPAND's handler clears/disables the Light checkbox, retaining the previous
+Light preference for re-enabling it. These fields are not new SysEx commands.
+
+The rate-match flag controls the Windows host-format update path 0x140005a70.
+After retaining the requested rate, that path rebuilds WDM formats only when
+an endpoint exists, the rate differs and neither stream-use count is positive.
+FsSyncOff suppresses that rebuild for callers passing third argument 1;
+the explicit GUI rate-change path passes 0. It does not disable the actual
+device clock-change request. The rebuild reaches 0x14000d680/0x14000dee0,
+which construct Windows audio-port formats. Linux instead negotiates the
+hardware rate through ALSA; application/server policy owns mixing, resampling
+and buffers. No Windows WDM matching preference is exposed in the Linux GUI.
+
+tools/verify-host-policy.py executes 768 original GUI property cases, 61 Apply
+transport/aggregation cases and 128 original kernel rate-update gate cases.
+Full property bytes are compared, including unrelated data. UI, host handles,
+IOCTL completion, locks and the final WDM rebuild use memory-only stubs; these
+checks do not exercise USB, actual Windows endpoints or multiple devices.
+
 The owner's manual describes CLOCK as INTERNAL or synchronization to a
 signal at the coaxial input. DIGITAL=AUTO receives that input and follows
 its sampling frequency; DIGITAL=OFF disables it. This does not establish
