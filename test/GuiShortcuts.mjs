@@ -48,6 +48,41 @@ async function blocked(expectedDialogs, description) {
   }
 }
 
+async function spaceCommands(original) {
+  const handler = route => route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(original)});
+  await page.route('**/api/control', handler);
+  const count = browser.controls.length;
+  try {
+    for (const mixer of [false, true]) {
+      if (mixer) await browser.click('#view-switch');
+      for (const selector of ['#view-switch', '#header-action', '[data-menu="driver"]', '#device-status',
+        mixer ? '.mixer-strip .toggle' : '[aria-label="Input 1 LO-CUT"]']) {
+        await page.locator(selector).first().focus();
+        await page.keyboard.press('Space');
+        await page.waitForTimeout(100);
+        assert.equal(await browser.evaluate('!document.querySelector("#mixer-view").hidden'), mixer,
+          `Space preserves the main view with focus on ${selector}`);
+        assert.deepEqual(await dialogs(), [], `Space does not open dialogs from ${selector}`);
+        assert.equal(await page.locator('#menus > *').count(), 0, `Space does not open menus from ${selector}`);
+        assert.equal(browser.controls.length, count, `Space does not submit a device command from ${selector}`);
+      }
+    }
+    await page.locator('#view-switch').focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await browser.evaluate('document.querySelector("#mixer-view").hidden'), true,
+      'Enter remains available for the HTML view switch');
+    await browser.click('[data-menu="driver"]');
+    await page.getByRole('menuitem', {name: 'Show README', exact: true}).focus();
+    await page.keyboard.press('Space');
+    assert.deepEqual(await dialogs(), ['readme'], 'Space still activates a popup menu item');
+    await page.locator('#readme [data-close]').focus();
+    await page.keyboard.press('Space');
+    assert.deepEqual(await dialogs(), [], 'Space still activates a modal dialog button');
+  } finally {
+    await page.unroute('**/api/control', handler);
+  }
+}
+
 async function modalCommands(highest) {
   for (const name of ['about', 'readme', 'settings', 'auto-sens', 'diagram', 'reverb', 'port-warning',
     ...highest ? [] : ['patchbay']]) {
@@ -190,6 +225,7 @@ try {
     await until(() => browser.evaluate('document.querySelector("#port-warning").open'), 'initial 192 kHz warning');
   }
   if (await browser.evaluate('document.querySelector("#port-warning").open')) await browser.click('#port-warning [data-close]');
+  await spaceCommands(original);
   await modalCommands(highest);
   await positiveCommands(highest);
   await repeatedSave();
@@ -215,7 +251,7 @@ try {
   assert.deepEqual(browser.networkErrors, []);
   assert.equal(await browser.evaluate('document.querySelector("#toast").hidden'), true, 'No unexpected device-command error');
   assert.deepEqual((await state()).state, original.state, 'No real device parameter was changed');
-  console.log('PASS Playwright Save/Open/Patch Bay keys, modifiers, modals, repeat/pending guards and simulated busy/writing/absence; real raw state preserved.');
+  console.log('PASS Playwright main-panel Space, popup/modal activation, Save/Open/Patch Bay keys, modifiers, repeat/pending guards and simulated busy/writing/absence; real raw state preserved.');
 } finally {
   await browser.blank();
   await page.unroute('**/api/state', stateHandler);

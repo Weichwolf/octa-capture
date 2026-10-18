@@ -112,7 +112,14 @@ In the connected offline model, Ctrl+S/Ctrl+O/Ctrl+P open Save/Open/Patch Bay
 from the main panel. Auto-Sens and Patch Bay modal dialogs suppress these file
 shortcuts; Ctrl+Shift+S does not invoke Save. Accelerator resource 128 confirms
 Ctrl-only O/S/P commands 0x8053/0x8054/0x805C (flags 0x0B, no Shift/Alt).
-Its additional Space/0x807B entry has no established command behavior yet.
+The additional unmodified Space/0x807B entry is consumed without an action in
+the main frame: base pretranslation (0x14004EF9C) calls TranslateAcceleratorW,
+which returns 1, but WM_COMMAND 0x807B returns 0 (unhandled). The same probe
+returns 1 for the known Always on top command 0x8056; Ctrl+Space is not
+translated. The decoded command maps contain no 0x807B handler. These are
+original Windows x64 code and offline Wine observations, not hardware evidence.
+The Linux main panel therefore suppresses unmodified Space; popup menus and
+modal dialogs retain their own keyboard behavior.
 
 Auto-Sens selection also opens against the offline model (local capture:
 auto-sens-selection-offline-model.png, 294x146 client pixels). It has two rows

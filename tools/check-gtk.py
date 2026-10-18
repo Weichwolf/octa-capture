@@ -67,10 +67,7 @@ class Check(Desktop):
             try:
                 value = view.call_async_javascript_function_finish(result)
                 self.result = json.loads(value.to_json(0))
-                if self.write:
-                    self.start_native_control()
-                else:
-                    self.start_save()
+                self.start_native_space()
             except Exception as error:
                 self.fail(error)
         self.view.call_async_javascript_function(source, -1, None, None, None, None, finished, None)
@@ -84,6 +81,49 @@ class Check(Desktop):
         if focus:
             self.focus_window()
         subprocess.run(['xdotool', 'key', '--clearmodifiers', key], check=True, timeout=3)
+
+    def start_native_space(self):
+        self.phase = 'native-space-focus'
+        self.view.grab_focus()
+        self.focus_window()
+        self.GLib.timeout_add(100, self.focus_native_space)
+
+    def focus_native_space(self):
+        script = "(()=>{document.querySelector('#view-switch').focus();" \
+                 "const focused=document.hasFocus()&&document.activeElement.id==='view-switch';" \
+                 "if(focused){window.__octaSpaceTest={mixer:!document.querySelector('#mixer-view').hidden};" \
+                 "document.addEventListener('keydown',event=>Object.assign(window.__octaSpaceTest," \
+                 "{key:event.key,trusted:event.isTrusted,prevented:event.defaultPrevented}),{capture:true,once:true});}" \
+                 "return focused;})();"
+
+        def focused(view, result, _data):
+            try:
+                if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
+                    self.GLib.timeout_add(100, self.focus_native_space)
+                    return
+                self.phase = 'native-space'
+                self.key('space', focus=False)
+                self.GLib.timeout_add(100, self.check_native_space)
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, focused, None)
+        return False
+
+    def check_native_space(self):
+        script = "(()=>{const result=window.__octaSpaceTest;delete window.__octaSpaceTest;" \
+                 "return result.key===' '&&result.trusted&&result.prevented&&" \
+                 "result.mixer===!document.querySelector('#mixer-view').hidden;})();"
+
+        def checked(view, result, _data):
+            try:
+                if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
+                    raise RuntimeError('Native Space did not preserve the main panel view.')
+                print('PASS actual X11/WebKit Space is consumed without activating the focused view button.', flush=True)
+                self.start_native_control() if self.write else self.start_save()
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, checked, None)
+        return False
 
     def start_save(self):
         self.phase = 'download'

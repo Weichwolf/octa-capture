@@ -932,7 +932,16 @@ function setupDialogs() {
 
 function resetFile(input) { input.value = ''; input.disabled = false; }
 
+function panelSpace(event) {
+  if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey ||
+      $('dialog[open]') || $('#menus').childElementCount) return;
+  // The original main-frame accelerator consumes Space without an action.
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 function setupEvents() {
+  document.addEventListener('keydown', panelSpace, true);
   for (const button of all('[data-menu]')) button.addEventListener('click', event => { event.stopPropagation(); menu(button.dataset.menu, button); });
   document.addEventListener('click', event => { if (!event.target.closest('.menu')) closeMenus(); });
   document.addEventListener('keydown', event => {
