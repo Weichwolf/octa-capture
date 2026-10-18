@@ -69,6 +69,23 @@ audio integrity. The checker reports these comparisons as failures; its
 `--keep-going` option only collects sample mismatches, never suppresses I/O,
 output-isolation or restoration failures. Native Debian comparison remains.
 
+A separate RAM-only USB observer found discontinuities in completed input
+payloads while the submitted output PRBS remained continuous. The observation
+had no monitor drops, malformed packet lengths or reported ISO packet errors.
+This places those errors before ALSA capture processing; it does not identify
+whether USB/IP scheduling, the host driver or the device caused them.
+
+To compare that boundary, start `tools/observe-usb-prbs.py --device 1-1
+--seconds 360` in one terminal, using the device's USB sysfs name. It requires
+`usbmon` and access to that bus's `/dev/usbmonN`. In another terminal run the
+continuous digital-return checker above. Ctrl+C or SIGTERM ends observation
+with a JSON summary. Exit 1 reports discontinuities, transfer/packet errors,
+invalid lengths or monitor drops; exit 2 means no PRBS was verified in both
+directions. No control writes or audio files are produced by the observer.
+Keep the device at 44.1/48/96 kHz. This diagnostic arms after 64 matching PRBS
+samples and reports gaps only if the sequence resumes within 512 samples;
+the audio checker's full comparison remains necessary for longer gaps.
+
 ```bash
 ./build/strict/octa-pcm-meters --read  # passive snapshot
 ./build/strict/octa-pcm-meters 2       # enable, observe, disable after two seconds
