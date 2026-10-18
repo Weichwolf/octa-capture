@@ -49,14 +49,14 @@
     <footer><button data-action="reverb-default">Initial Setting</button><button data-close>Close</button></footer>
   </dialog>
   <dialog id="settings" aria-labelledby="settings-title">
-    <h2 id="settings-title">OCTA-CAPTURE Driver Settings</h2>
+    <h2 id="settings-title">OCTA-CAPTURE Linux Audio Settings</h2>
     <div class="dialog-content settings-fields">
       <label class="settings-device"><select id="settings-device" aria-label="OCTA-CAPTURE device" disabled><option value="">OCTA-CAPTURE</option></select></label>
       <fieldset><label>SAMPLE RATE: <select id="sample-rate"><option value="44100">44100 Hz</option><option value="48000">48000 Hz</option><option value="96000">96000 Hz</option><option value="192000">192000 Hz</option></select></label><label>CLOCK: <output id="settings-clock">--</output></label></fieldset>
-      <fieldset><legend>Audio Buffer Size</legend><p>Buffer size and latency are controlled by your Linux audio application.</p></fieldset>
-      <fieldset><legend>ASIO Setting</legend><label><input type="checkbox" disabled> Use ASIO Direct Monitor</label><label><input type="checkbox" disabled> Low Latency mode</label><p>ASIO settings apply to Windows applications.</p><label title="Two-unit operation is not implemented yet."><input type="checkbox" disabled> VS EXPAND</label></fieldset>
+      <fieldset><legend>Linux Audio</legend><label>Audio API: <output>ALSA</output></label><label>Hardware format: <output>24-bit PCM</output></label><label>ALSA capture / playback: <output id="settings-channels">--</output></label><p id="settings-capture-note"></p><p>Direct monitoring uses the OCTA-CAPTURE hardware mixer.</p></fieldset>
+      <fieldset><legend>Buffer Size and Latency</legend><p>Set the period and buffer size in your audio application or sound server, such as PipeWire or JACK. Sample-rate changes here take effect immediately.</p></fieldset>
     </div>
-    <footer><button disabled title="Buffer settings are controlled by your Linux audio application.">Default</button><button id="cancel-settings">Cancel</button><button id="apply-rate" disabled title="Sample rate changes take effect immediately. Buffer settings are controlled by your Linux audio application.">Apply</button><button data-close>Close</button></footer>
+    <footer><button data-close>Close</button></footer>
   </dialog>
   <dialog id="auto-sens" aria-labelledby="auto-sens-title">
     <h2 id="auto-sens-title">AUTO-SENS</h2>

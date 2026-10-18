@@ -17,8 +17,9 @@ GTK/native Save/Open and timed audio transfers have passed on the connected WSL
 unit. WSL audio has produced underruns and digital sample discontinuities even
 without reported XRUNs. Native Debian hardware,
 physical signal quality, external clock, DIN loopback, persistent memory and
-two-unit operation still need verification. Windows host-buffer/ASIO policies
-have no complete Linux equivalent here. See the [function inventory](doc/function-inventory.md)
+two-unit operation still need verification. Linux audio settings show ALSA
+information; applications or sound servers configure their own buffers and latency.
+See the [function inventory](doc/function-inventory.md)
 for implemented behavior and remaining gaps.
 
 ## Run the panel

@@ -130,6 +130,16 @@ export class BrowserClient {
     await until(() => this.evaluate('location.href === "about:blank"'), 'blank page');
   }
 
+  async downloadTo(directory) {
+    await this.call('Page.setDownloadBehavior', {behavior: 'allow', downloadPath: directory});
+  }
+
+  async setFiles(selector, files) {
+    const document = await this.call('DOM.getDocument');
+    const input = await this.call('DOM.querySelector', {nodeId: document.root.nodeId, selector});
+    await this.call('DOM.setFileInputFiles', {nodeId: input.nodeId, files});
+  }
+
   close() {
     for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(new Error('Browser client closed.')); }
     this.pending.clear();

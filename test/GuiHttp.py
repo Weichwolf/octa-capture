@@ -123,6 +123,13 @@ class Http(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(headers['Content-Type'], 'image/svg+xml')
         self.assertIn(b'OCTA-CAPTURE signal flow', body)
+        for asset, mime in [('faders.js', 'text/javascript; charset=utf-8'),
+                            ('fader-white.svg', 'image/svg+xml'), ('fader-red.svg', 'image/svg+xml')]:
+            with self.subTest(asset=asset):
+                status, headers, body = self.request('GET', '/' + asset, authorized=False)
+                self.assertEqual(status, 200)
+                self.assertEqual(headers['Content-Type'], mime)
+                self.assertIn(b'GPL-2.0-only', body)
 
     def test_auth_host_origin(self):
         self.assertEqual(self.request('GET', '/api/state', authorized=False)[0], 403)

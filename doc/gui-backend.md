@@ -187,13 +187,16 @@ tools/check-gui.sh --write
 tools/check-gui.sh --write --rates  # additionally change all four hardware rates
 tools/check-gui.sh --write --matrix  # safe preamp/mixer scalars through browser events
 tools/check-gui.sh --write --reload-module  # WSL development helper required
+# Actual Playwright runner, isolated from system Node packages:
+npm install --prefix build/playwright-runner --no-save --ignore-scripts --no-audit --no-fund playwright@1.64.1
+tools/check-gui.sh --playwright --write --rates --matrix
 ```
 
 `--write` uses actual browser keyboard/pointer/file events, verifies hardware
 readback, multiple-mixer routing, panel commands, ten-channel context actions and
 Auto-Sens finish/cancel, and restores fresh raw snapshots, then checks release of CTRL. The
 checker saves private screenshots and recovery files under `build/gui/`.
-`--rates` also checks immediate sample-rate selection, Cancel/Close semantics, kernel/bulk rate agreement,
+`--rates` also checks immediate sample-rate selection, Close/Escape semantics, kernel/bulk rate agreement,
 channel availability, 192 kHz menu/dialog restrictions and PCM meter recovery,
 then restores the original rate. The Initialize submenu stays available at 192
 kHz, as in both reference dispatchers. WSL device tests pass at all four rates;
@@ -206,13 +209,21 @@ acknowledged request, fresh hardware readback and exact-value restoration. Phant
 power, Hi-Z, link/mono changes and persistent memory are outside this matrix.
 
 Sample-rate selection takes effect immediately, as in Windows handler
-`0x14002c2f0` (IOCTL `0x222328`); Cancel does not undo that device operation.
-Cancel/Escape keep Driver Settings open and reset staged host fields; Close ends
-the dialog. Linux audio applications own their buffers, so the Windows host-policy
-Apply/Default buttons stay disabled. No inactive slider silently controls another
-application's buffer.
+`0x14002c2f0` (IOCTL `0x222328`). Linux Audio Settings shows ALSA, the 24-bit
+hardware format, the rate-dependent capture/playback channel counts and the
+Mixer A capture return. Close and Escape close the dialog without undoing the
+device operation. Audio applications and sound servers own their periods and
+buffers; the dialog explains this instead of exposing Windows ASIO controls.
 The Driver Settings unit selector uses the same discovered, serial-bound device
 identities as the panel selector; it is unavailable during pending device writes.
+
+The mixer uses original vector artwork for white channel and red master fader
+caps, with 18×32 pixel ribbed handles and numeric dB readouts. Linked master
+thumbs and readouts update in the same render, using the device's separate stereo
+and input/output link rules. Pending values remain visible during state polling;
+fresh device replies remain authoritative. The Playwright write check delays a
+control request, checks immediate peer movement and rapid queued input, then
+verifies hardware readback and complete raw restoration.
 
 `--reload-module` uses the already provisioned `sudo -n octa-capture-dev` helper
 at `/usr/local/sbin/octa-capture-dev` to unload and reinstall this module. It

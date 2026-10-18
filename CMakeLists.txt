@@ -137,6 +137,8 @@ add_test(NAME gui-preferences COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DI
 add_test(NAME gui-warnings COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs")
 add_test(NAME gui-graphs COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiGraphs.mjs")
 add_test(NAME gui-steppers COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiSteppers.mjs")
+add_test(NAME gui-faders COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiFaders.mjs")
+set_tests_properties(gui-faders PROPERTIES TIMEOUT 10)
 set_tests_properties(gui-steppers PROPERTIES TIMEOUT 10)
 add_test(NAME gui-install COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiInstall.py"
   "${CMAKE_COMMAND}" "${CMAKE_BINARY_DIR}")
@@ -145,7 +147,7 @@ add_test(NAME gui-meters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiMet
 add_test(NAME gui-parameters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiParameters.mjs")
 add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   --config "${CMAKE_SOURCE_DIR}/gui/web/.eslintrc.json"
-  "${CMAKE_SOURCE_DIR}/gui/web/app.js" "${CMAKE_SOURCE_DIR}/gui/web/parameters.js"
+  "${CMAKE_SOURCE_DIR}/gui/web/app.js" "${CMAKE_SOURCE_DIR}/gui/web/faders.js" "${CMAKE_SOURCE_DIR}/gui/web/parameters.js"
   "${CMAKE_SOURCE_DIR}/gui/web/meters.js" "${CMAKE_SOURCE_DIR}/gui/web/menus.js"
   "${CMAKE_SOURCE_DIR}/gui/web/warnings.js"
   "${CMAKE_SOURCE_DIR}/gui/web/graphs.js"
@@ -155,6 +157,8 @@ add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   "${CMAKE_SOURCE_DIR}/test/GuiReconnect.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiSteppers.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiReverb.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiFaders.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMasterFaders.mjs"
+  "${CMAKE_SOURCE_DIR}/test/PlaywrightClient.mjs"
   "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs" "${CMAKE_SOURCE_DIR}/test/GuiGraphs.mjs")
 set_tests_properties(gui-javascript PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")

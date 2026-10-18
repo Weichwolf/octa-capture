@@ -4,7 +4,7 @@ set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 arguments=()
-while [[ ${1:-} == --write || ${1:-} == --rates || ${1:-} == --reload-module || ${1:-} == --matrix ]]; do
+while [[ ${1:-} == --write || ${1:-} == --rates || ${1:-} == --reload-module || ${1:-} == --matrix || ${1:-} == --playwright ]]; do
     arguments+=("$1")
     shift
 done
@@ -13,10 +13,13 @@ if [[ ( " ${arguments[*]} " == *' --rates '* || " ${arguments[*]} " == *' --relo
     exit 2
 fi
 if (( $# > 1 )); then
-    echo 'Usage: tools/check-gui.sh [--write [--rates] [--reload-module] [--matrix]] [private-server-log]' >&2
+    echo 'Usage: tools/check-gui.sh [--playwright] [--write [--rates] [--reload-module] [--matrix]] [private-server-log]' >&2
     exit 2
 fi
 server_log=${1:-build/gui/server.log}
+if [[ " ${arguments[*]} " == *' --playwright '* ]]; then
+    exec node test/GuiBrowser.mjs "$server_log" playwright "${arguments[@]}"
+fi
 umask 077
 mkdir -p build/gui
 browser_profile=$(mktemp -d "$PWD/build/gui/browser-profile-XXXXXX")

@@ -23,13 +23,11 @@ export async function checkRates(browser, api, directory, originalRate) {
     }, `${rate} Hz bulk and kernel status`, 20000);
     await until(() => browser.evaluate(`document.querySelector('#device-status').textContent.includes('${rate / 1000} kHz') && document.querySelector('#busy-message').hidden`), 'rate shown in browser');
     assert.equal(await browser.evaluate('document.querySelector("#toast").hidden'), true, 'No rate change error');
-    assert.equal(await browser.evaluate('document.querySelector("#apply-rate").disabled'), true, 'Apply belongs to host buffering settings');
-    await browser.click('#cancel-settings');
-    assert.equal(await browser.evaluate('document.querySelector("#settings").open'), true, 'Original Cancel resets staged host fields and keeps the dialog open');
-    assert.equal((await api('/api/state')).status.sample_rate_hz, rate, 'Cancel does not undo an immediate rate change');
-    await browser.key('#cancel-settings', 'Escape');
-    assert.equal(await browser.evaluate('document.querySelector("#settings").open'), true, 'Original Escape follows Cancel');
-    await browser.click('#settings [data-close]');
+    assert.equal(await browser.evaluate('document.querySelector("#settings-channels").textContent'),
+      rate === 192000 ? '4 in / 4 out' : '12 in / 10 out');
+    await browser.key('#settings [data-close]', 'Escape');
+    assert.equal(await browser.evaluate('document.querySelector("#settings").open'), false, 'Escape closes Linux audio settings');
+    assert.equal((await api('/api/state')).status.sample_rate_hz, rate, 'Closing keeps the immediate rate change');
   };
   try {
     await api('/api/preferences', {show_port_warning: true});
@@ -84,7 +82,7 @@ export async function checkRates(browser, api, directory, originalRate) {
           pcm.capture.channels === (high ? 4 : 12) && pcm.playback.channels === (high ? 4 : 10);
       }, `${rate} Hz actual PCM meter recovery`, 20000);
       await browser.screenshot(path.join(directory, `mixer-${rate}.png`));
-      console.log(`PASS browser ${rate} Hz: immediate selection, Cancel/Close behavior, kernel/bulk state, channel/dialog gating and real PCM meters`);
+      console.log(`PASS browser ${rate} Hz: Linux audio information, immediate selection, Close/Escape, kernel/bulk state, channel/dialog gating and real PCM meters`);
     }
   } finally {
     try {

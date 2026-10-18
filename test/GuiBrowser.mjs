@@ -12,6 +12,7 @@ import {checkRates} from './GuiRates.mjs';
 import {checkReconnect} from './GuiReconnect.mjs';
 import {checkControlMatrix} from './GuiControlMatrix.mjs';
 import {checkReverb} from './GuiReverb.mjs';
+import {checkMasterFaders} from './GuiMasterFaders.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -35,7 +36,9 @@ async function api(endpoint, body) {
   return response.json();
 }
 
-const browser = await BrowserClient.attach(portFile);
+const playwright = process.argv.includes('--playwright');
+const Client = playwright ? (await import('./PlaywrightClient.mjs')).PlaywrightClient : BrowserClient;
+const browser = await Client.attach(portFile);
 const before = (await api('/api/state')).state;
 const directory = await fs.mkdtemp(path.join(path.dirname(logFile), 'browser-check-'));
 const recovery = path.join(directory, 'original.syx');
@@ -47,6 +50,15 @@ await fs.writeFile(recovery, Buffer.concat([Buffer.from('f0411000004d12', 'hex')
 
 async function hardware(predicate, description) {
   await until(async () => predicate((await api('/api/state')).state), description);
+}
+
+async function restoreMixer() {
+  await browser.blank(); await api('/api/disconnect', {});
+  await run(path.join(root, 'build/strict/octa-preset'), ['restore', recovery], {timeout: 20000});
+  await browser.call('Page.navigate', {url: launch});
+  await until(() => browser.evaluate('document.querySelector("#connection-message")?.hidden === true'), 'reconnected after raw recovery');
+  await browser.click('#view-switch');
+  assert.deepEqual((await api('/api/state')).state, before);
 }
 
 async function contextLabels(selector, labels) {
@@ -164,7 +176,17 @@ try {
   }
   assert.equal(await browser.evaluate('document.querySelectorAll(".mixer-strip").length'), 20);
   await until(() => browser.evaluate('document.querySelectorAll(".level-lane:not(.stale)").length === 20'), 'all input and playback mixer meters use fresh PCM');
+  assert.equal(await browser.evaluate(`(() => {
+    const first=document.querySelector('.mixer-strip .fader input').getBoundingClientRect();
+    return [...document.querySelectorAll('.fader')].every(node=>{
+      const input=node.querySelector('input'), box=input.getBoundingClientRect(), label=node.querySelector('output').getBoundingClientRect();
+      const cap=getComputedStyle(input).getPropertyValue('--fader-cap');
+      return box.width===18 && box.top===first.top && box.bottom<label.top &&
+        cap.includes(node.closest('.master-group') ? 'fader-red.svg' : 'fader-white.svg');
+    });
+  })()`), true, 'aligned white channel/red master faders with unobstructed numeric readouts');
   await browser.screenshot(path.join(directory, 'mixer.png'));
+  if (playwright && write) await checkMasterFaders(browser, api, restoreMixer);
   if (write) {
     await browser.key('[aria-label="input 1 / PAN"]', 'ArrowRight');
     const initialPan = before.mixers[0].input.channels[0].pan;
@@ -254,6 +276,11 @@ try {
   await browser.click('#menus button:first-of-type');
   await until(() => browser.evaluate(`JSON.stringify([...document.querySelector('#settings-device').options].map(option=>option.value)) === ${JSON.stringify(JSON.stringify(devices.map(device=>device.id)))}`), 'settings device selector uses discovered identities');
   assert.equal(await browser.evaluate('document.querySelector("#settings-device").value'), devices.find(device=>device.selected).id);
+  const settingsText = await browser.evaluate('document.querySelector("#settings").textContent');
+  assert.match(settingsText, /ALSA/);
+  assert.match(settingsText, /PipeWire or JACK/);
+  assert.doesNotMatch(settingsText, /ASIO|VS EXPAND/);
+  assert.equal(await browser.evaluate('document.querySelectorAll("#settings footer button").length'), 1);
   await browser.click('#settings [data-close]');
   // Dialog inspection is read-only. Dangerous power/memory controls are never clicked.
   for (const name of ['patchbay', 'reverb', 'settings', 'auto-sens', 'diagram', 'about']) {
@@ -277,7 +304,7 @@ try {
   }
   await browser.call('Emulation.setDeviceMetricsOverride', {width: 1100, height: 650, deviceScaleFactor: 1, mobile: false});
   console.log('PASS local schematic and all dialog footers at the GTK viewport size');
-  await browser.call('Page.setDownloadBehavior', {behavior: 'allow', downloadPath: directory});
+  await browser.downloadTo(directory);
   await browser.click('[data-menu="device"]');
   await browser.click('#menus .menu > button:first-of-type');
   const settingsFile = path.join(directory, 'OCTA-CAPTURE.octa');
@@ -286,9 +313,7 @@ try {
   const header = 'OCTA-CAPTURE Control Panel Data\0Ver100\0';
   assert.equal(settings.subarray(0, Buffer.byteLength(header)).toString('ascii'), header);
   if (write) {
-    const document = await browser.call('DOM.getDocument');
-    const input = await browser.call('DOM.querySelector', {nodeId: document.root.nodeId, selector: '#load-file'});
-    await browser.call('DOM.setFileInputFiles', {nodeId: input.nodeId, files: [settingsFile]});
+    await browser.setFiles('#load-file', [settingsFile]);
     await until(() => browser.evaluate('document.querySelector("#confirm").open'), 'load confirmation');
     await browser.click('#confirm-yes');
     await until(() => browser.evaluate('!document.querySelector("#load-file").disabled && !document.querySelector("#confirm").open'), 'settings load completion');
@@ -327,6 +352,11 @@ try {
   if (reload) await checkReconnect(browser, api, launch, run);
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');
   assert.deepEqual(browser.securityErrors, [], 'Content Security Policy violations');
+  if (playwright && !reload) {
+    assert.deepEqual(browser.consoleErrors, [], 'Playwright console errors');
+    assert.deepEqual(browser.networkErrors, [], 'Playwright failed requests');
+    assert.deepEqual(browser.httpErrors, [], 'Playwright HTTP errors');
+  }
   assert.deepEqual((await api('/api/state')).state, before, 'Complete raw state preserved');
   console.log('PASS browser views, dialogs, actual meters, CSP and complete state preservation');
 } catch (error) {
@@ -348,6 +378,6 @@ try {
   }
   const {stdout} = await run(path.join(root, 'build/strict/octa-state'), [], {timeout: 10000});
   assert.deepEqual(JSON.parse(stdout), before, 'Independent final state and released CTRL port');
-  browser.close();
+  await browser.close();
   console.log(`PASS independent final readback; screenshots: ${path.relative(root, directory)}`);
 }

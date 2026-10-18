@@ -6,6 +6,7 @@ import {PopupMenus} from './menus.js';
 import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
+import {masterFaderPreview} from './faders.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -35,6 +36,7 @@ const meterViews = [];
 let meterSnapshot = null, meterReceived = 0, meterLastID = 0, meterLastRate = null;
 let meterTick = performance.now();
 const pending = new Map(), queued = new Map();
+const faderPreviews = new Map();
 const REVERB_TYPES = ['OFF', 'ECHO', 'ROOM', 'SMALL HALL', 'LARGE HALL'];
 let reverbDelay, reverbTime;
 const ROUTES = ['Direct Mix A', 'Direct Mix B', 'Direct Mix C', 'Direct Mix D',
@@ -99,7 +101,13 @@ function queueChange(control) {
   if (!connected || busy) return;
   const identifier = key(control);
   pending.set(identifier, control.value ?? control.selection);
+  queued.delete(identifier);
   queued.set(identifier, control);
+  if (control.kind === 'master' && control.parameter === 'volume') {
+    faderPreviews.delete(identifier);
+    faderPreviews.set(identifier, control);
+    if (documentState) renderFaders(documentState.state);
+  }
   if (!writing) void flushChanges();
 }
 
@@ -111,18 +119,23 @@ async function flushChanges() {
     revision++;
     try {
       const result = await api('/api/control', control);
-      if (!queued.has(identifier)) pending.delete(identifier);
+      if (!queued.has(identifier)) {
+        pending.delete(identifier);
+        faderPreviews.delete(identifier);
+      }
       update(result);
     } catch (error) {
       pending.delete(identifier);
       queued.clear();
       pending.clear();
+      faderPreviews.clear();
       if (error.status === 503) setConnected(false);
       notify(error.message);
     }
   }
   writing = false;
-  if (documentState) update(documentState);
+  if (documentState && connected) update(documentState);
+  else if (documentState) renderFaders(documentState.state);
 }
 
 function preamp(channel, parameter, value) {
@@ -366,13 +379,16 @@ function mixerValue(state, source, channel, parameter) {
 
 function fader(control, read, label, channel = null, source = null) {
   const wrapper = el('div', 'fader');
+  wrapper.dataset.source = source || control(0).source;
   const input = el('input');
   input.type = 'range'; input.min = '0'; input.max = '1024'; input.step = '1';
   input.setAttribute('aria-label', label);
   input.dataset.control = '';
   input.addEventListener('input', () => queueChange(control(VOLUME[Number(input.value)])));
   input.addEventListener('contextmenu', event => controlMenu(event, control(0)));
-  wrapper.append(input);
+  const output = el('output', 'fader-value');
+  output.setAttribute('aria-hidden', 'true');
+  wrapper.append(input, output);
   if (channel !== null) {
     const lane = el('span', 'level-lane');
     lane.dataset.channel = channel;
@@ -381,7 +397,7 @@ function fader(control, read, label, channel = null, source = null) {
       model: new MeterBallistics()});
     wrapper.append(lane);
   }
-  faders.push({input, control, read});
+  faders.push({input, output, control, read});
   return wrapper;
 }
 
@@ -473,6 +489,18 @@ function makeMasters() {
   master.append(groups); $('#mixer-groups').append(master);
 }
 
+function renderFaders(state) {
+  const previews = new Map(masterFaderPreview(state, faderPreviews.values()).map(control => [key(control), control.value]));
+  for (const {input, output, read, control} of faders) {
+    const identifier = key(control(0));
+    const value = previews.get(identifier) ?? read(state);
+    if (previews.has(identifier) || !pending.has(identifier)) input.value = volumeIndex(value);
+    input.title = volumeText(value);
+    output.textContent = volumeText(value).replace(/ dB$/, '');
+    input.disabled = !connected || busy || input.closest('.unavailable-channel') !== null;
+  }
+}
+
 function update(result) {
   if (!result.state) return;
   documentState = result;
@@ -500,10 +528,7 @@ function update(result) {
     button.setAttribute('aria-pressed', String(value));
     button.disabled = busy || pending.has(key(control(0))) || button.closest('.unavailable-channel') !== null;
   }
-  for (const {input, read, control} of faders) {
-    if (!pending.has(key(control(0)))) input.value = volumeIndex(read(state));
-    input.title = volumeText(read(state)); input.disabled = busy || input.closest('.unavailable-channel') !== null;
-  }
+  renderFaders(state);
   for (const {canvas, channel} of plots) drawCompressor(canvas, state.preamps[channel].compressor);
   for (const node of all('.mixer-send, .master-return, .master-reverb-type')) node.style.visibility = bus === 0 && rateIndex !== 3 ? 'visible' : 'hidden';
   $('.master-reverb-type').classList.toggle('lit', state.reverb.type !== 0);
@@ -527,6 +552,9 @@ function update(result) {
     (result.status.clock_active ? `EXTERNAL (${result.status.sample_rate_hz} Hz)` : 'EXTERNAL (Unlock)') : 'INTERNAL';
   $('#device-status').textContent = `OCTA-CAPTURE · ${rate ? rate / 1000 : '--'} kHz · ${clock}`;
   $('#settings-clock').textContent = clock;
+  $('#settings-channels').textContent = rateIndex === 3 ? '4 in / 4 out' : '12 in / 10 out';
+  $('#settings-capture-note').textContent = rateIndex === 3 ? 'At 192 kHz, inputs and outputs 1–4 are available.' :
+    'Capture channels 11/12 carry the stereo return from Mixer A.';
   $('#sample-rate').value = rate;
   $('#sample-rate').disabled = busy || writing;
   $('#settings-device').disabled = !canSelectDevice() || inFlight.has('settings-devices') || !$('#settings-device').value;
@@ -813,11 +841,9 @@ function setupDialogs() {
     if (rate !== current) await operation({action: 'sample-rate', rate});
     if (documentState) $('#sample-rate').value = [44100, 48000, 96000, 192000][parseInt(documentState.state.payload_hex.slice(4, 6), 16)];
   });
-  $('#cancel-settings').addEventListener('click', () => { void refresh(); });
   $('#settings-device').addEventListener('change', event => {
     void selectDevice(event.target.value).then(() => settingsDevices());
   });
-  $('#settings').addEventListener('cancel', event => { event.preventDefault(); void refresh(); });
   for (const button of all('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
   for (const button of all('[data-action]')) {
     button.addEventListener('click', () => {

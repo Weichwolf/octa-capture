@@ -104,10 +104,16 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .mixer-strip .knob-dial { width: 29px; height: 29px; }
 .mixer-strip .channel-label { margin: 0; text-align: center; font-size: 10px; }
 .fader { position: relative; display: flex; height: 103px; justify-content: center; padding-top: 3px; }
-.fader input { writing-mode: vertical-lr; direction: rtl; appearance: none; width: 14px; height: 94px; background: transparent; margin: 0; }
-.fader input::-webkit-slider-runnable-track { width: 3px; background: #0b0b0b; border-right: 1px solid #777; height: 100%; }
-.fader input::-webkit-slider-thumb { appearance: none; width: 19px; height: 10px; margin-left: -8px; border: 1px solid #181818; border-radius: 1px; box-shadow: 0 1px 2px #000; background: linear-gradient(#c0c0c0,#444 40%,#aaa 48%,#333 55%,#777); }
-.fader .level-lane { position: absolute; left: 0; top: 4px; bottom: 6px; width: 5px; background: #242724; border: 1px solid #555; }
+.fader { --fader-cap: url('/fader-white.svg'); }
+.master-group .fader { --fader-cap: url('/fader-red.svg'); }
+.fader input { writing-mode: vertical-lr; direction: rtl; appearance: none; width: 18px; height: 86px; background: transparent; margin: 0; }
+.fader input::-webkit-slider-runnable-track { width: 3px; height: 100%; background: linear-gradient(transparent 13px,#080808 13px,#080808 calc(100% - 13px),transparent calc(100% - 13px)); }
+.fader input::-webkit-slider-thumb { appearance: none; width: 18px; height: 32px; margin-left: -7.5px; border: 0; border-radius: 0; background: var(--fader-cap) center / 18px 32px no-repeat; }
+.fader input::-moz-range-track { width: 3px; height: calc(100% - 26px); background: #080808; border-right: 1px solid #777; }
+.fader input::-moz-range-thumb { width: 18px; height: 32px; border: 0; border-radius: 0; background: var(--fader-cap) center / 18px 32px no-repeat; }
+.fader .level-lane { position: absolute; left: 0; top: 4px; bottom: 16px; width: 5px; background: #242724; border: 1px solid #555; }
+.fader-value { position: absolute; bottom: 0; left: 0; width: 100%; height: 13px; margin: 0; border: 1px solid #4d4d4d; background: #080808; color: #eee; text-align: center; font: bold 9px/11px Arial,sans-serif; pointer-events: none; }
+.master-group .fader-value { font-size: 8px; }
 .fader .level-fill { position: absolute; bottom: 0; width: 100%; height: var(--level,0%); background: #c1bb72; }
 .master-panel { position: relative; background: #252525; }
 .master-controls { display: grid; grid-template-columns: 1fr 1fr; padding: 0 5px; gap: 3px; }
@@ -117,11 +123,10 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .master-reverb-type { position: absolute; top: 68px; left: 4px; flex-direction: row; gap: 4px; text-align: left; white-space: pre-line; }
 .master-top > .knob { position: absolute; top: 94px; left: 4px; width: 44px; }
 .master-return .knob-label { white-space: normal; text-align: center; font-size: 9px; line-height: 9px; }
-.master-faders { display: flex; justify-content: center; gap: 7px; }
+.master-faders { position: absolute; bottom: 8px; display: flex; justify-content: center; gap: 7px; }
 .master-group .toggle { margin: 4px auto; }
 .master-group .caption { text-align: center; font: bold 9px Arial,sans-serif; height: 24px; margin-top: 8px; }
-.master-group .fader { height: 93px; }
-.master-group .fader input { height: 86px; }
+.master-group .fader { height: 103px; }
 .menu { position: fixed; z-index: 40; min-width: 200px; padding: 2px; border: 1px solid #777; background: #eee; color: #111; box-shadow: 2px 3px 8px #0007; }
 .menu button { display: flex; width: 100%; justify-content: space-between; gap: 20px; padding: 5px 12px; border: 0; background: none; color: #111; font-size: 12px; text-align: left; }
 .menu button:hover, .menu button:focus { background: #bdd1e7; outline: 0; }
