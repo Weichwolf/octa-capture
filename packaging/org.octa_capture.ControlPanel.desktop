@@ -7,4 +7,4 @@ Exec=octa-capture
 Icon=octa-capture
 Terminal=false
 StartupNotify=true
-Categories=AudioVideo;Audio;Mixer;
+Categories=Settings;HardwareSettings;
