@@ -19,6 +19,7 @@ from gui.backend import Bridge
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pcm_checks import geometry_valid, owned_parameters
 from pcm_integrity import IntegrityError, interleave_sequence, make_sequence, verify_sequence
+from pcm_realtime import scheduling_parameters
 
 RATES = (44100, 48000, 96000)
 UNITY = 0x200000
@@ -53,7 +54,7 @@ class AudioMismatch(RuntimeError):
 
 
 class Check:
-    def __init__(self, directory, keep_going=False, period=1024, buffer=8192, aperiodic=False):
+    def __init__(self, directory, keep_going=False, period=1024, buffer=8192, aperiodic=False, realtime=False):
         self.directory = directory.resolve()
         self.bridge = Bridge(self.directory / 'octa-bridge')
         self.rate = None
@@ -64,6 +65,7 @@ class Check:
         self.buffer = buffer
         self.last_parameters = {}
         self.aperiodic = aperiodic
+        self.realtime = realtime
 
     def audio_failure(self, label, message):
         if not self.keep_going:
@@ -142,9 +144,10 @@ class Check:
             try:
                 common = ['-q', '-D', 'hw:CARD=OCTACAPTURE,DEV=0', '-r', str(rate), '-f', 'S24_3LE',
                           f'--period-size={self.period}', f'--buffer-size={self.buffer}', '-d', str(duration), '-t', 'raw']
-                capture = subprocess.Popen(['arecord', *common, '-c12'], stdout=recorded, stderr=capture_errors)
+                runner = [sys.executable, str(Path(__file__).with_name('pcm_realtime.py'))] if self.realtime else []
+                capture = subprocess.Popen([*runner, 'arecord', *common, '-c12'], stdout=recorded, stderr=capture_errors)
                 processes.append(capture)
-                playback = subprocess.Popen(['aplay', *common, '-c10'], stdin=generated,
+                playback = subprocess.Popen([*runner, 'aplay', *common, '-c10'], stdin=generated,
                                             stdout=subprocess.DEVNULL, stderr=playback_errors)
                 processes.append(playback)
                 self.last_parameters = self.observe_streams([
@@ -215,10 +218,19 @@ class Check:
                 if name not in parameters:
                     actual = owned_parameters(PCM_DIRECTORY, item, self.rate, self.period, self.buffer)
                     if actual is not None:
-                        parameters[name] = actual
+                        try:
+                            actual['scheduling'] = scheduling_parameters(process.pid, self.realtime)
+                            parameters[name] = actual
+                        except ProcessLookupError:
+                            pass
                 # Observe completion before reading diagnostics, so a final
                 # XRUN written immediately before exit cannot escape the check.
                 exit_code = process.poll()
+                if self.realtime and exit_code is None and name in parameters:
+                    try:
+                        scheduling_parameters(process.pid, require_realtime=True)
+                    except ProcessLookupError:
+                        pass  # Completion is checked on the next polling iteration.
                 item['error'].seek(0)
                 errors = item['error'].read(4096)
                 require(not errors, f'{name} failed/XRUN: {errors!r}')
@@ -318,6 +330,7 @@ def main():
     parser.add_argument('--keep-going', action='store_true', help='collect sample mismatches; I/O/safety failures still stop immediately')
     parser.add_argument('--integrity-seconds', type=int, help='only check ten quiet integrity streams per rate (2..60 seconds each)')
     parser.add_argument('--aperiodic', action='store_true', help='use a unique quiet reference sequence; requires --integrity-seconds')
+    parser.add_argument('--realtime', action='store_true', help='request bounded RTKit SCHED_RR priority 5 for both audio utilities')
     parser.add_argument('--period-size', type=int, default=1024, help='requested PCM period frames')
     parser.add_argument('--buffer-size', type=int, default=8192, help='requested PCM buffer frames')
     parser.add_argument('--recovery-dir', type=Path, default=ROOT / 'build/hardware')
@@ -330,10 +343,12 @@ def main():
         parser.error('--integrity-seconds requires --write and a value from 2 to 60.')
     if args.aperiodic and args.integrity_seconds is None:
         parser.error('--aperiodic requires --write and --integrity-seconds.')
+    if args.realtime and not args.write:
+        parser.error('--realtime requires --write.')
     if not geometry_valid(args.period_size, args.buffer_size):
         parser.error('Use a 64..32768-frame period and a 128..65536-frame buffer holding at least two whole periods.')
     check = Check(args.bin_dir, keep_going=args.keep_going, period=args.period_size,
-                  buffer=args.buffer_size, aperiodic=args.aperiodic)
+                  buffer=args.buffer_size, aperiodic=args.aperiodic, realtime=args.realtime)
     before = check.json('octa-state')
     original_rate = check.json('octa-status')['sample_rate_hz']
     if not args.write:

@@ -86,6 +86,16 @@ The aperiodic digital test passes all ten sources at 44.1 kHz with verified
 also encounter a capture overrun at 128/512 and playback underrun at 256/1024;
 full-state/rate recovery passes. These failures are not sample mismatches hidden
 by the earlier PRBS11 period, and do not yet distinguish scheduling from transport.
+With verified bounded RTKit SCHED_RR priority 5, all ten sources pass at
+44.1/48/96 kHz with 128/512 frames: ten-second streams, 16,929,000 checked
+samples and complete raw/rate recovery. Longer-duration performance remains open.
+
+An offline Auto-Sens workflow assertion failed once under native load and has
+not reproduced in targeted repeats. The fake-transport workflow uses a one-ms
+calibration window; a scheduling-sensitive timeout is a hypothesis, not a proven
+cause. Failure output now preserves action/scenario, status, connection counts,
+snapshot/recovery checks and captured diagnostics. Existing assertions and
+deadlines remain unchanged.
 
 One native control-stress run failed while restoring a raw snapshot. Independent
 outer recovery restored and verified the complete original state and rate.

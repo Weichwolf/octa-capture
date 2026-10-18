@@ -18,6 +18,11 @@ It passes all ten sources at 44.1 kHz with verified 256/1024 frames, but
 normal-priority 48 kHz tests under concurrent CPU load encounter XRUNs with
 128/512 and 256/1024 frames. Sustained small-buffer stability remains unproven;
 see the [protocol findings](../doc/usb-midi-protocol.txt) for verification scope.
+With the checker's optional `--realtime` mode, all ten sources pass at
+44.1/48/96 kHz using verified 128/512 frames and bounded RTKit SCHED_RR
+priority 5. The ten-second streams compare nine-second windows; they do not
+establish long-duration stability or absolute latency. The audio utilities
+run as the regular user; no additional sudo permission is needed.
 
 Use source matching the target kernel and its prepared build files, including `Module.symvers`:
 

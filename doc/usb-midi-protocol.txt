@@ -530,6 +530,20 @@ Under concurrent CPU load, normal-priority 48 kHz runs fail on a capture overrun
 at 128/512 and a playback underrun at 256/1024. Independent full-state/rate
 recovery passes. Earlier short successes therefore do not establish sustained
 small-buffer stability under load; scheduling and transport causes remain open.
+The optional --realtime test mode uses RTKit to request SCHED_RR priority 5
+with RESET_ON_FORK and a per-process RLIMIT_RTTIME no greater than 200000 us.
+It preserves stricter existing limits, execs the audio utility in the same PID,
+and independently checks each actual audio process's policy, priority and budget.
+Realtime policy is rechecked during streaming; demotion or request failure
+fails the test. Normal mode records its actual scheduler without changing it.
+This requires no root audio process or persistent scheduling-policy changes.
+Native Debian 6.12.113 passes all ten sources at 44.1/48/96 kHz in this mode
+with verified 128/512-frame period/buffer and SCHED_RR priority 5. Each stream
+lasts ten seconds; 16,929,000 samples across the middle nine-second windows
+match unique reference segments, with zero on the other return channel and
+no XRUN diagnostics. Physical outputs remain on silent Mixer B; independent
+full raw state and original rate recovery pass. This does not establish
+long-duration stability, absolute latency or 192 kHz signal integrity.
 
 Master bulk fields:
   404..407 input master stereo links, one byte per bus, bit 0

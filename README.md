@@ -13,8 +13,10 @@ Nonlinear parameter tables and display math are checked against both original
 Windows and macOS binaries.
 
 **Complete parity is not established.** Native Debian 6.12 passes all-rate PCM
-meter/lifecycle checks and ten-source digital-return PRBS streams at
-44.1/48/96 kHz (ten seconds per source, 1024/8192-frame period/buffer).
+meter/lifecycle checks and ten-source digital-return integrity streams at
+44.1/48/96 kHz (ten seconds per source, verified 128/512-frame period/buffer
+with bounded RTKit scheduling). Normal-priority small-buffer runs under CPU
+load have also encountered XRUNs.
 The native Playwright suite passes 427 control changes and all-rate settings
 checks; installed GTK Save/Open also passes with desktop-portal dialogs.
 These GUI operations also passed under WSL, where digital sample discontinuities
@@ -104,6 +106,11 @@ python3 tools/check-mixer-audio.py --write --rates --integrity-seconds 10 --aper
 ./tools/fuzz-clock.sh 120                   # actual clock C with USB adapters
 ./tools/fuzz-kernel-status.sh 120           # actual status C with fault adapters
 ```
+
+Add `--realtime` to the digital mixer checker to request bounded RTKit
+`SCHED_RR` priority 5 for both ALSA utilities. This optional mode needs `rtkit`
+and `python3-gi`; it runs as the regular user. The checker records actual
+scheduling and rejects lost realtime policy, XRUNs and sample mismatches.
 
 Fuzzing uses LLVM libFuzzer with ASan/UBSan and sends no malformed traffic to
 hardware. Kernel code retains separate Kbuild/Sparse checks; host fuzzing does

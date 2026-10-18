@@ -77,13 +77,15 @@ class IntegritySequence(unittest.TestCase):
 
 
 class IntegrityCapture(unittest.TestCase):
-    def measure(self, corrupt):
-        device = check.Check(Path('/unused'), aperiodic=True)
+    def measure(self, corrupt, realtime=False):
+        device = check.Check(Path('/unused'), aperiodic=True, realtime=realtime)
         device.rate = 100
         sinks = {}
 
         def process(command, **options):
-            if command[0] == 'arecord':
+            if realtime:
+                self.assertEqual(command[:2], [sys.executable, str(Path(check.__file__).with_name('pcm_realtime.py'))])
+            if 'arecord' in command:
                 sinks['capture'] = options['stdout']
             else:
                 payload = options['stdin'].read()
@@ -108,6 +110,9 @@ class IntegrityCapture(unittest.TestCase):
     def test_corrupted_capture_fails_without_needing_an_xrun(self):
         with self.assertRaisesRegex(check.AudioMismatch, 'sample/order mismatch'):
             self.measure(True)
+
+    def test_realtime_mode_wraps_both_audio_processes(self):
+        self.assertEqual(self.measure(False, realtime=True)[0]['reference_start_frame'], 25)
 
 
 class Device:
@@ -185,6 +190,9 @@ class StreamVerification(unittest.TestCase):
     def setUp(self):
         self.check = check.Check(Path('/unused'), period=256, buffer=1024)
         self.check.rate = 48000
+        scheduling = patch.object(check, 'scheduling_parameters', return_value={'policy': 'SCHED_OTHER', 'priority': 0})
+        self.scheduling = scheduling.start()
+        self.addCleanup(scheduling.stop)
         self.streams = [{'name': name, 'process': Mock(pid=123 + index, returncode=0, poll=Mock(return_value=0)),
                          'channels': channels, 'error': io.BytesIO()}
                         for index, (name, channels) in enumerate((('arecord', 12), ('aplay', 10)))]
@@ -206,6 +214,14 @@ class StreamVerification(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'arecord failed: exit 1'):
                 self.check.observe_streams(self.streams, 2)
 
+    def test_realtime_demotion_fails_even_without_an_xrun(self):
+        self.check.realtime = True
+        self.streams[0]['process'].poll.return_value = None
+        self.scheduling.side_effect = [{'policy': 'SCHED_RR', 'priority': 5}, RuntimeError('Scheduling demoted')]
+        with patch.object(check, 'owned_parameters', return_value={'period_frames': 256}):
+            with self.assertRaisesRegex(RuntimeError, 'Scheduling demoted'):
+                self.check.observe_streams(self.streams, 2)
+
     def test_xrun_written_between_polling_iterations_cannot_be_lost_at_exit(self):
         stream = self.streams[0]
         completions = iter((False, True))
@@ -223,7 +239,7 @@ class StreamVerification(unittest.TestCase):
     def test_invalid_geometry_cannot_open_the_device(self):
         for options in (['--period-size', '0'], ['--period-size', '63'],
                         ['--buffer-size', '65537'], ['--period-size', '256', '--buffer-size', '7681'],
-                        ['--aperiodic'], ['--aperiodic', '--write']):
+                        ['--aperiodic'], ['--aperiodic', '--write'], ['--realtime']):
             with self.subTest(options=options), patch.object(check, 'Check') as device, \
                     patch.object(sys, 'argv', ['check-mixer-audio.py', *options]), redirect_stdout(io.StringIO()), \
                     patch('sys.stderr', new_callable=io.StringIO), self.assertRaises(SystemExit) as result:

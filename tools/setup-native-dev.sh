@@ -38,7 +38,7 @@ apt-get install -y --no-install-recommends \
     build-essential gcc-14 clang-19 clang-tidy-19 clang-format-19 libclang-rt-19-dev lld-19 \
     cmake ninja-build pkg-config libasound2-dev libusb-1.0-0-dev libelf-dev dwarves \
     "linux-headers-$kernel_release" linux-source-6.12 dkms sparse \
-    alsa-utils usbutils kmod acl sudo psmisc git gh gdb binutils elfutils \
+    alsa-utils rtkit usbutils kmod acl sudo psmisc git gh gdb binutils elfutils \
     openjdk-21-jdk-headless unzip curl file \
     python3 python3-gi python3-xlib python3-usb1 python3-unicorn \
     gir1.2-gtk-4.0 gir1.2-webkit-6.0 gir1.2-atspi-2.0 xvfb xauth dbus-x11 xdotool x11-utils xfwm4 imagemagick \

@@ -815,11 +815,22 @@ bool auto_sense_workflow(octa::AutoSenseAction action, AutoSenseScenario scenari
       !failed || errors.str().contains("Original raw state restored and verified.");
   const bool removed_file = unlink(path.c_str()) == 0;
   const bool removed_directory = rmdir(directory.data()) == 0;
-  return require(
-      status == expected_status && saved && io.opens == connections &&
-          io.closes == connections * 2 && (!recovered || raw_tail) && recovery_verified &&
-          removed_file && removed_directory && bounded,
-      "Auto-Sens workflow snapshots, completion, bounded result changes and raw recovery");
+  const bool passed =
+      require(status == expected_status && saved && io.opens == connections &&
+                  io.closes == connections * 2 && (!recovered || raw_tail) && recovery_verified &&
+                  removed_file && removed_directory && bounded,
+              "Auto-Sens workflow snapshots, completion, bounded result changes and raw recovery");
+  if (!passed) {
+    std::cerr << "Auto-Sens action=" << static_cast<unsigned int>(action)
+              << " scenario=" << static_cast<unsigned int>(scenario) << " status=" << status
+              << " expected_status=" << expected_status << " saved=" << saved
+              << " opens=" << io.opens << " closes=" << io.closes
+              << " expected_connections=" << connections << " raw_tail=" << raw_tail
+              << " recovery_verified=" << recovery_verified << " bounded=" << bounded
+              << "\nCaptured diagnostics:\n"
+              << errors.str();
+  }
+  return passed;
 }
 
 enum class RoutingScenario : std::uint8_t {
