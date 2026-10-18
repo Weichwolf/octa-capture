@@ -185,6 +185,7 @@ python3 tools/serve-gui.py --bin-dir build/strict > build/gui/server.log 2>&1
 tools/check-gui.sh
 tools/check-gui.sh --write
 tools/check-gui.sh --write --rates  # additionally change all four hardware rates
+tools/check-gui.sh --write --matrix  # safe preamp/mixer scalars through browser events
 tools/check-gui.sh --write --reload-module  # WSL development helper required
 ```
 
@@ -192,11 +193,24 @@ tools/check-gui.sh --write --reload-module  # WSL development helper required
 readback, multiple-mixer routing, panel commands, ten-channel context actions and
 Auto-Sens finish/cancel, and restores fresh raw snapshots, then checks release of CTRL. The
 checker saves private screenshots and recovery files under `build/gui/`.
-`--rates` also checks actual settings selection/Apply, kernel/bulk rate agreement,
+`--rates` also checks immediate sample-rate selection, Cancel/Close semantics, kernel/bulk rate agreement,
 channel availability, 192 kHz menu/dialog restrictions and PCM meter recovery,
 then restores the original rate. The Initialize submenu stays available at 192
 kHz, as in both reference dispatchers. WSL device tests pass at all four rates;
 native Debian and physical signal quality remain separate requirements.
+
+`--matrix` additionally checks 427 actual browser changes: every preamp knob,
+safe phase/low-cut/compressor switch, strip pan/volume/mute/solo on all four buses,
+master volumes and Mixer A send/return controls. Each change requires the correct
+acknowledged request, fresh hardware readback and exact-value restoration. Phantom
+power, Hi-Z, link/mono changes and persistent memory are outside this matrix.
+
+Sample-rate selection takes effect immediately, as in Windows handler
+`0x14002c2f0` (IOCTL `0x222328`); Cancel does not undo that device operation.
+Cancel/Escape keep Driver Settings open and reset staged host fields; Close ends
+the dialog. Linux audio applications own their buffers, so the Windows host-policy
+Apply/Default buttons stay disabled. No inactive slider silently controls another
+application's buffer.
 
 `--reload-module` uses the already provisioned `sudo -n octa-capture-dev` helper
 at `/usr/local/sbin/octa-capture-dev` to unload and reinstall this module. It
@@ -239,6 +253,13 @@ palettes. Both binaries agree on fill/line colors and the 1.8-pixel pen width;
 reproduces that check with Unicorn and ImageMagick. The web renderer draws its
 own grid and shadow; no manufacturer artwork is shipped. Browser/GTK checks
 also inspect actual rendered pixels.
+
+Reverb pre-delay/time use read-only text and clamped arrow controls, matching
+Windows edit style `0x50800882` and both original 0..12/0..49 index ranges.
+All 13 pre-delay strings and 50 time displays agree with both binaries. Keyboard,
+pointer, endpoint bounds and all four effect-bank writes/readbacks are checked in
+the actual browser. Offline checks verify autorepeat cancellation on release,
+focus loss, hidden pages and disabling; pending readback cannot reverse local steps.
 
 ## GTK4/WebKitGTK host
 

@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Browser/hardware integration. --write changes safe controls with raw recovery.
 import assert from 'node:assert/strict';
+import {Buffer} from 'node:buffer';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import process from 'node:process';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {BrowserClient, until} from './BrowserClient.mjs';
 import {checkRates} from './GuiRates.mjs';
 import {checkReconnect} from './GuiReconnect.mjs';
+import {checkControlMatrix} from './GuiControlMatrix.mjs';
+import {checkReverb} from './GuiReverb.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -16,7 +20,8 @@ const portFile = path.resolve(process.argv[3] || 'build/gui/browser-profile/DevT
 const write = process.argv.includes('--write');
 const rates = process.argv.includes('--rates');
 const reload = process.argv.includes('--reload-module');
-if ((rates || reload) && !write) throw new Error('--rates/--reload-module require --write for recovery.');
+const matrix = process.argv.includes('--matrix');
+if ((rates || reload || matrix) && !write) throw new Error('--rates/--reload-module/--matrix require --write for recovery.');
 const launch = (await fs.readFile(logFile, 'utf8')).match(/http:\/\/127\.0\.0\.1:[0-9]+\/#token=[^\s]+/)?.[0];
 if (!launch) throw new Error('No private GUI launch link in the server log.');
 const url = new URL(launch), token = new URLSearchParams(url.hash.slice(1)).get('token');
@@ -292,6 +297,8 @@ try {
     }
     console.log('PASS browser Auto-Sens start/finish/cancel, verified notifications and recovery');
   }
+  if (write) await checkReverb(browser, api);
+  if (matrix) await checkControlMatrix(browser, api);
   if (rates) await checkRates(browser, api, directory, [44100, 48000, 96000, 192000][payload[2]]);
   if (reload) await checkReconnect(browser, api, launch, run);
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');

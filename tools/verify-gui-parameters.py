@@ -41,19 +41,23 @@ def mac_strings(image, address, count):
             for pointer in pointers]
 
 
-def windows_strings(image, table, count):
+def windows_data(image, address, length):
     pe = struct.unpack_from('<I', image, 0x3c)[0]
     sections = struct.unpack_from('<H', image, pe + 6)[0]
     start = pe + 24 + struct.unpack_from('<H', image, pe + 20)[0]
 
+    rva = address - 0x140000000
+    for index in range(sections):
+        _name, _size, section, raw_size, offset = struct.unpack_from('<8sIIII', image, start + index * 40)
+        if section <= rva and rva + length <= section + raw_size:
+            position = offset + rva - section
+            return image[position:position + length]
+    raise RuntimeError('Unmapped Windows address')
+
+
+def windows_strings(image, table, count):
     def string(address):
-        rva = address - 0x140000000
-        for index in range(sections):
-            _name, _size, section, raw_size, offset = struct.unpack_from('<8sIIII', image, start + index * 40)
-            if section <= rva < section + raw_size:
-                position = offset + rva - section
-                return image[position:position + 16].split(b'\0', 1)[0].decode('ascii').strip()
-        raise RuntimeError('Unmapped Windows string pointer')
+        return windows_data(image, address, 16).split(b'\0', 1)[0].decode('ascii').strip()
     return [string(pointer) for pointer in struct.unpack_from(f'<{count}Q', image, table)]
 
 
@@ -68,6 +72,7 @@ for (let ratio=0;ratio<9;ratio++) for (const threshold of [0,30,50])
   curves.push([input,threshold-50,p.RATIO[ratio],gain-50,p.compressorOutput(input,compressor)]);
  }}
 console.log(JSON.stringify({{volume:p.VOLUME,attack:p.ATTACK,release:p.RELEASE,ratio:p.RATIO_TEXT,minimum:p.GRAPH_MIN_DB,
+ pre_delay:p.PRE_DELAY.map((_,index)=>p.preDelayText(index)), time:Array.from({{length:50}},(_,index)=>p.reverbTimeText(index)),
  indices:values.map(v=>[v,p.volumeIndex(v)]),curves}}));'''
     output = subprocess.run(['node', '--input-type=module', '-e', code], check=True,
                             capture_output=True, text=True, timeout=10)
@@ -139,7 +144,14 @@ def main():
         if name != 'ratio':
             left, right = list(map(float, left)), list(map(float, right))
         require(left == right == values[name], f'{name} mapping differs between GUI/references')
-    print('PASS both original binaries: all 1025 fader coefficients and complete attack/release/ratio tables')
+    require(mac_strings(mac, 0x10005e170, 13) == windows_strings(windows, 0x29b900, 13) == values['pre_delay'],
+            'Pre-delay text differs between GUI/references')
+    unit = struct.unpack('<d', read_address(mac, 0x100041878, 8))[0]
+    require(unit == struct.unpack('<d', windows_data(windows, 0x1401f4280, 8))[0] == 0.1,
+            'Reverb time display unit differs between references')
+    require(windows_data(windows, 0x1401f3c28, 10).decode('utf-16-le') == '%.1f\0', 'Windows time format differs')
+    require(values['time'] == [f'{(index + 1) * unit:.1f}' for index in range(50)], 'Reverb time text differs')
+    print('PASS both original binaries: all 1025 fader coefficients, attack/release/ratio/pre-delay tables and reverb time text')
     if args.cpu:
         execute_math(mac, values)
 

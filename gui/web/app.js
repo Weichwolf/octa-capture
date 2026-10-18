@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
-import {PRE_DELAY, PREAMP_MAX, VOLUME, volumeIndex,
-  volumeText, parameterText, panToWire, wireToPan, panText, sensitivityIndex} from './parameters.js';
+import {PREAMP_MAX, VOLUME, volumeIndex,
+  volumeText, parameterText, panToWire, wireToPan, panText, sensitivityIndex, preDelayText, reverbTimeText} from './parameters.js';
 import {MeterBallistics, METER_TICK_MS, meterDb, meterY} from './meters.js';
 import {PopupMenus} from './menus.js';
 import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
+import {ReferenceStepper} from './steppers.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -27,7 +28,7 @@ history.replaceState(null, '', location.pathname);
 
 let documentState = null, connected = false, busy = false, activeView = 'preamp', bus = 0;
 let revision = 0, writing = false, toastTimer;
-let stopped = false, pendingRate = null;
+let stopped = false;
 let localBusy = false;
 const knobs = [], switches = [], plots = [], faders = [];
 const meterViews = [];
@@ -35,6 +36,7 @@ let meterSnapshot = null, meterReceived = 0, meterLastID = 0, meterLastRate = nu
 let meterTick = performance.now();
 const pending = new Map(), queued = new Map();
 const REVERB_TYPES = ['OFF', 'ECHO', 'ROOM', 'SMALL HALL', 'LARGE HALL'];
+let reverbDelay, reverbTime;
 const ROUTES = ['Direct Mix A', 'Direct Mix B', 'Direct Mix C', 'Direct Mix D',
   'WAVE OUT 1-2', 'WAVE OUT 3-4', 'WAVE OUT 5-6', 'WAVE OUT 7-8', 'WAVE OUT 9-10'];
 const VOLUME_PRESETS = [0x7fffff, 0x3fd930, 0x200000, 0x1009b9, 0x809bc,
@@ -70,7 +72,7 @@ async function api(path, body, binary = false) {
 
 function key(control) {
   return [control.kind, control.source, control.bus, control.channel,
-    control.parameter, control.pair].join(':');
+    control.parameter, control.pair, control.bank].join(':');
 }
 
 function setConnected(value, message = 'The device could not be found.') {
@@ -84,6 +86,11 @@ function setConnected(value, message = 'The device could not be found.') {
   $('#device-status').hidden = false;
   $('#device-status').setAttribute('aria-label', value ? 'Identify OCTA-CAPTURE' : 'Select OCTA-CAPTURE');
   if (!value) $('#device-status').textContent = 'Select OCTA-CAPTURE…';
+  if (!value) {
+    $('#sample-rate').disabled = true;
+    reverbDelay?.sync(reverbDelay.value, false, true);
+    reverbTime?.sync(reverbTime.value, false, true);
+  }
 }
 
 function queueChange(control) {
@@ -518,7 +525,8 @@ function update(result) {
     (result.status.clock_active ? `EXTERNAL (${result.status.sample_rate_hz} Hz)` : 'EXTERNAL (Unlock)') : 'INTERNAL';
   $('#device-status').textContent = `OCTA-CAPTURE · ${rate ? rate / 1000 : '--'} kHz · ${clock}`;
   $('#settings-clock').textContent = clock;
-  if (pendingRate === null) $('#sample-rate').value = rate;
+  $('#sample-rate').value = rate;
+  $('#sample-rate').disabled = busy || writing;
   syncDialogs(state, rateIndex);
   panelWarnings.update(rate, result.preferences);
   if (result.meters) updateMeters(result.meters);
@@ -583,7 +591,6 @@ function showDialog(name) {
   closeMenus();
   if (name === 'patchbay' && documentState?.state.payload_hex.slice(4, 6) === '03') return;
   const dialog = $(`#${name}`);
-  if (name === 'settings') pendingRate = null;
   if (!dialog.open) dialog.showModal();
 }
 
@@ -608,6 +615,13 @@ function setOperationBusy(value) {
   localBusy = value;
   busy = value || Boolean(documentState?.busy);
   $('#busy-message').hidden = !busy;
+  $('#sample-rate').disabled = !connected || busy || writing;
+  if (busy) {
+    reverbDelay.sync(reverbDelay.value, false, true);
+    reverbTime.sync(reverbTime.value, false, true);
+  } else if (documentState) {
+    syncDialogs(documentState.state, parseInt(documentState.state.payload_hex.slice(4, 6), 16));
+  }
 }
 
 async function operation(body, message) {
@@ -622,10 +636,14 @@ async function operation(body, message) {
 
 function syncDialogs(state, rateIndex) {
   const type = state.reverb.type;
-  $('#reverb-type').value = type;
-  $('#reverb-delay').value = state.reverb.pre_delay_indices[type];
-  if (document.activeElement !== $('#reverb-time')) $('#reverb-time').value = ((state.reverb.time_indices[type] + 1) / 10).toFixed(1);
-  for (const node of all('#reverb select, #reverb input')) node.disabled = rateIndex === 3 || (node.id !== 'reverb-type' && type === 0);
+  const changingType = pending.has(key({kind: 'reverb', parameter: 'type', bank: 0}));
+  if (!changingType) $('#reverb-type').value = type;
+  $('#reverb-type').disabled = busy || rateIndex === 3;
+  const enabled = connected && !busy && !changingType && rateIndex !== 3 && type !== 0;
+  reverbDelay.sync(state.reverb.pre_delay_indices[type], enabled,
+    pending.has(key({kind: 'reverb', parameter: 'pre-delay', bank: type})));
+  reverbTime.sync(state.reverb.time_indices[type], enabled,
+    pending.has(key({kind: 'reverb', parameter: 'time', bank: type})));
   for (const select of all('#patchbay select')) { select.value = state.output_routes[Number(select.dataset.pair)]; select.disabled = rateIndex === 3; }
   syncAutoSense(rateIndex);
 }
@@ -745,9 +763,9 @@ function setupDialogs() {
   for (const [index, name] of REVERB_TYPES.entries()) {
     const option = el('option', '', name); option.value = index; $('#reverb-type').append(option);
   }
-  for (const [index, value] of PRE_DELAY.entries()) {
-    const option = el('option', '', String(value)); option.value = index; $('#reverb-delay').append(option);
-  }
+  const reverbChange = parameter => value => queueChange({kind: 'reverb', parameter, bank: documentState.state.reverb.type, value});
+  reverbDelay = new ReferenceStepper($('#reverb-delay-stepper'), 12, preDelayText, 'ms', reverbChange('pre-delay'));
+  reverbTime = new ReferenceStepper($('#reverb-time-stepper'), 49, reverbTimeText, 'seconds', reverbChange('time'));
   for (let pair = 0; pair < 5; pair++) {
     const label = el('label', '', `OUTPUT ${pair * 2 + 1}-${pair * 2 + 2}:`);
     const select = el('select'); select.dataset.pair = pair;
@@ -774,14 +792,20 @@ function setupDialogs() {
   });
   $('#auto-cancel').addEventListener('click', cancelAutoSense);
   $('#auto-sens').addEventListener('cancel', event => { event.preventDefault(); cancelAutoSense(); });
-  $('#reverb-type').addEventListener('change', event => queueChange({kind: 'reverb', parameter: 'type', bank: 0, value: Number(event.target.value)}));
-  $('#reverb-delay').addEventListener('change', event => queueChange({kind: 'reverb', parameter: 'pre-delay', bank: documentState.state.reverb.type, value: Number(event.target.value)}));
-  $('#reverb-time').addEventListener('change', event => queueChange({kind: 'reverb', parameter: 'time', bank: documentState.state.reverb.type, value: Math.round(Number(event.target.value) * 10) - 1}));
-  $('#sample-rate').addEventListener('change', () => { pendingRate = Number($('#sample-rate').value); });
-  $('#apply-rate').addEventListener('click', async () => {
-    await operation({action: 'sample-rate', rate: Number($('#sample-rate').value)});
-    pendingRate = null;
+  $('#reverb-type').addEventListener('change', event => {
+    queueChange({kind: 'reverb', parameter: 'type', bank: 0, value: Number(event.target.value)});
+    reverbDelay.sync(reverbDelay.value, false, true);
+    reverbTime.sync(reverbTime.value, false, true);
   });
+  $('#sample-rate').addEventListener('change', async () => {
+    const rate = Number($('#sample-rate').value);
+    const current = [44100, 48000, 96000, 192000][parseInt(documentState?.state.payload_hex.slice(4, 6), 16)];
+    if (!canOperate()) { $('#sample-rate').value = current; return; }
+    if (rate !== current) await operation({action: 'sample-rate', rate});
+    if (documentState) $('#sample-rate').value = [44100, 48000, 96000, 192000][parseInt(documentState.state.payload_hex.slice(4, 6), 16)];
+  });
+  $('#cancel-settings').addEventListener('click', () => { void refresh(); });
+  $('#settings').addEventListener('cancel', event => { event.preventDefault(); void refresh(); });
   for (const button of all('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
   for (const button of all('[data-action]')) {
     button.addEventListener('click', () => {

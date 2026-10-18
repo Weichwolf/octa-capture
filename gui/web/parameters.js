@@ -99,6 +99,12 @@ export const RATIO_TEXT = Object.freeze(['1:1.0', '1:1.2', '1:1.5', '1:2.0', '1:
   '1:4.0', '1:8.0', '1:16', '1:INF']);
 export const RATIO = Object.freeze([1, Math.fround(1.2), 1.5, 2, Math.fround(2.8), 4, 8, 16, 0]);
 export const PRE_DELAY = Object.freeze([0, 0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 10, 20, 40, 80, 160]);
+export function preDelayText(index) {
+  return Number.isInteger(index) && index >= 0 && index < PRE_DELAY.length ? (index ? String(PRE_DELAY[index]) : '0.0') : '--';
+}
+export function reverbTimeText(index) {
+  return Number.isInteger(index) && index >= 0 && index < 50 ? ((index + 1) / 10).toFixed(1) : '--';
+}
 export const GRAPH_MIN_DB = -60;
 export const PREAMP_MAX = Object.freeze({sensitivity: 100, gate: 50, threshold: 50,
   gain: 74, attack: 25, release: 45, ratio: 8});

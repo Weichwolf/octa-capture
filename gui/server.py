@@ -33,6 +33,7 @@ ASSETS = {'/': ('index.html', 'text/html; charset=utf-8'),
           '/menus.js': ('menus.js', 'text/javascript; charset=utf-8'),
           '/warnings.js': ('warnings.js', 'text/javascript; charset=utf-8'),
           '/graphs.js': ('graphs.js', 'text/javascript; charset=utf-8'),
+          '/steppers.js': ('steppers.js', 'text/javascript; charset=utf-8'),
           '/signal-flow.svg': ('signal-flow.svg', 'image/svg+xml'),
           '/favicon.svg': ('favicon.svg', 'image/svg+xml'),
           '/style.css': ('style.css', 'text/css; charset=utf-8')}

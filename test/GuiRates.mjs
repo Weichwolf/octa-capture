@@ -16,7 +16,6 @@ export async function checkRates(browser, api, directory, originalRate) {
     for (let step = 0; step < index; step++) await browser.key('#sample-rate', 'ArrowDown');
     await browser.key('#sample-rate', 'Enter');
     assert.equal(await browser.evaluate('Number(document.querySelector("#sample-rate").value)'), rate);
-    await browser.click('#apply-rate');
     await until(async () => {
       const document = await api('/api/state');
       return !document.busy && parseInt(document.state.payload_hex.slice(4, 6), 16) === index &&
@@ -24,6 +23,12 @@ export async function checkRates(browser, api, directory, originalRate) {
     }, `${rate} Hz bulk and kernel status`, 20000);
     await until(() => browser.evaluate(`document.querySelector('#device-status').textContent.includes('${rate / 1000} kHz') && document.querySelector('#busy-message').hidden`), 'rate shown in browser');
     assert.equal(await browser.evaluate('document.querySelector("#toast").hidden'), true, 'No rate change error');
+    assert.equal(await browser.evaluate('document.querySelector("#apply-rate").disabled'), true, 'Apply belongs to host buffering settings');
+    await browser.click('#cancel-settings');
+    assert.equal(await browser.evaluate('document.querySelector("#settings").open'), true, 'Original Cancel resets staged host fields and keeps the dialog open');
+    assert.equal((await api('/api/state')).status.sample_rate_hz, rate, 'Cancel does not undo an immediate rate change');
+    await browser.key('#cancel-settings', 'Escape');
+    assert.equal(await browser.evaluate('document.querySelector("#settings").open'), true, 'Original Escape follows Cancel');
     await browser.click('#settings [data-close]');
   };
   try {
@@ -79,7 +84,7 @@ export async function checkRates(browser, api, directory, originalRate) {
           pcm.capture.channels === (high ? 4 : 12) && pcm.playback.channels === (high ? 4 : 10);
       }, `${rate} Hz actual PCM meter recovery`, 20000);
       await browser.screenshot(path.join(directory, `mixer-${rate}.png`));
-      console.log(`PASS browser ${rate} Hz: settings apply, kernel/bulk state, channel/dialog gating and real PCM meters`);
+      console.log(`PASS browser ${rate} Hz: immediate selection, Cancel/Close behavior, kernel/bulk state, channel/dialog gating and real PCM meters`);
     }
   } finally {
     try {

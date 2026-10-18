@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Test-only Chromium DevTools client. No remote service or browser extension.
 import fs from 'node:fs/promises';
+import {Buffer} from 'node:buffer';
 import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
 const {WebSocket} = require('undici');

@@ -135,6 +135,13 @@ settings. It rejects status flag bit 1 rather than overriding that condition.
 ALSA stream preparation and independent USB readback have passed at all four
 supported rates under WSL. This does not establish working audio streaming.
 
+Windows sample-rate combo 1130 changes the device immediately: GUI handler
+0x14002c2f0 sends IOCTL 0x222328. Kernel dispatch 0x1400292b0 queues command 6;
+worker 0x1400253a0 calls 0x140005fb0 and 0x140005b00, which sends the same
+03/0008 four-byte payload starting with 40, then polls 03/0001. Apply/Cancel/
+Default instead manage staged Windows host properties; Cancel does not undo
+the sample rate and keeps the settings dialog open (GUI 0x14002c1b0).
+
 The owner's manual describes CLOCK as INTERNAL or synchronization to a
 signal at the coaxial input. DIGITAL=AUTO receives that input and follows
 its sampling frequency; DIGITAL=OFF disables it. This does not establish
@@ -388,6 +395,12 @@ TxRevPreDly at 0x1000273fa uses 00 04 type 01; TxRevTime at
 0x1000274dc uses 00 04 type 02. Both send one table-index byte. CDlgReverb::InitDlgItems at 0x1000278fc
 sets pre-delay indices 0..12 and time indices 0..49. The Base.lproj
 Reverb.nib menu order is OFF, ECHO, ROOM, SMALL HALL, LARGE HALL (0..4).
+Both dialogs use read-only value displays with arrow controls. Windows edits
+1111/1113 have style 0x50800882 (ES_READONLY); their steppers use 0x34.
+The 13 pre-delay strings agree in Mac CRevDlyTbl::m_str (0x10005e170) and
+Windows file offset 0x29b900. Time is (index+1)*0.1 formatted with one decimal
+place (Mac 0x1000277aa, Windows 0x140006290). These are index changes, not
+arbitrary numeric text writes.
 Pre-delay/time writes target active type banks 1..4; incoming bulk state
 also retains the off bank. Patchbay.nib lists nine routing selections:
 Direct Mix A..D (0..3), WAVE OUT pairs 1-2 through 9-10 (4..8).

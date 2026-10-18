@@ -129,6 +129,8 @@ add_test(NAME gui-devices COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/t
 add_test(NAME gui-preferences COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiPreferences.py")
 add_test(NAME gui-warnings COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs")
 add_test(NAME gui-graphs COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiGraphs.mjs")
+add_test(NAME gui-steppers COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiSteppers.mjs")
+set_tests_properties(gui-steppers PROPERTIES TIMEOUT 10)
 add_test(NAME gui-install COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiInstall.py"
   "${CMAKE_COMMAND}" "${CMAKE_BINARY_DIR}")
 add_test(NAME dkms-build COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/DkmsBuild.py")
@@ -140,6 +142,12 @@ add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   "${CMAKE_SOURCE_DIR}/gui/web/meters.js" "${CMAKE_SOURCE_DIR}/gui/web/menus.js"
   "${CMAKE_SOURCE_DIR}/gui/web/warnings.js"
   "${CMAKE_SOURCE_DIR}/gui/web/graphs.js"
+  "${CMAKE_SOURCE_DIR}/gui/web/steppers.js"
+  "${CMAKE_SOURCE_DIR}/test/BrowserClient.mjs" "${CMAKE_SOURCE_DIR}/test/GuiBrowser.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiControlMatrix.mjs" "${CMAKE_SOURCE_DIR}/test/GuiRates.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiReconnect.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiSteppers.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiReverb.mjs"
   "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs" "${CMAKE_SOURCE_DIR}/test/GuiGraphs.mjs")
 set_tests_properties(gui-javascript PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")

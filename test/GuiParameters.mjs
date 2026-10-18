@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import assert from 'node:assert/strict';
 import {ATTACK, RELEASE, RATIO_TEXT, PRE_DELAY, VOLUME, volumeIndex, volumeText,
-  parameterText, panToWire, wireToPan, compressorOutput, sensitivityIndex} from '../gui/web/parameters.js';
+  parameterText, panToWire, wireToPan, compressorOutput, sensitivityIndex, preDelayText, reverbTimeText} from '../gui/web/parameters.js';
 
 assert.equal(VOLUME.length, 1025);
 assert.equal(VOLUME[0], 0);
@@ -23,6 +23,18 @@ assert.equal(ATTACK.length, 26);
 assert.equal(RELEASE.length, 46);
 assert.equal(RATIO_TEXT.length, 9);
 assert.equal(PRE_DELAY.length, 13);
+assert.equal(preDelayText(0), '0.0');
+assert.equal(preDelayText(1), '0.1');
+assert.equal(preDelayText(8), '10');
+assert.equal(preDelayText(12), '160');
+assert.equal(reverbTimeText(0), '0.1');
+assert.equal(reverbTimeText(9), '1.0');
+assert.equal(reverbTimeText(49), '5.0');
+for (const value of [-1, NaN, 1.5, undefined]) {
+  assert.equal(preDelayText(value), '--'); assert.equal(reverbTimeText(value), '--');
+}
+assert.equal(preDelayText(13), '--');
+assert.equal(reverbTimeText(50), '--');
 for (const [parameter, index, expected] of [
   ['sensitivity', 1, '0.5 dB'], ['gate', 0, '-INF dB'], ['gate', 1, '-69.0 dB'],
   ['gate', 50, '-20.0 dB'], ['threshold', 0, '-50.0 dB'], ['threshold', 50, '0.0 dB'],

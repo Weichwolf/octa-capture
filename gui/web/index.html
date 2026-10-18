@@ -43,8 +43,8 @@
     <h2 id="reverb-title">REVERB</h2>
     <div class="dialog-content reverb-fields">
       <label>TYPE: <select id="reverb-type"></select></label>
-      <label>PRE DELAY [ms]: <select id="reverb-delay"></select></label>
-      <label>TIME [sec]: <input id="reverb-time" type="number" min="0.1" max="5" step="0.1"></label>
+      <label>PRE DELAY [ms]: <span class="reference-stepper" id="reverb-delay-stepper"><input id="reverb-delay" type="text" readonly aria-label="Reverb pre-delay"><button type="button" data-step="1" aria-label="Increase reverb pre-delay">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb pre-delay">▾</button></span></label>
+      <label>TIME [sec]: <span class="reference-stepper" id="reverb-time-stepper"><input id="reverb-time" type="text" readonly aria-label="Reverb time"><button type="button" data-step="1" aria-label="Increase reverb time">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb time">▾</button></span></label>
     </div>
     <footer><button data-action="reverb-default">Initial Setting</button><button data-close>Close</button></footer>
   </dialog>
@@ -55,7 +55,7 @@
       <fieldset><legend>Audio Buffer Size</legend><p>Buffer size and latency are controlled by your Linux audio application.</p></fieldset>
       <fieldset><legend>ASIO Setting</legend><label><input type="checkbox" disabled> Use ASIO Direct Monitor</label><label><input type="checkbox" disabled> Low Latency mode</label><p>ASIO settings apply to Windows applications.</p><label title="Two-unit operation is not implemented yet."><input type="checkbox" disabled> VS EXPAND</label></fieldset>
     </div>
-    <footer><button data-close>Cancel</button><button id="apply-rate">Apply</button><button data-close>Close</button></footer>
+    <footer><button disabled title="Buffer settings are controlled by your Linux audio application.">Default</button><button id="cancel-settings">Cancel</button><button id="apply-rate" disabled title="Sample rate changes take effect immediately. Buffer settings are controlled by your Linux audio application.">Apply</button><button data-close>Close</button></footer>
   </dialog>
   <dialog id="auto-sens" aria-labelledby="auto-sens-title">
     <h2 id="auto-sens-title">AUTO-SENS</h2>
@@ -79,7 +79,7 @@
       <p>Device → Save settings exports an .octa file (Ctrl+S); Load settings
         imports one (Ctrl+O). The Patch Bay (Ctrl+P) selects the source for each
         output pair. Multiple Direct Mixer changes that routing to enable A–D.</p>
-      <p>Choose the sample rate under Driver → Driver Settings and click Apply.
+      <p>Choose the sample rate under Driver → Driver Settings; it changes immediately.
         Audio applications choose their own ALSA buffer size. At 192 kHz only
         channels 1–4 and Mixer A are available; reverb and patchbay are unavailable.</p>
       <p>Click the device name to send its identification command. Right-click it
