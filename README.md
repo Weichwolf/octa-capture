@@ -96,6 +96,8 @@ python3 tools/check-preamps.py --write       # active channels at the current ra
 ./build/strict/octa-audio-check 48000 capture  # quiet, timed transfer
 python3 tools/check-pcm-meters.py --rates    # quiet meter/PCM lifecycle checks
 python3 tools/check-mixer-audio.py --write --rates --keep-going  # digital DSP/signal checks
+python3 tools/check-mixer-audio.py --write --rates --integrity-seconds 10 \
+  --period-size 256 --buffer-size 1024      # verify actual buffers and digital sample order
 ./tools/check-gui.sh                        # running-panel browser checks
 ./tools/fuzz.sh 120                         # offline protocol fuzzing
 ./tools/fuzz-midi.sh 120                    # simulated ALSA transport

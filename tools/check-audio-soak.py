@@ -6,11 +6,14 @@ import argparse
 import json
 import os
 from pathlib import Path
-import re
 import signal
 import subprocess
+import sys
 import tempfile
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pcm_checks import geometry_valid, owned_parameters
 
 RATES = (44100, 48000, 96000, 192000)
 PCM_DIRECTORY = Path('/proc/asound/OCTACAPTURE')
@@ -29,25 +32,7 @@ class Check:
         return json.loads(result.stdout)
 
     def parameters(self, item, rate):
-        direction = 'c' if item['name'] == 'arecord' else 'p'
-        directory = PCM_DIRECTORY / f'pcm0{direction}/sub0'
-        owner = re.search(r'^owner_pid\s*:\s*(\d+)\s*$', (directory / 'status').read_text(), re.M)
-        if owner is None or int(owner[1]) != item['process'].pid:
-            return None
-        fields = dict(line.split(':', 1) for line in (directory / 'hw_params').read_text().splitlines() if ':' in line)
-        if not fields:
-            return None  # The stream may have closed between reading the two files.
-        try:
-            actual = {'access': fields['access'].strip(), 'sample_format': fields['format'].strip(),
-                      'channels': int(fields['channels']), 'rate_hz': int(fields['rate'].split()[0]),
-                      'period_frames': int(fields['period_size']), 'buffer_frames': int(fields['buffer_size'])}
-        except (KeyError, ValueError, IndexError) as error:
-            raise RuntimeError(f'Invalid ALSA hardware parameters for {item["name"]}: {fields}') from error
-        expected = {'access': 'RW_INTERLEAVED', 'sample_format': 'S24_3LE', 'channels': item['channels'],
-                    'rate_hz': rate, 'period_frames': self.period, 'buffer_frames': self.buffer}
-        if actual != expected:
-            raise RuntimeError(f'{item["name"]} negotiated unexpected ALSA parameters: {actual}; requested {expected}')
-        return actual
+        return owned_parameters(PCM_DIRECTORY, item, rate, self.period, self.buffer)
 
     def raw_restore(self, recovery):
         subprocess.run([str(self.binary_directory / 'octa-preset'), 'restore', str(recovery)],
@@ -151,8 +136,7 @@ def main():
     parser.add_argument('--recovery-dir', type=Path, default=Path('build/hardware'),
                         help='parent directory for a private raw recovery snapshot')
     arguments = parser.parse_args()
-    if (not 64 <= arguments.period_size <= 32768 or not 128 <= arguments.buffer_size <= 65536 or
-            arguments.buffer_size < arguments.period_size * 2 or arguments.buffer_size % arguments.period_size):
+    if not geometry_valid(arguments.period_size, arguments.buffer_size):
         parser.error('Use a 64..32768-frame period and a 128..65536-frame buffer holding at least two whole periods.')
     def interrupted(_signum, _frame):
         raise KeyboardInterrupt('Interrupted; stopping streams and restoring the original rate.')

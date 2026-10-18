@@ -65,6 +65,11 @@ class Parameters(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Invalid ALSA hardware parameters'):
             self.check.parameters(self.item, 48000)
 
+    def test_replaced_owner_cannot_verify_parameters_read_during_a_close_race(self):
+        parameters = ''.join(f'{key}: {value}\n' for key, value in self.fields.items())
+        with patch.object(Path, 'read_text', side_effect=['owner_pid: 123\n', parameters, 'owner_pid: 999\n']):
+            self.assertIsNone(self.check.parameters(self.item, 48000))
+
 
 class Recovery(unittest.TestCase):
     def setUp(self):

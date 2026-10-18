@@ -10,15 +10,20 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from gui.backend import Bridge
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pcm_checks import geometry_valid, owned_parameters
+
 RATES = (44100, 48000, 96000)
 UNITY = 0x200000
 PAN_RIGHT = 0x8000
 TAG = 1024  # -78 dBFS before mixer gain; no test signal reaches physical outputs.
+PCM_DIRECTORY = Path('/proc/asound/OCTACAPTURE')
 PATTERN_PERIOD = 2047
 
 
@@ -47,13 +52,16 @@ class AudioMismatch(RuntimeError):
 
 
 class Check:
-    def __init__(self, directory, keep_going=False):
+    def __init__(self, directory, keep_going=False, period=1024, buffer=8192):
         self.directory = directory.resolve()
         self.bridge = Bridge(self.directory / 'octa-bridge')
         self.rate = None
         self.cases = 0
         self.keep_going = keep_going
         self.failures = []
+        self.period = period
+        self.buffer = buffer
+        self.last_parameters = {}
 
     def audio_failure(self, label, message):
         if not self.keep_going:
@@ -118,7 +126,8 @@ class Check:
                            for index in range(10)))
         processes = []
         with os.fdopen(os.memfd_create('octa-quiet-mixer-test', os.MFD_CLOEXEC), 'w+b') as generated, \
-                tempfile.TemporaryFile() as playback_errors:
+                os.fdopen(os.memfd_create('octa-mixer-return', os.MFD_CLOEXEC), 'w+b') as recorded, \
+                tempfile.TemporaryFile() as capture_errors, tempfile.TemporaryFile() as playback_errors:
             # Start/end on digital zero; keep all generated/captured audio in RAM.
             quiet = bytes(30) * (rate // 4)
             size = (rate * duration - 2 * (rate // 4)) * 30
@@ -128,18 +137,17 @@ class Check:
             generated.seek(0)
             try:
                 common = ['-q', '-D', 'hw:CARD=OCTACAPTURE,DEV=0', '-r', str(rate), '-f', 'S24_3LE',
-                          '--period-size=1024', '--buffer-size=8192', '-d', str(duration), '-t', 'raw']
-                capture = subprocess.Popen(['arecord', *common, '-c12'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                          f'--period-size={self.period}', f'--buffer-size={self.buffer}', '-d', str(duration), '-t', 'raw']
+                capture = subprocess.Popen(['arecord', *common, '-c12'], stdout=recorded, stderr=capture_errors)
                 processes.append(capture)
                 playback = subprocess.Popen(['aplay', *common, '-c10'], stdin=generated,
                                             stdout=subprocess.DEVNULL, stderr=playback_errors)
                 processes.append(playback)
-                audio, errors = capture.communicate(timeout=duration + 15)
-                playback.wait(timeout=5)
-                playback_errors.seek(0)
-                output_errors = playback_errors.read(4096)
-                require(capture.returncode == 0 and not errors, f'Capture failed/XRUN: {errors!r}')
-                require(playback.returncode == 0 and not output_errors, f'Playback failed/XRUN: {output_errors!r}')
+                self.last_parameters = self.observe_streams([
+                    {'name': 'arecord', 'process': capture, 'channels': 12, 'error': capture_errors},
+                    {'name': 'aplay', 'process': playback, 'channels': 10, 'error': playback_errors}], duration)
+                recorded.seek(0)
+                audio = recorded.read(rate * duration * 36 + 1)
                 require(len(audio) == rate * duration * 36, 'Incomplete 12-channel capture.')
                 result = []
                 for offset in (30, 33):
@@ -185,6 +193,32 @@ class Check:
                         if pipe is not None:
                             pipe.close()
 
+    def observe_streams(self, streams, duration):
+        deadline = time.monotonic() + duration + 15
+        parameters = {}
+        finished = set()
+        while True:
+            for item in streams:
+                process, name = item['process'], item['name']
+                if name not in parameters:
+                    actual = owned_parameters(PCM_DIRECTORY, item, self.rate, self.period, self.buffer)
+                    if actual is not None:
+                        parameters[name] = actual
+                # Observe completion before reading diagnostics, so a final
+                # XRUN written immediately before exit cannot escape the check.
+                exit_code = process.poll()
+                item['error'].seek(0)
+                errors = item['error'].read(4096)
+                require(not errors, f'{name} failed/XRUN: {errors!r}')
+                if exit_code is not None:
+                    require(exit_code == 0, f'{name} failed: exit {exit_code}')
+                    require(name in parameters, f'{name}: actual ALSA parameters were not observed.')
+                    finished.add(name)
+            if len(finished) == len(streams):
+                return parameters
+            require(time.monotonic() < deadline, 'Duplex PCM transfer stalled.')
+            time.sleep(0.01)
+
     def expect(self, label, expected, channel=0, amplitude=TAG, tolerance=0):
         result = self.measure(channel, amplitude)
         self.cases += 1
@@ -193,7 +227,7 @@ class Check:
             self.audio_failure(label, f'channel {channel + 1}: expected {expected}, observed {result}')
             return
         print(json.dumps({'rate_hz': self.rate, 'case': label, 'source_channel': channel + 1,
-                          'return_11_12': result, 'tolerance_lsb': tolerance}), flush=True)
+                          'return_11_12': result, 'tolerance_lsb': tolerance, 'actual_parameters': self.last_parameters}), flush=True)
 
     def pattern(self, channel, duration=2):
         self.cases += 1
@@ -201,7 +235,7 @@ class Check:
             result = self.measure(channel, TAG, pattern=True, duration=duration)
             print(json.dumps({'rate_hz': self.rate, 'case': 'PRBS11 sample integrity',
                               'source_channel': channel + 1, 'checked_samples': self.rate * (duration - 1),
-                              'return_11_12': result}), flush=True)
+                              'return_11_12': result, 'actual_parameters': self.last_parameters}), flush=True)
         except AudioMismatch as error:
             self.audio_failure(f'PRBS11 channel {channel + 1}', error)
 
@@ -270,6 +304,8 @@ def main():
     parser.add_argument('--rates', action='store_true', help='44.1/48/96 kHz; requires --write and restores the original rate')
     parser.add_argument('--keep-going', action='store_true', help='collect sample mismatches; I/O/safety failures still stop immediately')
     parser.add_argument('--integrity-seconds', type=int, help='only check ten longer PRBS11 streams per rate (2..60 seconds each)')
+    parser.add_argument('--period-size', type=int, default=1024, help='requested PCM period frames')
+    parser.add_argument('--buffer-size', type=int, default=8192, help='requested PCM buffer frames')
     parser.add_argument('--recovery-dir', type=Path, default=ROOT / 'build/hardware')
     args = parser.parse_args()
     if args.rates and not args.write:
@@ -278,7 +314,9 @@ def main():
         parser.error('--keep-going requires --write.')
     if args.integrity_seconds is not None and (not args.write or not 2 <= args.integrity_seconds <= 60):
         parser.error('--integrity-seconds requires --write and a value from 2 to 60.')
-    check = Check(args.bin_dir, keep_going=args.keep_going)
+    if not geometry_valid(args.period_size, args.buffer_size):
+        parser.error('Use a 64..32768-frame period and a 128..65536-frame buffer holding at least two whole periods.')
+    check = Check(args.bin_dir, keep_going=args.keep_going, period=args.period_size, buffer=args.buffer_size)
     before = check.json('octa-state')
     original_rate = check.json('octa-status')['sample_rate_hz']
     if not args.write:
