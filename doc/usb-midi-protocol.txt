@@ -9,8 +9,8 @@ Preamp/compressor writes listed below have passed hardware readback tests.
 
 USB interfaces (observed from the connected device descriptors)
 --------------------------------------------------------------
-All five interfaces are vendor-specific; bcdDevice=0200. The device is
-connected at 480 Mbit/s through USB/IP in the development environment.
+All five interfaces are vendor-specific; bcdDevice=0200. The same descriptor
+layout has been read at 480 Mbit/s through USB/IP and direct native USB.
 
   Interface  Endpoint(s)       Transfer type / purpose
   0          05 OUT           asynchronous isochronous audio output
@@ -42,8 +42,9 @@ capture/playback timing checks still passing. Four concurrent status
 readers also passed alongside 48 kHz duplex audio, meters and shared CTRL
 queries/writes; the full raw device state was preserved. ALSA rejects writes
 to this control. Both 6.12 and 6.18 module builds pass Kbuild W=1/-Werror;
-the new status source passes Sparse with warnings as errors. Suspend,
-disconnect, malformed-device/fault-injection and native Debian hardware
+the new status source passes Sparse with warnings as errors. Native Debian
+6.12 also passes phase-coherent, read-only status and four concurrent-reader
+checks. Suspend, physical disconnect and malformed-device/fault-injection
 checks remain required; this is not kernel-fuzzing evidence.
 
 The clock-display mapping is established by the original macOS path:

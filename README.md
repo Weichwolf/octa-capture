@@ -12,12 +12,15 @@ Auto-Sens, settings import/export, device selection and live MIDI/PCM meters.
 Nonlinear parameter tables and display math are checked against both original
 Windows and macOS binaries.
 
-**Complete parity is not established.** Device writes/readback, browser controls,
-GTK/native Save/Open and timed audio transfers have passed on the connected WSL
-unit. WSL audio has produced underruns and digital sample discontinuities even
-without reported XRUNs. Native Debian hardware,
-physical signal quality, external clock, DIN loopback, persistent memory and
-two-unit operation still need verification. Linux audio settings show ALSA
+**Complete parity is not established.** Native Debian 6.12 passes all-rate PCM
+meter/lifecycle checks and ten-source digital-return PRBS streams at
+44.1/48/96 kHz (ten seconds per source, 1024/8192-frame period/buffer).
+The native Playwright suite passes 427 control changes and all-rate settings
+checks; installed GTK Save/Open also passes with desktop-portal dialogs.
+These GUI operations also passed under WSL, where digital sample discontinuities
+and underruns remain unresolved.
+Physical analog response, external clock, DIN loopback, persistent memory,
+two-unit operation and broader latency/stability still need verification. Linux audio settings show ALSA
 information; applications or sound servers configure their own buffers and latency.
 See the [function inventory](doc/function-inventory.md)
 for implemented behavior and remaining gaps.

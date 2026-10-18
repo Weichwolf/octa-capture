@@ -13,11 +13,11 @@
 
 - Development now runs on native Debian 13, kernel `6.12.113+deb13-amd64`, with direct USB. Earlier WSL development used `6.18.54.1-microsoft-standard-WSL2`. Recheck the active module binding; copied WSL build artifacts and process IDs are not valid native runtime evidence.
 - `doc/`: official Windows 1.5.3/macOS 1.5.9 downloads, sources/hashes in `drivers-manifest.json`, checksums in `SHA256SUMS`, findings in `environment.txt`.
-- With usbipd-win `aa3db8b` / VBoxUSB 7.2.2, run the Windows metadata helper after attachment to initialize its high-speed cache (see `kernel/README.md`). This fixed the 1/8 streaming rate; timed capture/playback checks pass at all four rates. Native Debian and signal-quality checks remain required.
+- With usbipd-win `aa3db8b` / VBoxUSB 7.2.2, run the Windows metadata helper after attachment to initialize its high-speed cache (see `kernel/README.md`). This fixed the 1/8 streaming rate; WSL timed checks pass at all four rates but intermittent digital sample gaps remain. Native Debian has passed all-rate PCM meter/lifecycle checks and ten-source digital-return PRBS checks at 44.1/48/96 kHz with 1024/8192-frame period/buffer. These do not establish physical analog response or broader latency/stability.
 - The module exposes the read-only ALSA CARD control `OCTA-CAPTURE Status` (8 bytes). `octa-status` reads it through the C++ backend; `tools/check-status.py --stress --binary build/strict/octa-status` validates concurrent reads. Keep unmapped status bits raw.
 - Findings are dated snapshots: recheck tools, permissions, and running builds before relying on them.
 - `tools/setup-native-dev.sh` installs native tools and development permissions after `build/driver-native/snd-octa-capture.ko` is built for the running kernel. It writes `/etc/octa-capture-dev.env` and configures the root helper with that native module path. Never install a WSL module on native Debian.
-- LLVM 19, GNU Binutils, and GDB are available natively. Ghidra 12.1.2 was installed as a Snap in WSL; native Ghidra availability must be checked separately. Manufacturer analysis remains under `doc/local/`.
+- LLVM 19, GNU Binutils, GDB and Ghidra 12.1.2 are available natively. `ghidra.analyzeHeadless` resolves to the user-local installation under `~/.local/opt/ghidra_12.1.2_PUBLIC`; existing projects open read-only. Manufacturer analysis remains under `doc/local/`.
 - Wine GUI observations: `doc/windows-gui-inspection.txt`; screenshots in ignored `doc/local/windows-gui/`. Main preamp/compressor view, Driver menu, and About dialog captured; Direct Mixer remains unobserved because the GUI reports no device.
 
 # Working practices

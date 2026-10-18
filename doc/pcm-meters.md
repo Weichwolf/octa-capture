@@ -62,12 +62,20 @@ on each playback source, including sample order across the middle 29 seconds.
 The bound is 2..60 seconds per source. Add `--rates` for the three return-capable
 rates. As with short checks, any mismatch makes the final result fail.
 
+Native Debian 6.12 direct USB passes ten-second PRBS streams on each of the ten
+playback sources at 44.1/48/96 kHz, with 1024-frame periods and an 8192-frame
+buffer. Each comparison checks the middle nine seconds; passive USB observation
+also found no sequence gaps or packet/transfer errors. This verifies these
+digital-return cases, not calibrated analog response or long-term stability.
+Exclusive PCM access is required; pausing one user's sound server does not
+reserve the device against other login sessions.
+
 The tested WSL USB/IP path has produced intermittent zero samples and a PRBS
 sequence jump inside otherwise correct digital returns, even without an ALSA
 XRUN. Successful timed transfers and quiet soak checks therefore do not establish
 audio integrity. The checker reports these comparisons as failures; its
 `--keep-going` option only collects sample mismatches, never suppresses I/O,
-output-isolation or restoration failures. Native Debian comparison remains.
+output-isolation or restoration failures.
 
 A separate RAM-only USB observer found discontinuities in completed input
 payloads while the submitted output PRBS remained continuous. The observation

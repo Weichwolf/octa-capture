@@ -2,7 +2,9 @@
 
 The driver is built as **`snd-octa-capture.ko`**, using an isolated copy of ALSA's USB audio implementation. Debian's kernel and its source tree remain untouched. The module matches only `0582:0120`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` module to coexist for other devices. It uses the kernel's existing MIDI helper.
 
-The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. CTRL communication, independent clock readback and timed streaming pass at 44.1/48/96/192 kHz under WSL after the host workaround below. Simultaneous capture/zero-playback passes ten minutes per rate with 1024-frame periods and an 8192-frame buffer. Smaller 256-frame periods have produced WSL underruns at 96/192 kHz. Digital Mixer A return checks also detect intermittent sample discontinuities without an XRUN, so these timing/quiet checks do not establish audio integrity. Native Debian, physical signal quality and broader latency/stability testing remain required.
+The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. Native Debian 6.12 passes clock/status reads and PCM meter/lifecycle checks at 44.1/48/96/192 kHz. Mixer A digital-return PRBS streams pass on all ten playback sources at 44.1/48/96 kHz, using ten-second streams, 1024-frame periods and an 8192-frame buffer. The 192 kHz mode has four capture/playback channels and no return 11/12; its PCM checks do not establish signal integrity.
+
+WSL 6.18 needs the host workaround below. Simultaneous capture/zero-playback passes ten minutes per rate with 1024/8192-frame period/buffer, but smaller periods produced underruns and digital-return tests found sample gaps without XRUNs. Physical analog response, external synchronization and broader native latency/stability testing remain required.
 
 Use source matching the target kernel and its prepared build files, including `Module.symvers`:
 
