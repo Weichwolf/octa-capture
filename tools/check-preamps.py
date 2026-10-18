@@ -5,10 +5,12 @@
 import argparse
 import copy
 import json
+import os
 from pathlib import Path
 import signal
 import subprocess
 import sys
+import tempfile
 
 
 # CLI name, JSON path, maximum wire index. Phantom power and stereo coupling are excluded.
@@ -24,6 +26,10 @@ PARAMETERS = (
     ('gain', ('compressor', 'gain_index'), 74),
     ('compressor', ('compressor', 'enabled'), 1),
 )
+# Reference bulk columns, independent of the C++ writer (see doc/usb-midi-protocol.txt).
+BULK_OFFSETS = {'low-cut': 0x17, 'phase': 0x19, 'hi-z': 0x1b, 'sensitivity': 0x1d,
+                'compressor': 0x26, 'gate': 0x28, 'attack': 0x30, 'release': 0x38,
+                'threshold': 0x40, 'ratio': 0x48, 'gain': 0x50}
 
 
 def interrupt(_signum, _frame):
@@ -43,8 +49,47 @@ def set_value(binary_dir, port, channel, parameter, value):
     run([str(binary_dir / 'octa-control'), str(channel + 1), parameter, str(value), port])
 
 
-def preamp_state(snapshot):
-    return snapshot['preamps'], snapshot['stereo_links']
+def expected_state(baseline, channel, parameter, path, value):
+    expected = copy.deepcopy(baseline)
+    target = expected['preamps'][channel]
+    for key in path[:-1]:
+        target = target[key]
+    packed = type(target[path[-1]]) is bool
+    target[path[-1]] = bool(value) if packed else value
+    payload = bytearray.fromhex(baseline['payload_hex'])
+    offset = BULK_OFFSETS[parameter]
+    if packed:
+        offset += channel // 4
+        bit = 1 << (channel % 4)
+        payload[offset] = (payload[offset] & ~bit) | (bit if value else 0)
+    else:
+        payload[offset + channel] = value
+    expected['payload_hex'] = payload.hex()
+    return expected
+
+
+def snapshot(directory, baseline):
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    private = Path(tempfile.mkdtemp(prefix='preamp-sweep-', dir=directory))
+    recovery = private / 'original.syx'
+    body = bytes([1, 0, 0, 0]) + bytes.fromhex(baseline['payload_hex'])
+    with os.fdopen(os.open(recovery, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as output:
+        output.write(bytes.fromhex('f0411000004d12') + body + bytes([-sum(body) % 128, 247]))
+        output.flush()
+        os.fsync(output.fileno())
+    return recovery
+
+
+def restore(args, baseline, recovery):
+    try:
+        current = state(args.bin_dir, args.port)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        current = None
+    if current != baseline:
+        subprocess.run([str(args.bin_dir / 'octa-preset'), 'restore', str(recovery), args.port],
+                       check=True, capture_output=True, timeout=25)
+    if state(args.bin_dir, args.port) != baseline:
+        raise RuntimeError(f'Full-state restoration failed. Recovery: {recovery}')
 
 
 def require_silent_outputs(snapshot, active):
@@ -69,21 +114,17 @@ def check_parameter(args, baseline, channel, parameter, path, maximum):
     values = range(maximum + 1) if args.all_values else (old_value - 1 if old_value else 1,)
     try:
         for new_value in values:
-            expected = copy.deepcopy(baseline)
-            target = expected['preamps'][channel]
-            for key in path[:-1]:
-                target = target[key]
-            target[path[-1]] = bool(new_value) if isinstance(original, bool) else new_value
+            expected = expected_state(baseline, channel, parameter, path, new_value)
             set_value(args.bin_dir, args.port, channel, parameter, new_value)
             actual = state(args.bin_dir, args.port)
-            if preamp_state(actual) != preamp_state(expected):
+            if actual != expected:
                 raise RuntimeError(f'Channel {channel + 1}: {parameter} {new_value} readback/isolation mismatch')
             print(f'PASS channel {channel + 1}: {parameter} {new_value}', flush=True)
     finally:
         # Also restore if the write reached the device but its reply was lost.
         set_value(args.bin_dir, args.port, channel, parameter, old_value)
         restored = state(args.bin_dir, args.port)
-        if preamp_state(restored) != preamp_state(baseline):
+        if restored != baseline:
             raise RuntimeError(f'Channel {channel + 1}: {parameter} restoration mismatch')
     print(f'RESTORED channel {channel + 1}: {parameter} {old_value}', flush=True)
 
@@ -98,6 +139,8 @@ def main():
     parser.add_argument('--all-values', action='store_true', help='check every legal index; requires --write')
     parser.add_argument('--channel', type=int, choices=range(1, 9), action='append',
                         help='check only this physical input (repeatable); defaults to all active inputs')
+    parser.add_argument('--recovery-dir', type=Path, default=root / 'build/hardware',
+                        help='parent of a private raw recovery snapshot')
     args = parser.parse_args()
     if args.hi_z and not args.write:
         parser.error('--hi-z requires --write.')
@@ -126,26 +169,25 @@ def main():
         raise RuntimeError('Hi-Z checks require phantom power already off on inputs 1/2')
     if args.all_values:
         require_silent_outputs(baseline, active)
-    snapshot = root / 'build/hardware/preamp-before.json'
-    snapshot.parent.mkdir(parents=True, exist_ok=True)
-    snapshot.write_text(json.dumps(baseline, indent=2) + '\n')
+    recovery = snapshot(args.recovery_dir, baseline)
+    print(f'Private full-state recovery: {recovery}', flush=True)
     for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, interrupt)
-    for channel in channels:
-        for parameter, path, maximum in PARAMETERS:
-            check_parameter(args, baseline, channel, parameter, path, maximum)
-    for channel in hi_z_channels:
-        check_parameter(args, baseline, channel, 'hi-z', ('hi_z',), 1)
-    final = state(args.bin_dir, args.port)
-    if final != baseline:
-        raise RuntimeError('Final bulk state differs from the original snapshot')
+    try:
+        for channel in channels:
+            for parameter, path, maximum in PARAMETERS:
+                check_parameter(args, baseline, channel, parameter, path, maximum)
+        for channel in hi_z_channels:
+            check_parameter(args, baseline, channel, 'hi-z', ('hi_z',), 1)
+    finally:
+        restore(args, baseline, recovery)
     print(f'PASS: {checks} writes/readbacks; each parameter and complete bulk state restored.')
 
 
 if __name__ == '__main__':
     try:
         main()
-    except (RuntimeError, subprocess.SubprocessError, KeyboardInterrupt) as error:
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, KeyboardInterrupt) as error:
         print(f'FAIL: {error}', file=sys.stderr)
         if isinstance(error, subprocess.CalledProcessError):
             print(error.stderr, file=sys.stderr)

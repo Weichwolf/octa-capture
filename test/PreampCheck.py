@@ -7,6 +7,7 @@ import importlib.util
 import io
 from pathlib import Path
 import sys
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -19,6 +20,7 @@ spec.loader.exec_module(check)
 def fixture(rate=2):
     payload = bytearray(1146)
     payload[2] = rate
+    payload[0x48:0x50] = bytes([5] * 8)
     return {'preamps': [{'low_cut': False, 'phantom': False, 'hi_z': False,
                          'compressor': {'ratio_index': 5}} for _ in range(8)],
             'stereo_links': [False] * 4, 'payload_hex': payload.hex(),
@@ -58,12 +60,23 @@ class Sweeps(unittest.TestCase):
             self.assertEqual((channel, parameter), (3, 'ratio'))
             writes.append(value)
             current['preamps'][channel]['compressor']['ratio_index'] = value
-            if failure == 'lost-reply' and value == 2:
-                raise RuntimeError('Write succeeded; reply lost.')
+            raw = bytearray.fromhex(current['payload_hex'])
+            raw[0x48 + channel] = value
             if failure == 'other-channel' and value == 2:
                 current['preamps'][0]['compressor']['ratio_index'] = 4
+                raw[0x48] = 4
+            if failure == 'unmapped-byte' and value == 2:
+                raw[0x10] = 1
+            if failure == 'routing' and value == 2:
+                current['output_routes'][0] = 1
             if value == 5:
                 current['preamps'][0]['compressor']['ratio_index'] = 5
+                raw[0x48] = 5
+                raw[0x10] = 0
+                current['output_routes'][0] = 0
+            current['payload_hex'] = raw.hex()
+            if failure == 'lost-reply' and value == 2:
+                raise RuntimeError('Write succeeded; reply lost.')
 
         with patch.object(check, 'set_value', side_effect=write), \
                 patch.object(check, 'state', side_effect=lambda *_args: copy.deepcopy(current)), \
@@ -87,6 +100,57 @@ class Sweeps(unittest.TestCase):
 
     def test_other_channel_change_stops_sweep_and_restores(self):
         self.assertEqual(self.run_check(failure='other-channel'), [0, 1, 2, 5])
+
+    def test_unmapped_raw_change_stops_the_sweep(self):
+        self.assertEqual(self.run_check(failure='unmapped-byte'), [0, 1, 2, 5])
+
+    def test_non_preamp_change_stops_the_sweep(self):
+        self.assertEqual(self.run_check(failure='routing'), [0, 1, 2, 5])
+
+    def test_private_raw_snapshot_and_recovery_of_non_preamp_changes(self):
+        baseline = fixture()
+        with tempfile.TemporaryDirectory() as name:
+            recovery = check.snapshot(Path(name), baseline)
+            raw = recovery.read_bytes()
+            self.assertEqual(raw[:11], bytes.fromhex('f0411000004d1201000000'))
+            self.assertEqual(raw[11:-2], bytes.fromhex(baseline['payload_hex']))
+            self.assertEqual(sum(raw[7:-1]) % 128, 0)
+            self.assertEqual(recovery.stat().st_mode & 0o777, 0o600)
+            args = SimpleNamespace(bin_dir=Path('/unused'), port='fake')
+            changed = copy.deepcopy(baseline)
+            changed['output_routes'][0] = 1
+            with patch.object(check, 'state', side_effect=[changed, baseline]), \
+                    patch.object(check.subprocess, 'run') as restore:
+                check.restore(args, baseline, recovery)
+                self.assertEqual(restore.call_args.args[0][1:], ['restore', str(recovery), 'fake'])
+            with patch.object(check, 'state', return_value=baseline), \
+                    patch.object(check.subprocess, 'run') as restore:
+                check.restore(args, baseline, recovery)
+                restore.assert_not_called()
+
+    def test_failed_sweep_recovers_the_full_state_and_keeps_the_failure(self):
+        baseline = fixture()
+        current = copy.deepcopy(baseline)
+
+        def failed(*_args):
+            current['output_routes'][0] = 1
+            raise RuntimeError('Injected unexpected routing change')
+
+        def restored(*_args, **_kwargs):
+            current.update(copy.deepcopy(baseline))
+
+        with tempfile.TemporaryDirectory() as name, \
+                patch.object(sys, 'argv', ['check-preamps.py', '--write', '--channel', '1', '--recovery-dir', name]), \
+                patch.object(check, 'state', side_effect=lambda *_args: copy.deepcopy(current)), \
+                patch.object(check, 'check_parameter', side_effect=failed), \
+                patch.object(check.subprocess, 'run', side_effect=restored) as restore, \
+                redirect_stdout(io.StringIO()) as output:
+            with self.assertRaisesRegex(RuntimeError, 'Injected unexpected routing change'):
+                check.main()
+            restore.assert_called_once()
+            self.assertEqual(current, baseline)
+            self.assertNotIn('PASS:', output.getvalue())
+            self.assertEqual(len(list(Path(name).glob('*/original.syx'))), 1)
 
     def test_unavailable_192_input_and_unknown_rate_do_not_write(self):
         for rate, channel in ((3, '5'), (127, '1')):

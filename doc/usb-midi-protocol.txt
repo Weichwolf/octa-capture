@@ -314,8 +314,11 @@ tools/emulate-preamp-controls.py checks all 188 valid min/max endpoint
 frames against the original TxPre functions and our C++ encoder offline.
 octa-control writes one DT1 and immediately requests bulk state on the same
 open CTRL connection; success requires the requested value in that reply.
-tools/check-preamps.py additionally checks channel isolation and restores
-each original value. It checks eight channels at 44.1/48/96 kHz and four
+tools/check-preamps.py additionally compares the complete decoded and raw
+state after every write, including unrelated/unmapped bytes, and restores
+each original value. A private durable raw snapshot is saved before writes;
+a failed sweep also attempts full-state recovery while retaining its failure.
+It checks eight channels at 44.1/48/96 kHz and four
 at 192 kHz. Phantom power and stereo coupling controls are excluded from
 its mutations. Optional --write --hi-z adds input 1/2 impedance changes;
 it requires their phantom power already off and never changes that power.
