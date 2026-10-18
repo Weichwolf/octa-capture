@@ -31,6 +31,7 @@ let documentState = null, connected = false, busy = false, activeView = 'preamp'
 let revision = 0, writing = false, toastTimer;
 let stopped = false;
 let localBusy = false;
+let autoSenseWasActive = false;
 const knobs = [], switches = [], plots = [], faders = [];
 const meterViews = [];
 let meterSnapshot = null, meterReceived = 0, meterLastID = 0, meterLastRate = null;
@@ -625,6 +626,7 @@ function showDialog(name) {
   closeMenus();
   if (name === 'patchbay' && documentState?.state.payload_hex.slice(4, 6) === '03') return;
   const dialog = $(`#${name}`);
+  if (name === 'auto-sens' && !dialog.open && !documentState?.auto_sense?.active) setAutoSenseSelection(false);
   if (!dialog.open) dialog.showModal();
   if (name === 'settings') void settingsDevices();
 }
@@ -687,16 +689,31 @@ function syncDialogs(state, rateIndex) {
 
 function syncAutoSense(rateIndex) {
   const job = documentState.auto_sense, active = Boolean(job?.active);
-  const messages = {starting: 'Starting Auto-Sens…', running: 'Input the loudest expected signal, then click Finish.',
+  if (autoSenseWasActive && !active && ['completed', 'cancelled'].includes(job?.state)) $('#auto-sens').close();
+  autoSenseWasActive = active;
+  const messages = {starting: 'Starting Auto-Sens…', running: 'Running...',
     finishing: 'Finishing Auto-Sens…', cancelling: 'Cancelling and restoring settings…',
-    completed: 'Auto-Sens complete.', cancelled: 'Auto-Sens cancelled. Settings restored.', failed: job?.error};
-  $('#auto-status').textContent = messages[job?.state] || 'Select the input channels.';
+    failed: job?.error};
+  $('#auto-status').textContent = messages[job?.state] || '';
+  $('#auto-status').classList.toggle('running', job?.state === 'running');
   $('#auto-start').textContent = active ? 'Finish' : 'Start';
+  for (const check of all('#auto-channels input')) {
+    if (active) check.checked = Boolean(job.channels & 1 << Number(check.value));
+    check.disabled = active || (rateIndex === 3 && Number(check.value) >= 4);
+  }
   $('#auto-start').disabled = inFlight.has('auto-sense') || !documentState.capabilities?.auto_sense || writing || localBusy ||
-    (active ? job.state !== 'running' : busy);
+    (active ? job.state !== 'running' : busy || autoSenseChannels() === 0);
   $('#auto-cancel').disabled = inFlight.has('auto-sense') || job?.state === 'cancelling';
-  for (const check of all('#auto-channels input')) check.disabled = active || (rateIndex === 3 && Number(check.value) >= 4);
   $('#auto-all').disabled = active; $('#auto-none').disabled = active;
+}
+
+function autoSenseChannels() {
+  return all('#auto-channels input:checked:not(:disabled)').reduce((mask, input) => mask | 1 << Number(input.value), 0);
+}
+
+function setAutoSenseSelection(selected) {
+  for (const input of all('#auto-channels input')) input.checked = selected && !input.disabled;
+  if (documentState) syncAutoSense(parseInt(documentState.state.payload_hex.slice(4, 6), 16));
 }
 
 async function autoSenseRequest(path, body) {
@@ -830,18 +847,19 @@ function setupDialogs() {
   }
   for (let channel = 0; channel < 8; channel++) {
     const label = el('label', '', String(channel + 1)); const check = el('input');
-    check.type = 'checkbox'; check.value = channel; check.checked = true;
-    label.append(check); $('#auto-channels').append(label);
+    check.type = 'checkbox'; check.value = channel;
+    check.addEventListener('change', () => syncAutoSense(parseInt(documentState.state.payload_hex.slice(4, 6), 16)));
+    label.prepend(check); $('#auto-channels').append(label);
   }
-  $('#auto-all').addEventListener('click', () => all('#auto-channels input:not(:disabled)').forEach(input => { input.checked = true; }));
-  $('#auto-none').addEventListener('click', () => all('#auto-channels input').forEach(input => { input.checked = false; }));
+  $('#auto-all').addEventListener('click', () => setAutoSenseSelection(true));
+  $('#auto-none').addEventListener('click', () => setAutoSenseSelection(false));
   $('#auto-start').addEventListener('click', () => {
     if (documentState?.auto_sense?.active) {
       void autoSenseRequest('/api/auto-sense/stop', {action: 'finish'});
       return;
     }
     if (!canOperate()) return;
-    const channels = all('#auto-channels input:checked:not(:disabled)').reduce((mask, input) => mask | 1 << Number(input.value), 0);
+    const channels = autoSenseChannels();
     if (!channels) { notify('Select at least one input channel.'); return; }
     void autoSenseRequest('/api/auto-sense/start', {channels});
   });

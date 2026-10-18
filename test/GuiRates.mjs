@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {until} from './BrowserClient.mjs';
+import {checkAutoSenseSelection} from './GuiAutoSense.mjs';
 
 export async function checkRates(browser, api, directory, originalRate) {
   const rates = [44100, 48000, 96000, 192000];
@@ -56,6 +57,7 @@ export async function checkRates(browser, api, directory, originalRate) {
       if (await browser.evaluate('document.querySelector("#preamp-view").hidden')) await browser.click('#view-switch');
       await browser.click('#header-action');
       assert.equal(await browser.evaluate('document.querySelectorAll("#auto-channels input:not(:disabled)").length'), expectedChannels);
+      await checkAutoSenseSelection(browser);
       await browser.click('#auto-cancel');
       await browser.click('#view-switch');
       assert.equal(await browser.evaluate('document.querySelectorAll(".mixer-strip:not(.unavailable-channel)").length'), high ? 8 : 20);

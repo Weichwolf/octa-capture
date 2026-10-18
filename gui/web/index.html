@@ -69,8 +69,11 @@
   </dialog>
   <dialog id="auto-sens" aria-labelledby="auto-sens-title">
     <h2 id="auto-sens-title">AUTO-SENS</h2>
-    <div class="dialog-content"><p>Channel</p><div id="auto-channels" class="auto-channels"></div><p id="auto-status">Select the input channels.</p></div>
-    <footer><button id="auto-all">Select All</button><button id="auto-none">Clear All</button><button id="auto-start" disabled>Start</button><button id="auto-cancel">Cancel</button></footer>
+    <div class="dialog-content auto-sens-content">
+      <fieldset><legend>Channel</legend><div class="auto-selection"><div id="auto-channels" class="auto-channels"></div><div class="auto-selection-buttons"><button id="auto-all">Select All</button><button id="auto-none">Clear All</button></div></div></fieldset>
+      <p id="auto-status" role="status"></p>
+    </div>
+    <footer><button id="auto-start" disabled>Start</button><button id="auto-cancel">Cancel</button></footer>
   </dialog>
   <dialog id="diagram" aria-labelledby="diagram-title">
     <h2 id="diagram-title">OCTA-CAPTURE Signal Flow</h2>

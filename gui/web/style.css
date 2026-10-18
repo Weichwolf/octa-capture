@@ -180,8 +180,22 @@ dialog select, dialog input[type=number] { min-width: 100px; padding: 2px 4px; f
 .settings-fields p { font-size: 11px; color: #555; line-height: 1.4; }
 .settings-fields label { justify-content: flex-start; }
 .settings-fields output { margin-left: auto; }
-.auto-channels { display: flex; gap: 14px; }
-.auto-channels label { flex-direction: column; gap: 4px; }
+#auto-sens { width: 298px; min-width: 0; font-size: 11px; background: #f4f4f4; }
+#auto-sens .auto-sens-content { padding: 0; }
+#auto-sens fieldset { height: 82px; margin: 8px 8px 0; padding: 5px 8px 9px 17px; border: 1px groove #ddd; }
+#auto-sens legend { padding: 0 2px; margin-left: -11px; }
+.auto-selection { display: grid; grid-template-columns: 144px 90px; gap: 17px; }
+.auto-channels { display: grid; grid-template-columns: repeat(4,36px); grid-auto-rows: 27px; }
+.auto-channels label { flex-direction: row; justify-content: flex-start; gap: 3px; margin: 0; }
+.auto-channels input { width: 13px; height: 13px; margin: 0; }
+.auto-selection-buttons { display: flex; flex-direction: column; gap: 6px; }
+#auto-sens button { height: 21px; padding: 0; font-size: 11px; }
+#auto-sens footer { gap: 6px; padding: 9px 15px 8px; }
+#auto-start { width: 75px; }
+#auto-cancel { width: 81px; }
+#auto-status { min-height: 12px; margin: 6px 8px 0; line-height: 12px; text-align: center; }
+#auto-status.running { animation: auto-sens-running 1s step-end infinite; }
+@keyframes auto-sens-running { 0%, 79.99% { opacity: 1; } 80%, 100% { opacity: 0; } }
 #diagram { width: 945px; max-width: calc(100vw - 24px); }
 .signal-flow { text-align: center; background: white; }
 .signal-flow img { display: block; width: 100%; height: auto; }

@@ -161,6 +161,19 @@ acknowledges cancellation, then restores and verifies the snapshot before closin
 the session. The 60-second maximum prevents an abandoned calibration from
 running indefinitely. Other controls stay disabled while calibration is active.
 
+The idle Auto-Sens dialog starts with no channels selected; Start is disabled
+until a usable input is checked. Select All clears unavailable inputs at 192 kHz.
+Its two-row channel group, side selection buttons and 800/200 ms running blink
+follow the Windows dialog. Successful finish/cancel closes it after the backend
+confirms completion; a failed job stays visible. Active channel checks come from
+the backend job. Native Playwright checks cover selection at all rates and actual
+finish/cancel with full recovery. Browser-only response simulation verifies active
+channel adoption and retention of the dialog on recovery failure; it does not
+inject a hardware failure. `tools/verify-auto-sense-ui.py WINDOWS-GUI MAC-GUI`
+executes 3,072 selection/gating cases per original binary with host controls
+stubbed. Adopting calibration started outside this backend remains unimplemented;
+device activity notifications are separate from the bulk state.
+
 The independently authored web assets use the original parameter values and
 reference-derived behavior, not extracted manufacturer images. Unimplemented
 capabilities stay disabled; absent output meter data is not synthesized.

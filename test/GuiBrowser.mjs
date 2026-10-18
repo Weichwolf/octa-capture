@@ -15,6 +15,7 @@ import {checkReverb} from './GuiReverb.mjs';
 import {checkMasterFaders} from './GuiMasterFaders.mjs';
 import {checkInputMonitor} from './GuiInputMonitor.mjs';
 import {checkFooter, checkFooterRates} from './GuiFooter.mjs';
+import {checkAutoSenseSelection, checkAutoSenseFailure} from './GuiAutoSense.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -325,19 +326,22 @@ try {
     assert.equal(await browser.evaluate('document.querySelector("#toast").hidden'), true, 'No settings load error');
     console.log('PASS browser settings download/upload, confirmation and verified device application');
     await browser.click('#view-switch');
+    await checkAutoSenseFailure(browser);
     for (const action of ['cancel', 'finish']) {
       await browser.click('#header-action');
+      await checkAutoSenseSelection(browser);
       await browser.click('#auto-none');
       await browser.click('#auto-channels input[value="0"]');
       await browser.click('#auto-start');
       await until(async () => (await api('/api/state')).auto_sense?.state === 'running', 'Auto-Sens device activity');
+      assert.deepEqual(await browser.evaluate('[...document.querySelectorAll("#auto-channels input:checked")].map(node=>Number(node.value))'), [0], 'Active selection agrees with the backend job');
       assert.equal((await api('/api/state')).busy, true);
       await browser.screenshot(path.join(directory, `auto-sens-${action}.png`));
       await browser.click(action === 'cancel' ? '#auto-cancel' : '#auto-start');
       const result = action === 'cancel' ? 'cancelled' : 'completed';
       await until(async () => (await api('/api/state')).auto_sense?.state === result, `Auto-Sens ${result}`);
       await until(async () => !(await api('/api/state')).busy, 'Auto-Sens released CTRL');
-      await until(() => browser.evaluate(`document.querySelector('#auto-status').textContent.startsWith('${action === 'cancel' ? 'Auto-Sens cancelled.' : 'Auto-Sens complete.'}')`), 'Auto-Sens result shown in browser');
+      await until(() => browser.evaluate('!document.querySelector("#auto-sens").open'), 'Successful Auto-Sens completion closes the dialog');
       const current = (await api('/api/state')).state;
       if (action === 'cancel') assert.deepEqual(current, before, 'Auto-Sens cancel restores full state');
       else {
@@ -346,8 +350,6 @@ try {
         assert.deepEqual(actual, payload, 'Auto-Sens finish changes only selected sensitivity');
         await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'sensitivity', value: before.preamps[0].sensitivity_index});
       }
-      await browser.click('#auto-cancel');
-      await until(() => browser.evaluate('!document.querySelector("#auto-sens").open'), 'Auto-Sens dialog closed');
     }
     console.log('PASS browser Auto-Sens start/finish/cancel, verified notifications and recovery');
   }
