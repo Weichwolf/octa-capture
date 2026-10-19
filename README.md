@@ -27,6 +27,18 @@ information; applications or sound servers configure their own buffers and laten
 See the [function inventory](doc/function-inventory.md)
 for implemented behavior and remaining gaps.
 
+## Screenshots
+
+The Linux GTK4/WebKitGTK panel connected to an OCTA-CAPTURE on native Debian.
+
+**Preamps and compressors**
+
+![OCTA-CAPTURE Linux control panel showing eight preamps and compressors](doc/images/preamp.png)
+
+**Direct Mixer**
+
+![OCTA-CAPTURE Linux Direct Mixer showing input channels, playback channels and master controls](doc/images/direct-mixer.png)
+
 ## Run the panel
 
 ```bash
