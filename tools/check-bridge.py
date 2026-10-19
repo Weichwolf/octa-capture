@@ -3,6 +3,9 @@
 """Check persistent GUI bridge state/meter sharing, typed controls and recovery."""
 
 import argparse
+from contextlib import contextmanager, nullcontext
+import ctypes
+import errno
 import json
 import os
 from pathlib import Path
@@ -14,6 +17,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gui.backend import Bridge, DeviceError, InvalidControl
+from gui.devices import discover
 
 
 def require(condition, message):
@@ -28,6 +32,38 @@ def run(command):
 def frame(state):
     body = bytes([1, 0, 0, 0]) + bytes.fromhex(state['payload_hex'])
     return bytes.fromhex('f0 41 10 00 00 4d 12') + body + bytes([-sum(body) % 128, 0xf7])
+
+
+@contextmanager
+def quiet_din(port):
+    devices = [device for device in discover() if device.port == port]
+    require(len(devices) == 1, 'DIN isolation requires the discovered named CTRL port on one OCTA-CAPTURE.')
+    din = port.removesuffix('SUBDEV=1') + 'SUBDEV=0'
+    library = ctypes.CDLL('libasound.so.2')
+    pointer = ctypes.c_void_p
+    library.snd_rawmidi_open.argtypes = (ctypes.POINTER(pointer), ctypes.POINTER(pointer), ctypes.c_char_p, ctypes.c_int)
+    library.snd_rawmidi_open.restype = ctypes.c_int
+    library.snd_rawmidi_close.argtypes = (pointer,)
+    library.snd_rawmidi_close.restype = ctypes.c_int
+    library.snd_rawmidi_read.argtypes = (pointer, pointer, ctypes.c_size_t)
+    library.snd_rawmidi_read.restype = ctypes.c_ssize_t
+    incoming, outgoing = pointer(), pointer()
+    try:
+        # ALSA SND_RAWMIDI_NONBLOCK is 0x0002. No output/write API is bound.
+        result = library.snd_rawmidi_open(ctypes.byref(incoming), ctypes.byref(outgoing), din.encode('ascii'), 2)
+        require(result >= 0, f'Could not open independent DIN input/output: {result}')
+
+        def quiet():
+            buffer = ctypes.create_string_buffer(4096)
+            count = library.snd_rawmidi_read(incoming, buffer, len(buffer))
+            require(count in (0, -errno.EAGAIN),
+                    'DIN is active or its read failed; this isolation check requires a quiet DIN source.')
+
+        quiet()
+        yield quiet
+    finally:
+        results = [library.snd_rawmidi_close(handle) for handle in (outgoing, incoming) if handle.value]
+        require(all(result >= 0 for result in results), 'Could not close the independent DIN ports.')
 
 
 def check_controls(bridge, before):
@@ -94,6 +130,8 @@ def main():
     parser.add_argument('--port', default='hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1')
     parser.add_argument('--write', action='store_true')
     parser.add_argument('--pause', action='store_true', help='verify PCM lease expiry and recovery across SIGSTOP/SIGCONT')
+    parser.add_argument('--din-isolation', action='store_true',
+                        help='hold DIN input/output open without sending, checking quiet input during CTRL queries')
     args = parser.parse_args()
     bridge = Bridge(args.bin_dir / 'octa-bridge', args.port)
     before = json.loads(run([args.bin_dir / 'octa-state', args.port]))
@@ -114,8 +152,13 @@ def main():
         while bridge.meters() is None and time.monotonic() < deadline:
             time.sleep(0.02)
         require(bridge.meters() is not None, 'No actual meter frame received')
-        for _ in range(10):
-            require(bridge.request('state')['state'] == before, 'Meter/query sharing changed state')
+        with quiet_din(args.port) if args.din_isolation else nullcontext(lambda: None) as quiet:
+            for _ in range(10):
+                require(bridge.request('state')['state'] == before, 'Meter/query sharing changed state')
+                quiet()
+        if args.din_isolation:
+            print('PASS independent DIN input/output ownership, quiet input during ten CTRL queries and meter traffic; '
+                  'no DIN bytes sent. Physical DIN loopback remains unverified.', flush=True)
         try:
             bridge.change({'kind': 'preamp', 'channel': 7, 'parameter': 'hi-z', 'value': 1})
         except InvalidControl:

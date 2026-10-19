@@ -143,6 +143,16 @@ device change and restoration; arbitrary touchpad gestures remain unverified.
 
 ## Specific unresolved distinctions
 
+MIDI framing matches 2,525 fixed macOS/ALSA transmit/receive cases with host APIs
+stubbed. The selected ALSA functions are unchanged between supported source
+copies and execute under ASan/UBSan; 30 input guards and 33 receive-completion
+cases also pass. Twelve aborted-SysEx cases deliberately retain the observed
+macOS/ALSA difference. Native Debian's quiet-DIN checker verifies independent
+DIN input/output ownership during ten CTRL state queries and meter traffic,
+without DIN writes and with full raw/clock preservation. Physical DIN loopback,
+real USB fault recovery and scheduling remain open; see the
+[protocol reference](usb-midi-protocol.txt).
+
 Windows preset loading now executes through its original GUI loader, state
 copy and kernel bulk builder: 658 fixed cases match the Linux preparation,
 including all file scalars, mono/opaque resets and all-rate cached prefixes.

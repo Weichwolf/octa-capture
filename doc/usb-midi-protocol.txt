@@ -147,6 +147,66 @@ quirk's cable mask 0x0001 exposes cable 0 only; cable 1 is missing.
 Cable 1 is hardware-verified: the standalone module exposes ALSA subdevice 1
 as Control, and the bulk request returns a valid 1146-byte state payload.
 
+USB-MIDI framing and isolation
+-----------------------------
+USB-MIDI 1.0 section 4 defines events of four bytes: a header combining cable
+and message type, followed by the MIDI bytes and zero padding. The reference
+uses this format even though the device interfaces are vendor-specific.
+Specification: https://www.usb.org/sites/default/files/midi10.pdf (pages 16-17).
+
+tools/verify-midi-framing.py executes the macOS x86_64 MIDI driver's Ana1
+(0xcf08), Dt (0xcfe4), Eox (0xd18c), actual output writer (0xcee0), RxDone
+(0xc8d8) and SetRxEps (0xd8cc). CoreMIDI endpoint/packet-list/clock APIs are
+memory stubs. Both cable maps are checked against identity 0..15; two modeled
+entities map to MIDI/CTRL, and the other input cables have no destination.
+The actual parser/helpers execute; CoreMIDI packet timestamps and scheduling
+are not verified.
+
+The comparator compiles seven unchanged ALSA MIDI functions with a serial host
+model, strict warnings, ASan/UBSan, clang-format and clang-tidy. It pins the
+selected functions/constants by hash before compilation and preserves their
+license notice. The supported 6.12 and 6.18 private copies have the same hash.
+This does not prove that a loaded kernel helper has the same machine code.
+The 2,525 fixed transmit/receive cases cover all musical channels and message
+families, running status, boundary data values, system-common/realtime bytes,
+SysEx lengths/endings, realtime insertion and interleaved MIDI/CTRL cables.
+They include a complete 1159-byte SysEx stream; original receive callbacks
+process at most 512 USB bytes at a time, matching the cached endpoint geometry.
+Thirty additional input cases check trigger masks, unused cables and incomplete
+trailing events. They compare complete byte streams, not native CoreMIDI packet
+grouping, signal timing or physical DIN transmission.
+
+Thirty-three host completion cases exercise the original ALSA receive callback:
+unlink/disconnect errors stop it; EPROTO/ETIME/EILSEQ schedule retry; other
+modeled errors resubmit without delivering the bad input. The timer model uses
+HZ=1000 and observes the existing 100 ms delay. A failed resubmission does not
+schedule another retry in this callback. Submission/timers are stubs, so actual
+USB faults, kernel concurrency/sanitizers and recovery remain unverified.
+
+Twelve aborted-SysEx cases establish a difference: macOS inserts F7 before a
+new non-realtime status; ALSA discards unflushed SysEx bytes and starts the new
+message. Already emitted complete packets remain. The CTRL backend sends
+complete frames. Windows behavior for interrupted streams remains untraced;
+the comparator does not treat these cases as equivalent or alter the driver.
+
+  python3 tools/verify-midi-framing.py \
+    doc/local/macos-analysis/midi-x86_64 build/driver-native/midi.c
+  # Repeat with build/driver-wsl/midi.c for the other supported source copy.
+
+This optional check needs the original hash-pinned MIDI binary, the ALSA source
+copy, Python Unicorn and LLVM 19. It sends nothing to hardware and performs no
+fuzzing. Host sanitizer checks do not replace kernel fault-injection tests.
+
+Native Debian at 48 kHz passes the separate quiet-DIN check: input and output
+on ALSA subdevice 0 stay open while the backend performs ten complete state
+queries on subdevice 1 and receives actual meters. No DIN input bytes arrive,
+and no DIN output/write API is invoked. Complete raw state and the original
+clock are preserved; ownership is released afterward. This checks logical
+port isolation/ownership, not physical DIN loopback, scheduling or saturation.
+With the GUI closed and a quiet DIN source, reproduce as a regular user:
+
+  python3 tools/check-bridge.py --din-isolation --bin-dir build/strict
+
 USB clock requests
 ------------------
 CuUsbDev::DevReqCall2 at 0x1732c issues vendor control transfers with

@@ -273,6 +273,7 @@ set(octa_bridge_sources
 
 add_custom_target(format-check
   COMMAND "${OCTA_CLANG_FORMAT}" --dry-run --Werror
+    "${CMAKE_SOURCE_DIR}/tools/reference-midi-host.c"
     ${octa_clock_sources} ${octa_clock_shims}
     ${octa_kernel_status_sources} ${octa_status_shims}
     ${octa_bridge_sources}
@@ -344,6 +345,7 @@ add_custom_target(format-check
 
 add_custom_target(format
   COMMAND "${OCTA_CLANG_FORMAT}" -i
+    "${CMAKE_SOURCE_DIR}/tools/reference-midi-host.c"
     ${octa_clock_sources} ${octa_clock_shims}
     ${octa_kernel_status_sources} ${octa_status_shims}
     ${octa_bridge_sources}

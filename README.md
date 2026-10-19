@@ -94,6 +94,7 @@ a runtime backup cannot undo an overwritten device-memory preset.
 ./build/strict/octa-state             # complete CTRL state
 ./build/strict/octa-status            # kernel-owned clock status
 python3 tools/check-status.py --stress --binary build/strict/octa-status
+python3 tools/check-bridge.py --din-isolation  # close GUI first; quiet DIN, no DIN transmission
 python3 tools/check-preamps.py --write       # active channels at the current rate
 ./build/strict/octa-audio-check 48000 capture  # quiet, timed transfer
 python3 tools/check-pcm-meters.py --rates    # quiet meter/PCM lifecycle checks
