@@ -11,7 +11,8 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   `RDCP1110.CPL`, `RDAS1110.DLL`, `RDAW1110.DLL`, `RDAH1110.EXE`, and `RDWM1110.SYS`.
   The control-panel RTTI/vtables and MFC message maps identify dialog handlers.
   The kernel binary has been imported and its functions/call sites inventoried;
-  its complete IOCTL/property, USB and power-management behavior is not yet traced.
+  selected PortCls power callbacks now execute offline. Complete IOCTL/property,
+  USB and power-management behavior is not yet traced.
 - macOS x86_64: control-panel transmitters, state decoders, preset operations,
   audio USB/clock/stream paths and MIDI routing have selected decompilation and
   offline reference execution. The separate Driver Setup parameter get/set/default
@@ -130,6 +131,32 @@ installed native GTK checker verifies trusted X11 wheel input, focus transfer,
 device change and restoration; arbitrary touchpad gestures remain unverified.
 
 ## Specific unresolved distinctions
+
+Windows power registration (`0x1400127e0`) selects the
+[IAdapterPowerManagement interface](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/implementing-iadapterpowermanagement).
+Allocation failure returns false; a negative PortCls registration result is not
+propagated by the vendor wrapper.
+Its original callback (`0x14000b730`) matches 1,848 fixed transitions, including
+duplicate/invalid states, disconnected D0, stream/CTRL gates, worker fallback,
+timer ordering, cached transport states and exact bulk-query/meter-switch frames.
+The cached power state changes before dependent work; disconnected D0 still
+caches D0, so a duplicate D0 call alone does not retry recovery. The port query
+helper observes bit 1, the
+[USB port-connected flag](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/usbioctl/ni-usbioctl-ioctl_internal_usb_get_port_status).
+Eleven additional original query/capability cases accept D0–D3 and preserve other
+capability bytes while setting
+[SurpriseRemovalOK](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/content/wdm/ns-wdm-_device_capabilities).
+This declared capability does not prove successful physical hotplug.
+The macOS power-manager callbacks match 36 fixed events: duplicate notifications
+are suppressed and their cached state changes after the optional callback.
+`tools/verify-power-lifecycle.py` pins both binary hashes. USB/status, locks,
+timers, worker exchange and ring operations are stubs; the actual callback and
+Windows MIDI builders execute. Hardware suspend/reset recovery remains open.
+
+```sh
+python3 tools/verify-power-lifecycle.py doc/local/windows-kernel-analysis/RDWM1110.SYS \
+  --macos doc/local/macos-analysis/audio-x86_64
+```
 
 The USB runtime-PM checker is prepared in `tools/check-runtime-pm.py`: regular-user
 status/MIDI/quiet PCM probes with observed suspend, independent resume evidence

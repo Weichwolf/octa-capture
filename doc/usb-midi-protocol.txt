@@ -242,6 +242,32 @@ a freely selectable clock-source command. Fsc_SetDIN (0x17704) sends
 values, external-clock conditions and live write behavior remain unverified;
 no such write has been issued by our implementation.
 
+Power recovery in the reference drivers
+--------------------------------------
+The Windows kernel registers a PortCls power-management object at 0x1400127e0.
+PowerChangeState (0x14000b730) ignores duplicate and out-of-range notifications.
+D1/D2/D3 stop the timer, persist host properties, conditionally disable input
+meters and request worker value 1 before stopping active rings. D0 first caches
+its new state, then checks the USB port connection through 0x140013ef0
+(IOCTL 0x220013, result bit 1).
+A failed connection check leaves D0 cached and skips dependent recovery.
+Connected recovery resumes active stream work and requests worker value 0;
+worker result zero triggers a value-1 fallback. When both CTRL gate fields
+(0x78330->0x38 and 0x78358) are nonzero, the original code requests 1146 bytes
+at 01 00 00 00 and restores
+the saved meter-switch byte at 00 0a 00 00. It then restarts the timer.
+The transport-state field at 0x2b8 has conditional 1/3 normalization; its full
+state semantics remain unmapped. The shutdown property save is host registry
+state, not a persistent-device-memory command.
+
+tools/verify-power-lifecycle.py executes 1848 fixed Windows transitions, object
+construction/registration and 11 query/capability cases with hash-pinned code.
+Its optional --macos audio-x86_64 also executes 36 CuPowerMgr events at 0x10ef0
+and 0x10f1c; those update their cache after the optional callback. Actual Windows
+MIDI builders/checksum routines execute, while USB/status, locks, timers, worker
+exchange and ring operations are memory stubs. This establishes reference
+control flow and frames, not native/Windows/WSL hardware power recovery.
+
 SysEx envelope
 --------------
 Byte positions (hexadecimal byte values, zero-based offsets):
