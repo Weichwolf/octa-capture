@@ -162,12 +162,32 @@ entities map to MIDI/CTRL, and the other input cables have no destination.
 The actual parser/helpers execute; CoreMIDI packet timestamps and scheduling
 are not verified.
 
+With --windows, tools/reference_windows_midi.py also executes the hash-pinned
+Windows x64 kernel's encoder (0x14001ad50, 0x140019fd0), packet FIFO writer
+(0x14001b1d0), room guard (0x140019da0), receive completion/dispatch
+(0x14001a8f0), decoder (0x14001b230) and byte FIFO writer (0x14001b460).
+The encoded bytes are checked in the actual synthetic FIFO, not only at an
+output hook. NT locks and user-read notifications are stubs; URB resubmission
+is suppressed. No Windows driver, USB stack or hardware is running.
+
+Windows' bulk/meter builders (0x14000aa20/0x14000a990) call the sender
+(0x14001b5e0) with cable 2. The sender executes for a short frame and the
+complete 1159-byte bulk fixture and preserves that cable in the queued bytes.
+Static analysis of 0x14001b8d0 shows that USB submission copies queued DWORDs
+without remapping. The receive cable table is identity 0..15: active public
+readers receive cables 0/1, cable 2 goes to an enabled private sink, and cables
+3..15 have no destination. Eight isolation and five URB-status cases check
+these paths. This Windows-internal control path is distinct from macOS/Linux
+CTRL on cable 1. Device support on cable 2 has not been tested; Linux does not
+expose it as an additional port.
+
 The comparator compiles seven unchanged ALSA MIDI functions with a serial host
 model, strict warnings, ASan/UBSan, clang-format and clang-tidy. It pins the
 selected functions/constants by hash before compilation and preserves their
 license notice. The supported 6.12 and 6.18 private copies have the same hash.
 This does not prove that a loaded kernel helper has the same machine code.
-The 2,525 fixed transmit/receive cases cover all musical channels and message
+The 2,525 fixed transmit/receive cases match macOS, Windows (when supplied)
+and ALSA. They cover all musical channels and message
 families, running status, boundary data values, system-common/realtime bytes,
 SysEx lengths/endings, realtime insertion and interleaved MIDI/CTRL cables.
 They include a complete 1159-byte SysEx stream; original receive callbacks
@@ -183,18 +203,30 @@ HZ=1000 and observes the existing 100 ms delay. A failed resubmission does not
 schedule another retry in this callback. Submission/timers are stubs, so actual
 USB faults, kernel concurrency/sanitizers and recovery remain unverified.
 
-Twelve aborted-SysEx cases establish a difference: macOS inserts F7 before a
-new non-realtime status; ALSA discards unflushed SysEx bytes and starts the new
-message. Already emitted complete packets remain. The CTRL backend sends
-complete frames. Windows behavior for interrupted streams remains untraced;
-the comparator does not treat these cases as equivalent or alter the driver.
+Twelve aborted-SysEx cases establish a Windows-parity gap: Windows and macOS
+insert F7 before a new non-realtime status; ALSA discards unflushed SysEx bytes
+and starts the new message. Already emitted complete packets remain. The CTRL
+backend sends complete frames. Eleven fixed receive regressions expose another
+difference: both references discard eight selected status/CIN or data-byte
+mismatches that ALSA passes by CIN length. SysEx CINs still pass opaque bytes
+in both references; this is not comprehensive MIDI validation. These checks
+record the differences and do not change the Linux helper.
+
+Five transmit FIFO boundary cases verify the Windows ring's 0x2800 packet
+slots, four-slot reserve and wrap. Five receive boundary cases verify its
+0x2800-byte ring and wrap, including an original limitation: the public reader
+guard permits a three-byte event with only two or three free bytes. It can
+overwrite unread data or make write/read pointers equal. This is an isolated
+reference observation, not a Linux behavior or a hardware saturation test.
 
   python3 tools/verify-midi-framing.py \
-    doc/local/macos-analysis/midi-x86_64 build/driver-native/midi.c
+    doc/local/macos-analysis/midi-x86_64 build/driver-native/midi.c \
+    --windows doc/local/windows-kernel-analysis/RDWM1110.SYS
   # Repeat with build/driver-wsl/midi.c for the other supported source copy.
 
-This optional check needs the original hash-pinned MIDI binary, the ALSA source
-copy, Python Unicorn and LLVM 19. It sends nothing to hardware and performs no
+This optional check needs the original hash-pinned binaries, the ALSA source
+copy, Python Unicorn and LLVM 19. Omit --windows for macOS/ALSA only.
+It sends nothing to hardware and performs no
 fuzzing. Host sanitizer checks do not replace kernel fault-injection tests.
 
 Native Debian at 48 kHz passes the separate quiet-DIN check: input and output

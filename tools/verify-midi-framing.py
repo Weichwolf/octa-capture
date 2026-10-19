@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-only
-"""Compare original macOS MIDI framing with pinned ALSA functions offline."""
+"""Compare original macOS/optional Windows MIDI framing with ALSA offline."""
 
 import argparse
 import errno
@@ -15,6 +15,8 @@ import subprocess
 
 from unicorn import UC_HOOK_CODE
 from unicorn import x86_const as registers
+
+from reference_windows_midi import WindowsMidi
 
 HELPERS = runpy.run_path(str(Path(__file__).with_name('verify-pcm-peaks.py')))
 CONTEXT, PROPS, DATA, STOP = (HELPERS[name] for name in ('CONTEXT', 'PROPS', 'DATA', 'STOP'))
@@ -263,21 +265,25 @@ def host_records(binary, records):
     return output
 
 
-def compare(mac, binary):
+def compare(mac, binary, windows=None):
     cases = list(vectors())
     records = [(0, 0, bytes(byte for event in event_list for byte in event)) for _, event_list, _ in cases]
     transmitted = host_records(binary, records)
     counts = {}
     for (name, event_list, expected), actual in zip(cases, transmitted, strict=True):
         require(mac.transmit(event_list) == actual == expected, f'Original/ALSA MIDI output differs: {name}, {event_list}')
+        if windows is not None:
+            require(windows.transmit(event_list) == expected, f'Windows MIDI output differs: {name}, {event_list}')
         counts[name] = counts.get(name, 0) + 1
     received = host_records(binary, [(1, 3, wire) for wire in transmitted])
     for index, (wire, actual) in enumerate(zip(transmitted, received, strict=True)):
         require(mac.receive(wire) == actual == receiver_expected(wire), f'Original/ALSA MIDI input differs: vector {index}')
+        if windows is not None:
+            require(windows.receive(wire) == actual, f'Windows MIDI input differs: vector {index}')
     return counts
 
 
-def input_gates(mac, binary):
+def input_gates(mac, binary, windows=None):
     wire = bytes.fromhex('0990407f1990417f')
     cases = [(wire + bytes(trailing), mask) for trailing, mask in itertools.product(range(4), range(4))]
     cases += [(packet(cable, 9, bytes([0x90, 64, 127])), 3) for cable in range(2, 16)]
@@ -285,6 +291,10 @@ def input_gates(mac, binary):
     for (data, mask), actual in zip(cases, received, strict=True):
         require(actual == receiver_expected(data, mask), 'ALSA input trigger/unmapped/trailing guard differs.')
         require(mac.receive(data) == receiver_expected(data), 'Original unmapped/trailing packet handling differs.')
+        if windows is not None:
+            enabled = tuple(bool(mask & 1 << cable) for cable in (0, 1))
+            require(windows.receive_all(data, enabled=enabled)[:2] == actual,
+                    'Windows public input active/unmapped/trailing guard differs.')
     return len(cases)
 
 
@@ -302,7 +312,7 @@ def completion_cases(binary):
     return len(cases)
 
 
-def aborted_sysex(mac, binary):
+def aborted_sysex(mac, binary, windows=None):
     cases = []
     for cable, length in itertools.product((0, 1), range(6)):
         raw = b'\xf0' + bytes([0x7d] * length) + bytes.fromhex('90407f')
@@ -319,7 +329,57 @@ def aborted_sysex(mac, binary):
         final = prefix[complete:] + b'\xf7'
         require(original == expected + packet(cable, 4 + len(final), final) + note,
                 'Original no longer closes interrupted SysEx with F7.')
+        if windows is not None:
+            require(windows.transmit(events(cable, raw)) == original,
+                    'Windows no longer closes interrupted SysEx like macOS.')
     return len(cases)
+
+
+def receive_validation(mac, binary, windows=None):
+    # Fixed parser regressions only; no generated/mutated traffic or device I/O.
+    cases = (
+        ('note-status-mismatch', '0980407f', ''),
+        ('note-data-status', '0990807f', ''),
+        ('song-position-status-mismatch', '03f1407f', ''),
+        ('song-position-data-status', '03f240ff', ''),
+        ('program-data-status', '0cc08000', ''),
+        ('common-status-mismatch', '02f24000', ''),
+        ('common-data-status', '02f18000', ''),
+        ('single-realtime-invalid-status', '0f900000', ''),
+        ('single-tune-request', '0ff60000', 'f6'),
+        ('sysex-opaque-payload', '049080ff', '9080ff'),
+        ('single-sysex-opaque-payload', '05900000', '90'),
+    )
+    results = host_records(binary, [(1, 3, bytes.fromhex(raw)) for _name, raw, _expected in cases])
+    for (name, raw, expected), actual in zip(cases, results, strict=True):
+        wire, expected = bytes.fromhex(raw), (bytes.fromhex(expected), b'')
+        require(actual == receiver_expected(wire), f'ALSA receive filtering changed: {name}')
+        require(mac.receive(wire) == expected, f'macOS receive filtering changed: {name}')
+        if windows is not None:
+            require(windows.receive(wire) == expected, f'Windows receive filtering changed: {name}')
+    return {'cases': len(cases), 'discarded_by_references': 8}
+
+
+def windows_paths(windows, mac):
+    wire = bytes.fromhex('0990407f1990417f2990427f3990437f')
+    for mask, private in itertools.product(range(4), (False, True)):
+        enabled = tuple(bool(mask & 1 << cable) for cable in (0, 1))
+        expected = (*receiver_expected(wire, mask), bytes.fromhex('90427f') if private else b'')
+        require(windows.receive_all(wire, enabled, private) == expected,
+                'Windows public/private receive cable isolation differs.')
+    for status in (0, 0xc0000001, 0xc0000011, 0xc0000120, 0x80000005):
+        expected = (*receiver_expected(wire), bytes.fromhex('90427f')) if status == 0 else (b'', b'', b'')
+        require(windows.receive_all(wire, status=status) == expected, 'Windows URB status receive guard differs.')
+    root = Path(__file__).resolve().parent.parent
+    frames = (bytes.fromhex('f07d01f7'), (root / 'test/data/preset-export-bulk.syx').read_bytes())
+    for frame in frames:
+        require(frame[:1] == b'\xf0' and frame[-1:] == b'\xf7', 'Missing complete control frame fixture.')
+        actual = windows.control_sender(frame)
+        require(actual == mac.transmit(events(2, frame)), 'Windows private sender packetization differs.')
+        require(windows.receive_all(actual) == (b'', b'', frame), 'Windows private control frame routed incorrectly.')
+        require(windows.receive_all(actual, private=False) == (b'', b'', b''), 'Disabled Windows private sink accepted data.')
+    return {'cable_isolation_cases': 8, 'urb_status_cases': 5, 'control_sender_cases': len(frames),
+            'transmit_fifo_cases': windows.capacity(), 'receive_fifo_cases': windows.receive_capacity()}
 
 
 def main():
@@ -328,14 +388,21 @@ def main():
     parser.add_argument('alsa_midi', type=Path, help='midi.c from the supported ALSA snapshot/private module copy')
     parser.add_argument('--build-dir', type=Path, default=Path(__file__).resolve().parent.parent / 'build/midi-reference')
     parser.add_argument('--cc', default='clang-19')
+    parser.add_argument('--windows', type=Path, help='optional original Windows x64 RDWM1110.SYS')
     args = parser.parse_args()
     binary, mac = build_host(args.alsa_midi, args.build_dir.resolve(), args.cc), Mac(args.mac_midi)
-    counts = compare(mac, binary)
+    windows = WindowsMidi(args.windows) if args.windows else None
+    counts = compare(mac, binary, windows)
+    dependencies = 'CoreMIDI packet lists/clock/endpoints; serial ALSA ports, USB submission/timers'
+    if windows is not None:
+        dependencies += '; Windows locks, user-read notifications and suppressed URB resubmission'
     print(json.dumps({'transmit_and_receive_cases': sum(counts.values()), 'families': counts,
-                      'input_gate_cases': input_gates(mac, binary), 'completion_cases': completion_cases(binary),
-                      'documented_aborted_sysex_differences': aborted_sysex(mac, binary),
+                      'input_gate_cases': input_gates(mac, binary, windows), 'completion_cases': completion_cases(binary),
+                      'documented_aborted_sysex_differences': aborted_sysex(mac, binary, windows),
+                      'receive_validation': receive_validation(mac, binary, windows),
+                      'windows_paths': windows_paths(windows, mac) if windows is not None else None,
                       'alsa_functions_sha256': ALSA_SHA256, 'sanitizers': ['address', 'undefined'],
-                      'host_dependencies': 'CoreMIDI packet lists/clock/endpoints; serial ALSA ports, USB submission/timers',
+                      'host_dependencies': dependencies,
                       'hardware_validation': False, 'kernel_sanitizer_validation': False}))
 
 
