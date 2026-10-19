@@ -243,6 +243,10 @@ class Check(Desktop):
         script = '''(()=>{const dialog=document.querySelector('#about');dialog.showModal();
             const r=dialog.getBoundingClientRect(),h=dialog.querySelector('.dialog-title').getBoundingClientRect();
             window.__octaCaptionTrusted=false;
+            window.__octaCaptionEvents=[];
+            window.__octaCaptionListener=e=>window.__octaCaptionEvents.push({type:e.type,
+              trusted:e.isTrusted,x:e.clientX,y:e.clientY,button:e.button,buttons:e.buttons,target:e.target.className});
+            for(const type of ['pointerdown','pointerup','click','close'])dialog.addEventListener(type,window.__octaCaptionListener);
             dialog.addEventListener('pointerdown',e=>{
               window.__octaCaptionTrusted=e.isTrusted;
               window.__octaCaptionPoint={x:e.clientX,y:e.clientY,target:e.target.className};
@@ -285,16 +289,22 @@ class Check(Desktop):
     def reopen_native_caption(self):
         original = self.caption_original
         script = f'''(()=>{{const dialog=document.querySelector('#about');if(dialog.open)return {{closed:false,
-              pointer:window.__octaCaptionPoint,clicked:window.__octaCaptionClick}};
+              pointer:window.__octaCaptionPoint,clicked:window.__octaCaptionClick,events:window.__octaCaptionEvents}};
             const previousStyle=dialog.style.cssText;
             dialog.showModal();const r=dialog.getBoundingClientRect();
-            return {{closed:true,left:r.left,top:r.top,previousStyle,style:dialog.style.cssText,
+            return {{closed:true,left:r.left,top:r.top,previousStyle,style:dialog.style.cssText,events:window.__octaCaptionEvents,
               centered:Math.abs(r.left-{original['left']})<1&&Math.abs(r.top-{original['top']})<1}};}})();'''
 
         def checked(view, result, _data):
             try:
                 value = json.loads(view.evaluate_javascript_finish(result).to_json(0))
-                if not value.get('closed') or not value['centered']:
+                self.caption_status = value
+                if not value.get('closed'):
+                    self.GLib.timeout_add(100, self.reopen_native_caption)
+                    return
+                clicked = any(event['type'] == 'click' and event['trusted'] and
+                              'dialog-close' in event['target'].split() for event in value['events'])
+                if not value['centered'] or not clicked:
                     raise RuntimeError(f'Caption close/reopen failed: {value}; original={original}; '
                                        f'surface transform={self.window.get_surface_transform()}')
                 self.phase = 'native-caption-escape'
@@ -306,13 +316,18 @@ class Check(Desktop):
         return False
 
     def finish_native_caption(self):
-        script = 'delete window.__octaCaptionTrusted;delete window.__octaCaptionPoint;' \
-                 'delete window.__octaCaptionClick;!document.querySelector("#about").open;'
+        script = '(()=>{if(document.querySelector("#about").open)return false;' \
+                 'for(const type of ["pointerdown","pointerup","click","close"])' \
+                 'document.querySelector("#about").removeEventListener(type,window.__octaCaptionListener);' \
+                 'delete window.__octaCaptionEvents;delete window.__octaCaptionListener;' \
+                 'delete window.__octaCaptionTrusted;delete window.__octaCaptionPoint;' \
+                 'delete window.__octaCaptionClick;return true;})();'
 
         def checked(view, result, _data):
             try:
                 if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
-                    raise RuntimeError('Escape did not close the reopened native dialog.')
+                    self.GLib.timeout_add(100, self.finish_native_caption)
+                    return
                 print('PASS trusted X11/WebKit dialog caption drag/close, centered reopen and Escape.', flush=True)
                 self.start_native_hits()
             except Exception as error:
@@ -731,7 +746,8 @@ class Check(Desktop):
 
     def _tick(self):
         if time.monotonic() > self.deadline:
-            self.fail(f'GTK check timed out in {self.phase}. Last menu input: {getattr(self, "menu_status", None)}')
+            self.fail(f'GTK check timed out in {self.phase}. Last menu input: {getattr(self, "menu_status", None)}; '
+                      f'caption: {getattr(self, "caption_status", None)}')
             return False
         if self.phase in ('native-change', 'native-restore', 'native-wheel-change', 'native-wheel-restore'):
             self.native_progress()

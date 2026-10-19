@@ -304,6 +304,12 @@ gray for outputs unavailable at 192 kHz. At that rate, only pairs 1/2 and 3/4
 are available and selection uses Mixer A, regardless of stored B–D metadata.
 Accessible labels name the stored route or unavailability independently of color.
 The multiple-mixer header uses the original blue active-lamp color family.
+Active switch palettes also follow the shared reference resources: pink/red for
+preamp, compressor link, mixer mute/solo/link, master/reverb and Auto-Sens;
+amber/orange for compressor bypass; blue for Multiple Direct Mixer. Own CSS
+gradients use the reference face colors `#ffa5b5`, `#ff9546` and `#65c4ff`.
+Resource selection is traced in both constructors; this does not establish exact
+bitmap, pressed/disabled rendering or complete visual parity.
 `tools/verify-output-jacks.py WINDOWS-GUI --macos MAC-GUI` executes both original
 selectors over 720 fixed rate/mixer/pair/route combinations each. Standard tests
 use the resulting numeric fixture; painting, notifications and device transport
@@ -631,6 +637,9 @@ validates the native Save download, checks live controls/meters, blocks an
 external navigation and exercises Driver → Exit. It verifies independent full
 state readback after releasing CTRL. It supports both in-process GTK choosers
 and separate desktop-portal dialogs, verifying the exact returned file path.
+Caption-close checks require a trusted click on the Close control and observe
+the resulting closed state before reopening. Close/Escape completion uses the
+existing overall deadline, with pointer-target traces retained on timeout.
 Native keyboard input waits for WebKit focus and a display matching fresh
 device state. For headless checks, install `xvfb`, `xauth`, `xdotool`, `dbus`,
 `imagemagick` and `gir1.2-atspi-2.0`:

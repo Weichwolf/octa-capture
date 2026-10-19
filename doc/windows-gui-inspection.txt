@@ -241,6 +241,22 @@ routes and dark-gray unavailable pairs. The HTML panel uses its own CSS/text
 with these state colors and a blue multiple-mixer active lamp. Native font and
 bitmap rendering remain outside parity claims.
 
+Switch palettes
+---------------
+Windows panel-resource constructor 0x1400129f0 loads resources 290/291/294 as
+amber/blue/red clips. The equivalent macOS CRsPnl::Create (0x10002b286) names
+BTN_AMBER, BTN_BLUE and BTN_RED. The Windows red clip begins at resource-object
+offset 0x270; the macOS offset is 0xc0. Preamp creation 0x140010af0 /
+0x10001a63c uses red for phantom, Hi-Z, phase and low-cut and amber for bypass.
+Compressor and mixer stereo links, mixer mute/solo, master links and reverb use
+red as well. Auto-Sens uses red; Multiple Direct Mixer uses blue. This corrects
+the earlier generic yellow HTML switch palette and the separate phantom hue.
+The three Windows clips and named macOS resources are byte-identical. Their
+active face-center RGB values are amber (255,149,70), blue (101,196,255) and
+pink/red (255,165,181). The HTML panel uses its own CSS gradients with these
+colors, without shipping reference bitmaps. This is resource/constructor
+evidence; full pressed/disabled/painting and native font parity remain open.
+
 Windows driver compatibility checks
 -----------------------------------
 The vendor INF registers RDWM1110.SYS with ServiceType=1

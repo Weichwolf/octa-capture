@@ -130,6 +130,11 @@ also verify unequal stereo values and thumb-release selection on all four buses.
 Host visibility/painting and macOS notification scheduling are modeled.
 Owner-painted artwork and native Windows fonts/DPI remain outside that comparison;
 this is not complete visual parity.
+Active switch families now follow both references' resource construction:
+pink/red for preamp, link, mute/solo, master/reverb and Auto-Sens; amber for
+compressor bypass; blue for Multiple Direct Mixer. The matching Windows/macOS
+resource bytes and face colors were compared; the shipped gradients are our
+own CSS. Exact pressed/disabled frames and complete artwork parity remain open.
 The output-jack display now projects physical routing readback to five colored
 pair labels. Its assigned/other/unavailable decisions match 720 executed
 Windows/macOS selector cases each, including all rates and routes and the

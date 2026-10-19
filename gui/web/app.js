@@ -356,7 +356,7 @@ function makePreamps() {
     const buttons = el('div', 'preamp-switches');
     for (const [parameter, label] of [['phantom', '+48'], ['hi-z', 'Hi-Z'], ['low-cut', 'LO-CUT'], ['phase', 'PHASE']]) {
       const button = toggle(label, value => preamp(channel, parameter, value),
-        state => preampValue(state, channel, parameter), parameter === 'phantom' ? 'red' : '');
+        state => preampValue(state, channel, parameter));
       button.setAttribute('aria-label', `Input ${channel + 1} ${label}`);
       if (parameter === 'hi-z' && channel >= 2) {
         button.classList.add('placeholder');
