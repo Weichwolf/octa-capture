@@ -36,9 +36,18 @@ class Check(Desktop):
         self.pending = False
         self.loads = 0
         self.open_request = None
+        self.native_pointer_events = []
+        self.hit_process = None
 
     def fail(self, error):
         self.errors.append(str(error))
+        if self.hit_process is not None and self.hit_process.poll() is None:
+            self.hit_process.terminate()
+            try:
+                self.hit_process.communicate(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.hit_process.kill()
+                self.hit_process.communicate(timeout=3)
         try:
             subprocess.run(['import', '-window', 'root', str(self.directory / 'failure.png')],
                            capture_output=True, timeout=5)
@@ -48,6 +57,12 @@ class Check(Desktop):
 
     def activate(self, app):
         super().activate(app)
+        dispatch = self.pointer_controls.dispatch
+
+        def record_pointer(message):
+            self.native_pointer_events.append(dict(message))
+            dispatch(message)
+        self.pointer_controls.dispatch = record_pointer
         self.view.connect('load-changed', self.loaded)
         self.view.connect('run-file-chooser', self.file_chooser)
         self.view.connect('web-process-terminated', lambda _view, reason: self.fail(f'Web process terminated: {reason}'))
@@ -294,10 +309,118 @@ class Check(Desktop):
                 if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
                     raise RuntimeError('Escape did not close the reopened native dialog.')
                 print('PASS trusted X11/WebKit dialog caption drag/close, centered reopen and Escape.', flush=True)
-                self.start_native_control() if self.write else self.start_save()
+                self.start_native_hits()
             except Exception as error:
                 self.fail(error)
         self.view.evaluate_javascript(script, -1, None, None, None, checked, None)
+        return False
+
+    def start_native_hits(self):
+        self.phase = 'native-pointer-prepare'
+        self.hit_native_begin = len(self.native_pointer_events)
+        self.hit_source = (ROOT / 'test/GtkControlHits.mjs').read_text().replace('export ', '')
+
+        def prepared(view, result, _data):
+            try:
+                geometry = json.loads(view.call_async_javascript_function_finish(result).to_json(0))
+                self.hit_window = self.focus_window()
+                label, dial, dy = geometry['label'], geometry['dial'], geometry['dy']
+                move = lambda p, dx=0, y=0: ('move', p['x'] + dx, p['y'] + y)
+                quiet = 'state.requests.length===0&&!state.dragging'
+                self.hit_steps = iter((
+                    ('label', [move(label), ('down', 1), move(label, 20, -20), ('up', 1)], quiet),
+                    ('right-down', [move(dial), ('down', 3)], f'{quiet}&&state.menus===0'),
+                    ('right-up', [('up', 3)], f'{quiet}&&state.menus===1'),
+                    ('right-outside', [('key', 'Escape'), move(dial), ('down', 3), move(label), ('up', 3)],
+                     f'{quiet}&&state.menus===0'),
+                    ('left-held', [('key', 'Escape'), move(dial), ('down', 1), ('down', 3), ('up', 3), ('up', 1)],
+                     f'{quiet}&&state.menus===0'),
+                    ('middle-held', [move(dial), ('down', 1), ('down', 2), ('up', 2), ('up', 1)],
+                     f'{quiet}&&state.menus===0&&!state.captured'),
+                    ('left-release', [move(dial), ('down', 1), ('down', 3), ('up', 1), move(dial, 3, -3), ('up', 3)],
+                     f'{quiet}&&state.menus===1&&!state.captured'),
+                    ('right-first', [('key', 'Escape'), move(dial), ('down', 3), ('down', 1), ('up', 1),
+                                     move(dial, 3, -3), ('up', 3)], f'{quiet}&&state.menus===1&&!state.captured'),
+                    ('keyboard-context', [('key', 'Escape'), ('key', 'shift+F10')], f'{quiet}&&state.menus===1&&'
+                     'state.events.some(event=>event.type==="keydown"&&event.trusted&&event.key==="F10"&&event.shiftKey)'),
+                    ('drag', [('key', 'Escape'), move(dial), ('down', 1), move(dial, 0, dy), ('up', 1)],
+                     'state.requests.length===1&&!state.dragging&&!state.captured&&state.requests[0].kind==="preamp"&&'
+                     f'state.requests[0].parameter==="sensitivity"&&state.requests[0].value==={geometry["expected"]}'),
+                ))
+                self.next_native_hit()
+            except Exception as error:
+                self.fail(error)
+        source = self.hit_source + f'\nreturn prepareNativeControlHits({json.dumps(self.device.snapshot())});'
+        self.view.call_async_javascript_function(source, -1, None, None, None, None, prepared, None)
+
+    def hit_input(self, events):
+        valid, bounds = self.view.compute_bounds(self.window)
+        if not valid:
+            raise RuntimeError('Cannot locate native pointer controls.')
+        scale, window = self.view.get_scale_factor(), self.hit_window
+        command = ['xdotool']
+        for event in events:
+            if event[0] == 'move':
+                command += ['mousemove', '--window', window, str(round((bounds.get_x() + event[1]) * scale)),
+                            str(round((bounds.get_y() + event[2]) * scale))]
+            elif event[0] == 'key':
+                command += ['key', '--clearmodifiers', event[1]]
+            else:
+                command += ['mousedown' if event[0] == 'down' else 'mouseup', str(event[1])]
+            command += ['sleep', '0.05']
+        self.hit_process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+    def next_native_hit(self):
+        step = next(self.hit_steps, None)
+        if step is None:
+            def finished(view, result, _data):
+                try:
+                    view.call_async_javascript_function_finish(result)
+                    print('PASS X11/GDK skin/label hits, release/chord/capture guards and modeled drag; '
+                          'primary DOM events trusted, secondary DOM events match host receipts; '
+                          'no parameter writes to hardware.', flush=True)
+                    self.start_native_control() if self.write else self.start_save()
+                except Exception as error:
+                    self.fail(error)
+            self.view.call_async_javascript_function(self.hit_source + '\nreturn await finishNativeControlHits();',
+                                                     -1, None, None, None, None, finished, None)
+            return
+        name, events, self.hit_expected = step
+        self.phase = f'native-pointer-{name}'
+        self.hit_input(events)
+        self.GLib.timeout_add(50, self.poll_native_hit_input)
+
+    def poll_native_hit_input(self):
+        try:
+            if self.hit_process.poll() is None:
+                return True
+            _, error = self.hit_process.communicate(timeout=1)
+            if self.hit_process.returncode:
+                raise RuntimeError(f'Native pointer input failed: {error.decode(errors="replace")}')
+            self.GLib.timeout_add(100, self.check_native_hit)
+        except Exception as error:
+            self.fail(error)
+        return False
+
+    def check_native_hit(self):
+        script = self.hit_source + f'\nconst state=nativeControlHitState();return {{state,passed:({self.hit_expected})&&' \
+                                  'state.events.some(event=>event.trusted)};'
+
+        def checked(view, result, _data):
+            try:
+                self.menu_status = json.loads(view.call_async_javascript_function_finish(result).to_json(0))
+                forwarded = [{key: event[key] for key in ('type', 'button', 'buttons', 'x', 'y',
+                              'shiftKey', 'ctrlKey', 'altKey', 'metaKey')}
+                             for event in self.menu_status['state']['events'] if not event['trusted']]
+                receipts = self.native_pointer_events[self.hit_native_begin:]
+                self.menu_status['host_events_match'] = forwarded == receipts
+                if self.menu_status['passed'] and forwarded == receipts:
+                    self.next_native_hit()
+                else:
+                    self.GLib.timeout_add(100, self.check_native_hit)
+            except Exception as error:
+                self.fail(error)
+        self.view.call_async_javascript_function(script, -1, None, None, None, None, checked, None)
         return False
 
     def start_save(self):

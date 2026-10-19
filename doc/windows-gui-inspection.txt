@@ -175,6 +175,28 @@ Tab selects Cancel and Enter declines it. Numeric observations remain under
 ignored build/wine-reference/dialog-keyboard-observations.json. No calibration,
 initialization or device writes were tested against real Windows hardware.
 
+Control pointer regions and context menus
+-----------------------------------------
+The decoded control maps assign double-click editing only to the sensitivity
+value field (CValPreSens, 0x1400042b0); the ordinary knob/fader maps contain no
+parameter-reset double-click handler. The existing HTML editor follows that
+behavior. Wine GetWindowRect/MapWindowPoints observations place input 1's knob
+in a separate 25x25 child (ID 775) and its value in a 37x13 edit (ID 782).
+The observed preamp/header button children occupy 23x19 rectangles; nearby
+captions are painted outside those children. These are Wine client coordinates,
+not a comparison of native Windows font rendering or DPI scaling.
+
+Original right-release handlers 0x1400035a0/0x140003510 reject MK_LBUTTON and
+use PtInRect's inclusive left/top, exclusive right/bottom boundaries. The
+button path additionally checks its availability callback before opening a
+menu. tools/verify-control-hit.py executes 192 fixed rectangle/modifier cases
+against these handlers and compares the HTML helper; 96 more cases exercise
+the original unavailable-button gate. Window rectangles, availability and popup
+dispatch are host stubs. Numeric vectors are in test/data/control-hit.json;
+the measured child bounds remain in ignored build/wine-reference/pointer-control-bounds.log.
+The left-release handler 0x1400032c0 releases capture and ends dragging regardless
+of the remaining mouse buttons; 0x140002e30 also resets it on capture change.
+
 Windows driver compatibility checks
 -----------------------------------
 The vendor INF registers RDWM1110.SYS with ServiceType=1

@@ -14,6 +14,7 @@ from .application import Application
 from .navigation import local_document, local_download
 from .server import LocalServer
 from .window_controls import WindowControls
+from .pointer_controls import PointerControls
 
 
 def gtk_modules():
@@ -34,6 +35,7 @@ class Desktop:
         self.window = None
         self.view = None
         self.window_controls = None
+        self.pointer_controls = None
         self._downloads = {}
         self._server_thread = None
         self._signal_sources = []
@@ -73,6 +75,7 @@ class Desktop:
         self.view.connect('close', lambda *_args: self.window.close())
         self.view.connect('context-menu', lambda *_args: True)
         self.window.set_child(self.view)
+        self.pointer_controls = PointerControls(self.Gtk, self.view, self.window)
         self.window.present()
         # The capability never enters argv, browser history or persistent storage.
         self.view.load_uri(f'{self.server.origin}/#token={self.server.token}')

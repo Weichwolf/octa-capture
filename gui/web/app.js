@@ -7,7 +7,7 @@ import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
 import {masterFaderPreview, ReferenceFader} from './faders.js';
-import {knobDrag, knobKey, wheelDelta, wheelValue} from './knobs.js';
+import {knobDrag, knobKey, wheelDelta, wheelValue, controlPointerHit, controlContextHit, controlContext, controlButton} from './knobs.js';
 import {DialogWindow} from './dialogs.js';
 
 const $ = selector => document.querySelector(selector);
@@ -167,7 +167,10 @@ class Knob {
     this.kind = maximum === 1024 ? 'volume' : extraClass === 'sensitivity' ? 'sensitivity' : maximum === 200 ? 'pan' : 'compressor';
     this.value = 0;
     this.dragging = false;
+    this.pointer = null;
+    this.lastPointer = null;
     this.node = el('div', `knob ${extraClass}`);
+    this.node.dataset.pointerTarget = '.knob-dial';
     this.node.tabIndex = 0;
     this.node.setAttribute('role', 'slider');
     this.node.setAttribute('aria-label', label);
@@ -180,14 +183,21 @@ class Knob {
     this.editing = false;
     if (extraClass === 'sensitivity') this.sensitivityEditor(label);
     this.node.append(this.label, this.dial, this.output);
-    this.node.addEventListener('pointerdown', event => this.start(event));
-    this.node.addEventListener('pointermove', event => this.move(event));
+    this.node.addEventListener('pointerdown', event => { this.lastPointer = event.pointerId; this.start(event); });
+    this.node.addEventListener('mousedown', event => {
+      if (event.button === 0 && !this.dragging && this.lastPointer !== null) this.start(event, this.lastPointer);
+    });
+    this.node.addEventListener('pointermove', event => {
+      if (event.button === 0 && (event.buttons & 1) && !this.dragging) this.start(event);
+      else this.move(event);
+    });
     for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-      this.node.addEventListener(name, () => this.end());
+      this.node.addEventListener(name, event => { if (event.pointerId === this.pointer) this.end(); });
     }
+    this.node.addEventListener('mouseup', event => { if (event.button === 0) this.end(); });
     this.node.addEventListener('keydown', event => this.keyboard(event));
     this.node.addEventListener('wheel', event => this.wheel(event), {passive: false});
-    this.node.addEventListener('contextmenu', event => {
+    controlContext(this.node, event => {
       if (!this.editing) controlMenu(event, this.control(this.value));
     });
     knobs.push(this);
@@ -217,18 +227,21 @@ class Knob {
     if (wireValue !== undefined) control.value = wireValue;
     queueChange(control);
   }
-  start(event) {
+  start(event, pointer = event.pointerId) {
     if (event.target === this.output && this.output instanceof HTMLInputElement) return;
     if (event.button !== 0 || !connected || busy || this.node.closest('.unavailable-channel')) return;
-    event.preventDefault();
+    if (!controlPointerHit(event, this.dial)) return;
     this.node.focus();
-    this.node.setPointerCapture(event.pointerId);
+    this.node.setPointerCapture(pointer);
+    this.pointer = pointer;
     this.origin = {x: Math.trunc(event.clientX), y: Math.trunc(event.clientY), anchor: this.value, value: this.value};
     this.dragging = true;
     this.node.classList.add('dragging');
   }
   move(event) {
     if (!this.dragging) return;
+    if (!(event.buttons & 1)) { this.end(); return; }
+    if (event.button !== -1) return;
     this.origin.value = this.value;
     this.origin = knobDrag(this.kind, this.maximum, this.origin, {x: event.clientX, y: event.clientY}, event.shiftKey, event.ctrlKey);
     this.change(this.origin.value, this.origin.wireValue);
@@ -236,6 +249,9 @@ class Knob {
   end() {
     this.dragging = false;
     this.node.classList.remove('dragging');
+    const pointer = this.pointer;
+    this.pointer = null;
+    if (pointer !== null && this.node.hasPointerCapture(pointer)) this.node.releasePointerCapture(pointer);
   }
   keyboard(event) {
     if (!connected || busy || this.editing || this.node.closest('.unavailable-channel')) return;
@@ -247,7 +263,7 @@ class Knob {
   wheel(event) {
     event.preventDefault();
     if (!connected || busy || this.editing || !panelWheelAllowed() || this.node.closest('.unavailable-channel') ||
-        !event.target.closest('.knob-dial')) return;
+        !controlPointerHit(event, this.dial)) return;
     this.node.focus();
     this.change(wheelValue(this.value, this.maximum, wheelDelta(event)));
   }
@@ -301,10 +317,10 @@ function toggle(label, control, read, className = '') {
   button.setAttribute('aria-label', label);
   button.setAttribute('aria-pressed', 'false');
   button.dataset.control = '';
-  button.addEventListener('click', () => {
+  controlButton(button, '.lamp', () => {
     if (documentState) queueChange(control(Number(!read(documentState.state))));
   });
-  button.addEventListener('contextmenu', event => controlMenu(event, control(0)));
+  controlContext(button, event => controlMenu(event, control(0)));
   switches.push({button, control, read});
   return button;
 }
@@ -404,7 +420,7 @@ function fader(control, read, label, channel = null, source = null) {
     output.textContent = volumeText(value).replace(/ dB$/, '');
     queueChange(control(value));
   }, panelWheelAllowed);
-  input.addEventListener('contextmenu', event => controlMenu(event, control(0)));
+  controlContext(input, event => controlMenu(event, control(0)));
   wrapper.append(input, output);
   if (channel !== null) {
     const lane = el('span', 'level-lane');
@@ -483,7 +499,7 @@ function makeMasters() {
     state => state.mixers[bus].input_output_link, 'master-io-link'));
   const reverb = el('button', 'toggle master-reverb-type');
   reverb.append(el('span', 'lamp'), el('span', '', 'REVERB\nTYPE'));
-  reverb.addEventListener('click', () => showDialog('reverb'));
+  controlButton(reverb, '.lamp', () => showDialog('reverb'));
   top.append(reverb);
   const returned = new Knob('REVERB RETURN', 1024, value => volumeText(VOLUME[value]),
     value => mixerControl('input', 0, 'return', VOLUME[value], 'master'),
@@ -763,6 +779,10 @@ function openMenu(items, x, y, anchor = null) {
 
 function controlMenu(event, control) {
   event.preventDefault(); if (!connected || busy) return;
+  const owner = event.currentTarget;
+  if (owner.disabled || owner.getAttribute('aria-disabled') === 'true' || owner.closest('.unavailable-channel')) return;
+  const target = owner.dataset.pointerTarget ? owner.querySelector(owner.dataset.pointerTarget) : owner;
+  if (!controlContextHit(event, target)) return;
   event.currentTarget.focus({preventScroll: true});
   const items = [];
   const set = (label, value) => ({label, run: () => queueChange({...control, value})});
@@ -798,7 +818,11 @@ function controlMenu(event, control) {
     if (control.parameter !== 'phantom') items.push({label: `${prefix} ${upper ? 'ON' : 'On'} All Ch.`, run: () => allChannels(1)});
     items.push({label: `${prefix} ${upper ? 'OFF' : 'Off'} All Ch.`, run: () => allChannels(0)});
   }
-  if (items.length) openMenu(items, event.clientX, event.clientY);
+  if (items.length) {
+    const keyboard = event.type === 'keydown' || (event.type === 'contextmenu' && event.button !== 2);
+    const rect = target.getBoundingClientRect();
+    openMenu(items, keyboard ? rect.left : event.clientX, keyboard ? rect.bottom : event.clientY);
+  }
 }
 
 function canRunPanelCommand(command) {
@@ -976,7 +1000,7 @@ function setupEvents() {
     $('#header-action > span:last-child').textContent = activeView === 'preamp' ? 'AUTO-SENS' : 'MULTIPLE DIRECT MIXER';
     if (documentState) update(documentState);
   });
-  $('#header-action').addEventListener('click', () => {
+  controlButton($('#header-action'), '.lamp', () => {
     if (activeView === 'preamp') showDialog('auto-sens');
     else {
       const multiple = documentState?.state.output_routes.some(route => route >= 1 && route <= 3);
@@ -992,11 +1016,8 @@ function setupEvents() {
     if (connected) queueChange({kind: 'identify'});
     else void deviceMenu(event);
   });
-  $('#device-status').addEventListener('contextmenu', event => { void deviceMenu(event); });
+  controlContext($('#device-status'), event => { void deviceMenu(event); });
   $('#device-status').addEventListener('keydown', event => {
-    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-      void deviceMenu(event); return;
-    }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       if (connected) queueChange({kind: 'identify'});
@@ -1015,6 +1036,7 @@ function leave(name) { inFlight.delete(name); }
 
 async function deviceMenu(event) {
   event.preventDefault();
+  if ((event.buttons & 1) || (event.type !== 'keydown' && !controlPointerHit(event, $('#device-status')))) return;
   if (!enter('devices')) return;
   const anchor = $('#device-status');
   anchor.focus({preventScroll: true});

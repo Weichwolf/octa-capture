@@ -238,6 +238,42 @@ values in 0..50 dB truncate to half-dB indices, matching Windows `0x140003940`
 and macOS `CValPreSens::CheckValue`. Polling preserves active edits; invalid
 decimal values restore the current display without a device write.
 
+Pointer hit regions follow the original child controls: knob dials and button
+skins are active; their painted labels do not drag, toggle or open control menus.
+Keyboard activation remains on the labeled control. Context menus open on right
+release inside the control, and are suppressed while left is held or the control
+is disabled. Left release ends a knob/fader drag even when right remains held.
+Shift+F10/ContextMenu opens the focused control's menu directly; this does not
+depend on a browser-generated context event, which native WebKit omits.
+Button-only pointer transitions do not quantize a stored value; pressing left
+while right is already held can still begin a drag. Range controls suppress
+their native mouse-down default separately from pointer delivery.
+The fixed original-code comparison is optional:
+
+```bash
+python3 tools/verify-control-hit.py doc/local/windows-gui-analysis/RDDP1110.EXE
+```
+
+Chromium checks actual skin/label targets, both button orders, release timing,
+capture cleanup and keyboard activation. Parameter replies are intercepted in
+the browser, and full raw state is checked independently; these input checks
+do not establish physical gain response.
+
+GTK 4.18.6/WebKitGTK 2.54.0 loses a primary mouse sequence when another
+button reaches its single-button gesture controller. The host intercepts
+secondary button presses/releases during capture, reads their public GDK event
+fields and forwards bounded mouse messages to the local page. Primary input
+keeps WebKit's native path. Coordinates include the native surface translation,
+widget offset and page zoom. These forwarded DOM events have `isTrusted=false`;
+the X11 checker compares every such event with the actual GDK-derived host
+receipt, including coordinates, buttons and modifiers. It also verifies primary
+trusted events, menu timing, capture cleanup and raw-state preservation.
+The event reader uses the public GTK C API because this PyGObject runtime
+delivers the opaque `GdkEvent` signal argument as `None`.
+See [GTK's gesture button guard](https://github.com/GNOME/gtk/blob/4.18.6/gtk/gtkgesturesingle.c)
+and [WebKit's mouse gesture setup](https://github.com/WebKit/WebKit/blob/webkitgtk-2.54.0/Source/WebKit/UIProcess/API/gtk/WebKitWebViewBase.cpp).
+Native Wayland and updated WSL input behavior remain unverified.
+
 The bridge additionally emits `pcm-meters` events with validated ALSA capture
 and playback peaks, rate/channel counts, sequences and ages. The Python cache
 retains independent MIDI/PCM receive times. The web panel uses the sources and

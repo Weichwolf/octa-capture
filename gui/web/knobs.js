@@ -3,6 +3,53 @@ import {VOLUME, volumeIndex} from './parameters.js';
 
 const VOLUME_STOPS = [8388607, 4184368, 2097152, 1051065, 526780, 264015, 132321, 66317, 33237, 0];
 
+export function controlPointerHit(event, target) {
+  if (event.type === 'click' && event.detail === 0) return true;
+  if (event.type === 'contextmenu' && event.button !== 2) return true;
+  if (event.type === 'keydown' && (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) return true;
+  const rect = target.getBoundingClientRect();
+  return event.clientX >= rect.left && event.clientX < rect.right && event.clientY >= rect.top && event.clientY < rect.bottom;
+}
+
+export function controlContextHit(event, target) {
+  return !(event.buttons & 1) && controlPointerHit(event, target);
+}
+
+export function controlButton(node, selector, activate) {
+  let pressedInside = false;
+  node.dataset.pointerTarget = selector;
+  node.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    pressedInside = controlPointerHit(event, node.querySelector(selector));
+    if (!pressedInside) event.preventDefault();
+  });
+  node.addEventListener('mousedown', event => {
+    if (event.button === 0) pressedInside = controlPointerHit(event, node.querySelector(selector));
+  });
+  node.addEventListener('pointercancel', () => { pressedInside = false; });
+  node.addEventListener('click', event => {
+    const activatePointer = pressedInside && controlPointerHit(event, node.querySelector(selector));
+    pressedInside = false;
+    if (event.detail === 0 || activatePointer) activate(event);
+  });
+}
+
+export function controlContext(node, open) {
+  // Windows opens these menus on right-button release, including chorded input.
+  node.addEventListener('mouseup', event => { if (event.button === 2) open(event); });
+  node.addEventListener('contextmenu', event => {
+    event.preventDefault();
+    // Native keyboard/assistive context events have no right mouse button.
+    if (event.button !== 2) open(event);
+  });
+  node.addEventListener('keydown', event => {
+    if (event.ctrlKey || event.altKey || event.metaKey ||
+        (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10'))) return;
+    event.preventDefault();
+    if (!event.repeat) open(event);
+  });
+}
+
 export function wheelValue(value, maximum, delta) {
   return Math.max(0, Math.min(maximum, value + Math.trunc(delta / 120)));
 }

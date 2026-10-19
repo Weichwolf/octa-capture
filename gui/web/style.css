@@ -42,7 +42,10 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .toggle .lamp { width: 24px; height: 22px; border-radius: 3px; }
 .toggle.red.lit .lamp { background: radial-gradient(ellipse at 45% 25%,#ffb2a5,#b9321e 75%); box-shadow: 0 0 4px #c3202080; }
 .placeholder { visibility: hidden; }
-.knob { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 0; touch-action: none; user-select: none; cursor: ns-resize; font-size: 9px; color: #eee; line-height: 12px; }
+.knob { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 0; touch-action: none; user-select: none; font-size: 9px; color: #eee; line-height: 12px; }
+.knob-dial { cursor: ns-resize; }
+.toggle, .header-action { cursor: default; }
+.toggle:not(:disabled) .lamp, .header-action:not(:disabled) .lamp { cursor: pointer; }
 .knob-label { font-weight: bold; font-stretch: condensed; white-space: nowrap; }
 .knob-dial { position: relative; display: block; width: 29px; height: 29px; border-radius: 50%; border: 2px solid #444; background: radial-gradient(circle at 35% 25%,#797979 0%,#525252 34%,#2c2c2c 65%,#151515 70%,#4b4b4b 80%); box-shadow: 0 2px 2px #0009, -1px -1px 1px #8888; }
 .knob-dial::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; border: 1px solid #333; }

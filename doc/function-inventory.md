@@ -112,7 +112,15 @@ selection, Shift/Ctrl behavior, anchor rebasing, truncation and exact wire value
 Arrow keys use single indices (1-% pan); Home/End do not change a knob. This
 comparison uses host-window/notification stubs and does not establish complete
 mouse/keyboard behavior for every control or dialog.
-Native Debian at 48 kHz also matches 144 actual Playwright pointer events across
+The original knob/button right-release handlers also match 192 fixed hit/flag
+cases and 96 unavailable-button cases with window/popup stubs. Wine child
+bounds distinguish the actual skin from its painted label. HTML pointer actions
+now use those regions, defer context menus to right release and end left dragging
+across button chords. Chromium and native GTK/X11 input checks intercept
+parameter replies and preserve the real raw state. The GTK host forwards
+secondary buttons around the runtime's gesture reset; its DOM events remain
+untrusted and are compared with actual GDK receipts. See the [GUI reference](gui-backend.md).
+Native Debian at 44.1/48 kHz also matches 144 actual Playwright pointer events across
 the four knob families and all Shift/Ctrl combinations, with independent device
 readback and complete raw recovery. This checks control values, not analog response.
 
@@ -124,7 +132,7 @@ steps, exact level coefficients and thumb hit-testing. Original geometry and
 volume functions execute; host APIs, display interval getters and notifications
 are stubbed. macOS range/scale and resource geometry agree. Numeric fixtures
 are public; manufacturer binaries/assets remain private.
-Native Debian at 48 kHz also passes 240 actual Playwright fader pointer events
+Native Debian at 44.1/48 kHz also passes 240 actual Playwright fader pointer events
 across input/playback channels and both master groups, all Shift/Ctrl
 combinations and thumb/track boundaries, with independent wire readback and
 complete raw/clock preservation. Linked-master preview and delayed-reply checks

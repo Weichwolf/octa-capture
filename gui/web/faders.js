@@ -25,12 +25,23 @@ export class ReferenceFader {
     this.input = input;
     this.changed = change;
     this.dragging = false;
+    this.pointer = null;
+    this.lastPointer = null;
     input.addEventListener('input', () => change(VOLUME[Number(input.value)]));
-    input.addEventListener('pointerdown', event => this.start(event));
-    input.addEventListener('pointermove', event => this.move(event));
+    input.addEventListener('pointerdown', event => { this.lastPointer = event.pointerId; this.start(event); });
+    input.addEventListener('pointermove', event => {
+      if (event.button === 0 && (event.buttons & 1) && !this.dragging) this.start(event);
+      else this.move(event);
+    });
+    input.addEventListener('mousedown', event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      if (!this.dragging && this.lastPointer !== null) this.start(event, this.lastPointer);
+    });
     for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-      input.addEventListener(name, () => { this.dragging = false; });
+      input.addEventListener(name, event => { if (event.pointerId === this.pointer) this.end(); });
     }
+    input.addEventListener('mouseup', event => { if (event.button === 0) this.end(); });
     input.addEventListener('keydown', event => {
       if (input.disabled) return;
       const value = knobKey(Number(input.value), 1024, event.key);
@@ -49,11 +60,17 @@ export class ReferenceFader {
     this.input.value = result.value;
     this.changed(result.wireValue ?? VOLUME[result.value]);
   }
-  start(event) {
+  end() {
+    this.dragging = false;
+    const pointer = this.pointer;
+    this.pointer = null;
+    if (pointer !== null && this.input.hasPointerCapture(pointer)) this.input.releasePointerCapture(pointer);
+  }
+  start(event, pointer = event.pointerId) {
     if (event.button !== 0 || this.input.disabled) return;
-    event.preventDefault();
     this.input.focus();
-    this.input.setPointerCapture(event.pointerId);
+    this.input.setPointerCapture(pointer);
+    this.pointer = pointer;
     const value = Number(this.input.value);
     this.origin = {x: Math.trunc(event.clientX), y: Math.trunc(event.clientY), anchor: value, value};
     this.dragging = true;
@@ -65,6 +82,8 @@ export class ReferenceFader {
   }
   move(event) {
     if (!this.dragging || this.input.disabled) return;
+    if (!(event.buttons & 1)) { this.end(); return; }
+    if (event.button !== -1) return;
     this.origin.value = Number(this.input.value);
     this.origin = faderDrag(this.origin, {x: event.clientX, y: event.clientY}, event.shiftKey, event.ctrlKey);
     if (this.origin.value !== Number(this.input.value) || this.origin.wireValue !== undefined) this.change(this.origin);

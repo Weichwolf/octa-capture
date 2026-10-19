@@ -2,7 +2,7 @@
 // Fixed numeric traces executed by verify-knob-drag.py against the original GUI.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {knobDrag, knobKey} from '../gui/web/knobs.js';
+import {knobDrag, knobKey, controlPointerHit, controlContextHit, controlContext, controlButton} from '../gui/web/knobs.js';
 import {VOLUME, panToWire} from '../gui/web/parameters.js';
 
 const cases = JSON.parse(readFileSync(new URL('data/knob-drag.json', import.meta.url), 'utf8'));
@@ -26,3 +26,50 @@ for (const test of cases) {
 assert.equal(count, 2304);
 assert.equal(keys, 144);
 console.log(`PASS ${count} original knob drag vectors and ${keys} key cases, including modifier changes and endpoint reversals`);
+
+const hits = JSON.parse(readFileSync(new URL('data/control-hit.json', import.meta.url), 'utf8'));
+for (const test of hits) {
+  const target = {getBoundingClientRect: () => ({left: 0, top: 0, right: test.width, bottom: test.height})};
+  assert.equal(controlContextHit({type: 'mouseup', button: 2, buttons: test.flags & 3,
+    clientX: test.point[0], clientY: test.point[1]}, target), test.expected, JSON.stringify(test));
+}
+assert.equal(hits.length, 192);
+const target = new EventTarget(), menus = [];
+target.getBoundingClientRect = () => ({left: 10, top: 20, right: 35, bottom: 45});
+controlContext(target, event => { if (controlContextHit(event, target)) menus.push(event.type); });
+function mouse(type, fields) {
+  const event = Object.assign(new Event(type, {cancelable: true}), fields);
+  target.dispatchEvent(event); return event;
+}
+assert.equal(mouse('contextmenu', {button: 2, buttons: 2, clientX: 20, clientY: 30}).defaultPrevented, true);
+assert.deepEqual(menus, [], 'Native early context event waits for right-button release');
+mouse('mouseup', {button: 2, buttons: 1, clientX: 20, clientY: 30});
+mouse('mouseup', {button: 2, buttons: 0, clientX: 35, clientY: 30});
+assert.deepEqual(menus, [], 'Left-held or outside releases cannot open menus');
+mouse('mouseup', {button: 2, buttons: 0, clientX: 20, clientY: 30});
+mouse('contextmenu', {button: 2, buttons: 0, clientX: 20, clientY: 30});
+assert.deepEqual(menus, ['mouseup'], 'Late native context event cannot duplicate the popup');
+mouse('contextmenu', {button: -1, buttons: 0});
+assert.deepEqual(menus, ['mouseup', 'contextmenu'], 'Keyboard context remains available');
+assert.equal(mouse('keydown', {key: 'F10', shiftKey: true}).defaultPrevented, true);
+assert.equal(mouse('keydown', {key: 'ContextMenu'}).defaultPrevented, true);
+assert.deepEqual(menus, ['mouseup', 'contextmenu', 'keydown', 'keydown'], 'Keyboard context works without a browser default event');
+mouse('keydown', {key: 'F10', shiftKey: true, repeat: true});
+mouse('keydown', {key: 'F10', shiftKey: true, ctrlKey: true});
+assert.equal(menus.length, 4, 'Repeat and extra modifiers cannot reopen a keyboard menu');
+assert.equal(controlPointerHit({type: 'click', detail: 0}, target), true, 'Keyboard activation ignores mouse coordinates');
+assert.equal(controlPointerHit({type: 'click', detail: 1, clientX: 9, clientY: 30}, target), false);
+target.dataset = {};
+target.querySelector = () => target;
+let clicks = 0;
+controlButton(target, '.lamp', () => { clicks++; });
+assert.equal(mouse('pointerdown', {button: 0, clientX: 9, clientY: 30}).defaultPrevented, true);
+mouse('click', {detail: 1, clientX: 9, clientY: 30});
+assert.equal(clicks, 0, 'Label does not activate the button');
+mouse('click', {detail: 1, clientX: 10, clientY: 20});
+assert.equal(clicks, 0, 'Moving from an inactive label to a skin cannot activate it');
+mouse('pointerdown', {button: 0, clientX: 10, clientY: 20});
+mouse('click', {detail: 1, clientX: 10, clientY: 20});
+mouse('click', {detail: 0});
+assert.equal(clicks, 2, 'Skin hit and keyboard click activate the button');
+console.log('PASS 192 original context hit guards, release timing, keyboard access and inactive labels');

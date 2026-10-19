@@ -95,7 +95,7 @@ export class BrowserClient {
 
   async click(selector, clickCount = 1, button = 'left') {
     await this.ready(selector);
-    const rectangle = await this.evaluate(`(() => {const node=document.querySelector(${JSON.stringify(selector)});if(!node)throw new Error('Missing control');const r=node.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+    const rectangle = await this.evaluate(`(() => {const node=document.querySelector(${JSON.stringify(selector)});if(!node)throw new Error('Missing control');const target=node.dataset.pointerTarget?node.querySelector(node.dataset.pointerTarget):node;const r=target.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
     await this.call('Input.dispatchMouseEvent', {type: 'mousePressed', button, clickCount, ...rectangle});
     await this.call('Input.dispatchMouseEvent', {type: 'mouseReleased', button, clickCount, ...rectangle});
   }

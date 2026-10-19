@@ -59,6 +59,12 @@ even if clock restoration fails; such a failure still makes the test fail.
 A private raw recovery file is saved before any rate change. A forced kill or
 disconnect can prevent automatic restoration; retain the reported snapshot.
 
+Capture and playback share implicit-feedback endpoints. Their rate, format,
+period size and period count must be compatible. Fixed-geometry diagnostics such
+as `octa-audio-check` require an unused PCM device; an active sound server with
+different periods can make their parameter negotiation fail with `EINVAL`.
+Do not stop another application's stream to run these checks.
+
 ## DKMS package
 
 Build a source package for one supported kernel series using its Linux source

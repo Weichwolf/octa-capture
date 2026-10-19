@@ -20,6 +20,7 @@ import {checkInputMonitor} from './GuiInputMonitor.mjs';
 import {checkFooter, checkFooterRates} from './GuiFooter.mjs';
 import {checkAutoSenseSelection, checkAutoSenseFailure} from './GuiAutoSense.mjs';
 import {checkDialogWindows} from './GuiDialogs.mjs';
+import {checkControlHits} from './GuiControlHits.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -375,6 +376,7 @@ try {
   if (rates) await checkFooterRates(browser, api);
   const expectedErrors = reload ? await checkReconnect(browser, api, launch, run) : {consoleErrors: [], httpErrors: []};
   await checkDialogWindows(browser, directory, api);
+  await checkControlHits(browser, api);
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');
   assert.deepEqual(browser.securityErrors, [], 'Content Security Policy violations');
   if (playwright) {

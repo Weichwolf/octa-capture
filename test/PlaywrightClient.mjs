@@ -83,7 +83,9 @@ export class PlaywrightClient {
 
   async click(selector, clickCount = 1, button = 'left') {
     await this.ready(selector);
-    await this.page.locator(selector).first().click({button, clickCount});
+    const node = this.page.locator(selector).first();
+    const target = await node.getAttribute('data-pointer-target');
+    await (target ? node.locator(target) : node).click({button, clickCount});
   }
 
   async key(selector, key) {
