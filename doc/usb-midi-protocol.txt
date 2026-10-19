@@ -945,7 +945,14 @@ live import requires exact full readback. A private raw snapshot is saved
 before writing; failed/interrupted application attempts restoration using
 a fresh CTRL connection. Raw restoration preserves fields absent from the
 file format. Current-preset, pan and attack imports and full restoration
-passed on WSL hardware. See preset-format.txt for commands and limits.
+passed on WSL hardware and at all four native Debian rates.
+Windows x64's actual file loader, state-copy functions and kernel bulk sender
+also match 658 fixed offline import cases through IOCTL 0x22225c selector 5;
+selector 0x2f updates a cached flag afterward. The full frame, checksum, mono/
+opaque resets and cached system prefix agree with macOS and Linux. File,
+device and final transport calls are memory stubs; Windows Load's positive
+return is not a transfer/completion acknowledgement. See preset-format.txt
+for the original addresses, commands and remaining limits.
 
 PCM driver meters
 -----------------

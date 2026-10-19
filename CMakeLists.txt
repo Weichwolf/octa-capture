@@ -212,6 +212,7 @@ target_link_libraries(preset_test PRIVATE octa_protocol)
 add_test(NAME preset COMMAND preset_test)
 add_test(NAME preset-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/PresetCli.py"
   "$<TARGET_FILE:octa-preset>" "${CMAKE_SOURCE_DIR}/test/data")
+add_test(NAME preset-import-check COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/PresetImportCheck.py")
 add_test(NAME auto-sense-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/AutoSenseCli.py"
   "$<TARGET_FILE:octa-auto-sense>")
 add_executable(auto_sense_test test/AutoSense.cpp)

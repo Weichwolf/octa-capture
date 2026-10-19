@@ -131,13 +131,48 @@ The complete prepared frame, including its checksum, matches this reference
 byte-for-byte. A hardware-derived state/preset pair also matched offline.
 These offline reference comparisons do not exercise hardware.
 
+Windows import reference
+------------------------
+tools/verify-windows-preset.py executes the original x64 Load (0x140006810),
+LoadCpl (0x140006b00), constructor (0x1400063e0) and Set (0x140008670).
+Its modeled DeviceIoControl forwards IOCTL 0x22225c selectors 5 and 0x2f to
+the original kernel handler at 0x140006550. Selector 5 copies the model through
+0x140008390 and builds/checksums the complete 1159-byte DT1 at 0x1400074e0
+and 0x14000a710. CFile and device APIs and the final MIDI transport are memory
+stubs; GUI and kernel CPUs use separate address spaces with the model pointer
+relocated at their boundary. Cached device properties are supplied directly;
+asynchronous USB reception is not exercised.
+
+All 658 fixed imports match octa-preset prepare: two base presets, one legal
+boundary/noncanonical-flag case for each of 592 file scalars, and 64 cached
+prefix combinations covering all four rates. Each complete file uses 631
+original file reads (39 header bytes plus 592 scalars). Current mono and opaque
+mixer flags start enabled; loading clears them, agreeing with macOS and Linux.
+The macOS reference fixture also matches the Windows-generated complete frame.
+Fourteen short-file/magic/open/context cases issue no device IOCTL and leave
+the current model intact. Four readiness combinations check transport gating.
+
+The original Load returns 1 despite failed device opening, DeviceIoControl or
+final MIDI transport. This function's success does not prove a device update;
+Linux requires verified bulk readback. The Windows loader also accepts the
+fixed Ver101 and trailing-byte examples; Linux deliberately keeps the exact
+Ver100/size checks because no other layout is established.
+
+  python3 tools/verify-windows-preset.py \
+    doc/local/windows-gui-analysis/RDDP1110.EXE \
+    doc/local/windows-kernel-analysis/RDWM1110.SYS build/strict/octa-preset
+
+Both manufacturer hashes are pinned. Inputs are synthetic and this optional
+reference check performs no hardware I/O or fuzzing.
+
 Live application and recovery
 -----------------------------
 octa-preset apply FILE NEW-RECOVERY.syx [hw:CTRL-port] reads the current
 state, creates a new recovery file exclusively (0600, fsync before device
 write), sends the prepared DT1 and queries the complete bulk state. An
-existing recovery path is rejected without changing parameters. Exact
-Message equality is required, including fields absent from .octa files.
+existing recovery path is rejected without changing parameters. Complete
+Message equality is required, with only the 192 kHz prefix-byte exception
+described above; fields absent from .octa files must also match.
 
 On failure after a write attempt, or SIGINT/SIGTERM during application,
 the command closes its connection and attempts verified raw recovery on
@@ -153,9 +188,18 @@ tools/check-preset-import.py is read-only by default. --write checks an
 existing recovery-file collision, current-preset application, a one-unit
 pan change and a one-unit compressor-attack change. Each case checks the
 full target and restores the original raw state independently. These
-checks pass on the attached WSL device with strict and release binaries.
+checks pass on WSL with strict and release binaries and on native Debian
+with strict binaries at all four rates (12 applications and exact raw
+restorations, plus backup collisions at each rate). The original rate and
+complete raw state are independently restored afterward. The checker accepts
+only the same bounded 192 kHz prefix-byte exception as the backend; its offline
+tests reject changes to every other payload byte in both accepted variants.
+To reproduce at a selected rate, close the panel to release CTRL, then run:
+  python3 tools/check-preset-import.py --write --bin-dir build/strict
+Repeat after selecting each required rate; return to the original rate afterward.
 SIGINT and SIGTERM after transmission also restored the full raw state
-in a separate WSL hardware check. Native Debian remains unverified.
+in a separate WSL hardware check; native interrupted-import recovery remains
+unverified.
 Device Store/Load Memory is separate:
   octa-preset memory-store NEW-RECOVERY.syx [hw:CTRL-port]
   octa-preset memory-load NEW-RECOVERY.syx [hw:CTRL-port]

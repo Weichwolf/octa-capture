@@ -143,6 +143,16 @@ device change and restoration; arbitrary touchpad gestures remain unverified.
 
 ## Specific unresolved distinctions
 
+Windows preset loading now executes through its original GUI loader, state
+copy and kernel bulk builder: 658 fixed cases match the Linux preparation,
+including all file scalars, mono/opaque resets and all-rate cached prefixes.
+Three modeled device/IOCTL/MIDI failures still produce a positive original Load
+return; this is not proof of a successful Windows device write. Linux verifies
+the complete reply. Native Debian also passes current/pan/attack CLI imports
+and exact raw recovery at all four rates, with independent final clock/state
+restoration. Persistent device memory and native interrupted-import recovery
+remain unverified; see the [preset reference](preset-format.txt).
+
 Windows menu resource 128 and the offline display model establish F10 focus,
 Alt+D/V, root-menu arrow switching and first-match letter activation. The HTML
 menu bar implements these with focus restoration, pointer switching and the
