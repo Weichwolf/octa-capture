@@ -17,8 +17,10 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focu
 .device-lamp { width: 21px; height: 15px; flex-shrink: 0; border: 1px solid #555; border-radius: 2px; background: linear-gradient(#999,#444); box-shadow: inset 0 0 0 2px #777; }
 .panel:not(.disconnected) .device-lamp { background: radial-gradient(ellipse at 40% 30%,#ffcf83,#e08730 70%); }
 .footer-rate, .footer-clock { display: flex; align-items: center; }
-.footer-rate { gap: 3px; padding-left: 8px; }
-.footer-rate select { width: 85px; min-height: 0; height: 15px; padding: 0 2px; border: 1px solid #555; border-radius: 0; background: #050505; color: #ddd; font: bold 9px Arial,sans-serif; text-align: center; }
+.footer-rate { position: relative; gap: 3px; padding-left: 8px; }
+.footer-rate select { appearance: none; width: 85px; min-height: 0; height: 15px; padding: 0 17px 0 2px; border: 1px solid #555; border-radius: 0; background: #050505; color: #ddd; font: bold 9px Arial,sans-serif; text-align: center; }
+.footer-rate::after { content: '▾'; position: absolute; right: 2px; top: 1px; display: grid; place-items: center; width: 13px; height: 13px; border: 1px solid #888; background: linear-gradient(#777,#444); color: #ddd; font: 10px/10px Arial,sans-serif; pointer-events: none; }
+.footer-rate:has(select:disabled)::after { opacity: .42; }
 .footer-clock > span { padding: 0 8px; }
 .footer-clock output { min-width: 80px; height: 15px; padding: 1px 5px; background: #050505; color: #ddd; white-space: nowrap; text-align: center; }
 .panel-header { position: relative; display: flex; height: 28px; align-items: center; justify-content: space-between; background: linear-gradient(52deg,#c7c7c7 54%,#555 54.2%); border-block: 1px solid #888; }

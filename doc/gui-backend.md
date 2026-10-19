@@ -426,7 +426,10 @@ readback. Native Playwright checks exercise all four footer rates, kernel/DSP
 agreement, PCM meter recovery and full-state restoration. Missing clock status
 displays `UNKNOWN`; this fallback is checked with a browser-only response
 simulation, without changing hardware status. GTK checks verify footer readback
-and pointer access within the fixed window. The device selector remains available
+and pointer access within the fixed window. A CSS-drawn arrow keeps the compact
+rate label readable with WebKitGTK theme metrics; native screenshots verify
+the actual 48 kHz display with independent state/clock preservation.
+The device selector remains available
 when disconnected to support reconnection; the original hides its bottom bar.
 
 The original 192 kHz audio-port warning appears once on entering that rate,
