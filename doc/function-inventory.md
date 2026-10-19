@@ -35,7 +35,10 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   transmitters against the C++ encoders. The same DSP matrix passes on x86_64;
   large scalar ranges use boundary and mixed-nibble samples. Another 2,049
   nearest-fader cases and 243 compressor graph points match the web implementation.
-  Fader and attack/release/ratio/pre-delay/dB tables also match. Other ARM64 GUI, audio and
+  Fader and attack/release/ratio/pre-delay/dB tables also match. Cached USB
+  descriptor parsing, interface selection and audio-open sequences also match
+  x86_64/Windows at all four rates, using architecture-specific structure offsets
+  and host-open stubs; interface 4 remains unresolved. Other ARM64 GUI, audio and
   property paths still need independent comparison; Windows x86 remains unaudited.
   Shared artwork does not establish shared control logic.
 - `tools/ghidra/ExportReferenceInventory.java` exports function and call-site TSVs

@@ -38,17 +38,22 @@ nonzero rate. Each call attempts at most four interrupt reads, each with a
 250 ms timeout, seeking phase 0 then phase 1. Interface selection/PM may
 add latency. It does not detach interfaces or change audio/CTRL settings.
 Interface 4's meaning is not yet established. Executing the original Windows
-x64/macOS x86_64 descriptor parsers on the native cached descriptors confirms
+x64/macOS x86_64 and ARM64 descriptor parsers on the native cached descriptors confirms
 all four rates and packet sizes. The traced pipe constructors/port-opening
 paths select capture 1, playback 0, MIDI 2 and status 3; they do not select
 interface 4. This does not rule out another untraced path. The macOS parser
 is CuDscLeastInfo::GetAllIFInfo (0x12598), its selectors are GetConfPort
 (0x169A0) and CuUsbPorts::Open (0x16A5E); Windows uses 0x140014EA0 and
-pipe wrappers 0x14001E860..0x14001E8D0. Reproduce offline with:
+pipe wrappers 0x14001E860..0x14001E8D0. The corresponding ARM64 functions are
+GetAllIFInfo (0x15878), GetConfPort (0x1a134) and CuUsbPorts::Open (0x1a214).
+ARM64 uses different descriptor field/interface-array offsets; the checker
+executes that binary's actual parser and selectors rather than reusing x86 code.
+Reproduce offline with:
   python3 tools/verify-interface-selection.py audio-x86_64 RDWM1110.SYS descriptors.bin
+  python3 tools/verify-interface-selection.py audio-arm64 RDWM1110.SYS descriptors.bin --mac-architecture arm64
 The checker uses hash-pinned binaries and cached descriptors (a sysfs
-descriptors file is also accepted). It checks 35 selector cases and five
-macOS open sequences; host interface opening is stubbed, with no USB transfers.
+descriptors file is also accepted). Each architecture checks 35 selector cases
+and five macOS open sequences; host interface opening is stubbed, with no USB transfers.
 WSL hardware reads report the matching rate at 44.1/48/96/192 kHz, with
 capture/playback timing checks still passing. Four concurrent status
 readers also passed alongside 48 kHz duplex audio, meters and shared CTRL
