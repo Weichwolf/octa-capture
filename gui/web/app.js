@@ -7,7 +7,7 @@ import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
 import {masterFaderPreview, ReferenceFader} from './faders.js';
-import {knobDrag, knobKey} from './knobs.js';
+import {knobDrag, knobKey, wheelDelta, wheelValue} from './knobs.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -77,6 +77,10 @@ async function api(path, body, binary = false) {
 function key(control) {
   return [control.kind, control.source, control.bus, control.channel,
     control.parameter, control.pair, control.bank].join(':');
+}
+
+function panelWheelAllowed() {
+  return !$('#menus').childElementCount && !$('dialog[open]');
 }
 
 function setConnected(value, message = 'The device could not be found.') {
@@ -181,6 +185,7 @@ class Knob {
       this.node.addEventListener(name, () => this.end());
     }
     this.node.addEventListener('keydown', event => this.keyboard(event));
+    this.node.addEventListener('wheel', event => this.wheel(event), {passive: false});
     this.node.addEventListener('contextmenu', event => {
       if (!this.editing) controlMenu(event, this.control(this.value));
     });
@@ -223,6 +228,7 @@ class Knob {
   }
   move(event) {
     if (!this.dragging) return;
+    this.origin.value = this.value;
     this.origin = knobDrag(this.kind, this.maximum, this.origin, {x: event.clientX, y: event.clientY}, event.shiftKey, event.ctrlKey);
     this.change(this.origin.value, this.origin.wireValue);
   }
@@ -236,6 +242,13 @@ class Knob {
     if (value === null) return;
     event.preventDefault();
     this.change(value);
+  }
+  wheel(event) {
+    event.preventDefault();
+    if (!connected || busy || this.editing || !panelWheelAllowed() || this.node.closest('.unavailable-channel') ||
+        !event.target.closest('.knob-dial')) return;
+    this.node.focus();
+    this.change(wheelValue(this.value, this.maximum, wheelDelta(event)));
   }
   sensitivityEditor(label) {
     this.output.type = 'text';
@@ -389,7 +402,7 @@ function fader(control, read, label, channel = null, source = null) {
     input.title = volumeText(value);
     output.textContent = volumeText(value).replace(/ dB$/, '');
     queueChange(control(value));
-  });
+  }, panelWheelAllowed);
   input.addEventListener('contextmenu', event => controlMenu(event, control(0)));
   wrapper.append(input, output);
   if (channel !== null) {

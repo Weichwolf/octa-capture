@@ -76,6 +76,7 @@ class Check(Desktop):
         window = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(os.getpid())],
                                 capture_output=True, text=True, check=True, timeout=3).stdout.splitlines()[0]
         subprocess.run(['xdotool', 'windowfocus', window], check=True, timeout=3)
+        return window
 
     def key(self, key, focus=True):
         if focus:
@@ -335,13 +336,76 @@ class Check(Desktop):
 
     def native_progress(self):
         value = self.server.application.snapshot()['state']['preamps'][0]['sensitivity_index']
-        expected = self.native_original + self.native_delta if self.phase == 'native-change' else self.native_original
+        changed = self.phase in ('native-change', 'native-wheel-change')
+        expected = self.native_original + self.native_delta if changed else self.native_original
         if value != expected:
             return
         if self.phase == 'native-change':
             self.phase = 'native-restore'
             self.key('Down' if self.native_delta > 0 else 'Up', focus=False)
             return
+        if self.phase == 'native-restore':
+            self.phase = 'native-wheel-focus'
+            self.focus_native_wheel()
+            return
+        if self.phase == 'native-wheel-change':
+            self.phase = 'native-wheel-restore'
+            self.native_wheel(-self.native_delta)
+            return
+        self.phase = 'native-wheel-complete'
+
+        def checked(view, result, _data):
+            try:
+                event = json.loads(view.evaluate_javascript_finish(result).to_json(0))
+                if not event['trusted'] or not event['prevented'] or not event['focused']:
+                    raise RuntimeError(f'Native WebKit wheel event was not handled: {event}')
+                print('PASS actual X11/WebKit wheel, focus, hardware change and restoration: '
+                      f'deltaY={event["deltaY"]}, wheelDeltaY={event["wheelDeltaY"]}.', flush=True)
+                self.finish_native_control()
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript('({...window.__octaWheelTest,focused:document.activeElement.matches(".sensitivity")})',
+                                      -1, None, None, None, checked, None)
+
+    def native_wheel(self, delta):
+        subprocess.run(['xdotool', 'click', '4' if delta > 0 else '5'], check=True, timeout=3)
+
+    def focus_native_wheel(self):
+        script = '(()=>{const node=document.querySelector(".preamp-strip .sensitivity"),r=node.getBoundingClientRect();' \
+                 'return {x:r.x+r.width/2,y:r.y+r.height/2,value:Number(node.getAttribute("aria-valuenow"))};})();'
+
+        def positioned(view, result, _data):
+            try:
+                point = json.loads(view.evaluate_javascript_finish(result).to_json(0))
+                if point['value'] != self.native_original:
+                    self.GLib.timeout_add(100, self.focus_native_wheel)
+                    return
+                valid, bounds = self.view.compute_bounds(self.window)
+                if not valid:
+                    raise RuntimeError('Cannot locate the native WebKit wheel target.')
+                scale = self.view.get_scale_factor()
+                subprocess.run(['xdotool', 'mousemove', '--window', self.focus_window(),
+                                str(round((bounds.get_x() + point['x']) * scale)),
+                                str(round((bounds.get_y() + point['y']) * scale))], check=True, timeout=3)
+                self.phase = 'native-wheel-prepare'
+                source = 'document.querySelector("#view-switch").focus();' \
+                         'document.addEventListener("wheel",e=>window.__octaWheelTest=' \
+                         '{trusted:e.isTrusted,prevented:e.defaultPrevented,deltaY:e.deltaY,wheelDeltaY:e.wheelDeltaY},{once:true});'
+                self.view.evaluate_javascript(source, -1, None, None, None, prepared, None)
+            except Exception as error:
+                self.fail(error)
+
+        def prepared(view, result, _data):
+            try:
+                view.evaluate_javascript_finish(result)
+                self.phase = 'native-wheel-change'
+                self.native_wheel(self.native_delta)
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, positioned, None)
+        return False
+
+    def finish_native_control(self):
         self.phase = 'native-complete'
 
         def mixer(view, result, _data):
@@ -367,7 +431,7 @@ class Check(Desktop):
         if time.monotonic() > self.deadline:
             self.fail(f'GTK check timed out in {self.phase}.')
             return False
-        if self.phase in ('native-change', 'native-restore'):
+        if self.phase in ('native-change', 'native-restore', 'native-wheel-change', 'native-wheel-restore'):
             self.native_progress()
         if self.phase == 'download':
             identifier = self.native_dialog('Save OCTA-CAPTURE settings')

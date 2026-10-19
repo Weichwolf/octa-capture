@@ -355,6 +355,31 @@ code/assets or a device. `--save-vectors PATH` regenerates those traces only
 after a successful comparison. The Playwright write suite also checks actual
 pointer events against these traces and independent device readback.
 
+Wheel input over a dial/fader focuses that control and changes by one index per
+120 native wheel units, clamped to its range. Each event truncates independently;
+partial deltas are not accumulated. The Windows private `0x80c8` message handler
+and `0x140022af0` force fine steps regardless of Shift/Ctrl, so wheel input does
+not use normal drag quantization or Ctrl presets. Horizontal scrolling and open
+popup menus do not change background controls. Active sensitivity editing and
+busy/disconnected/unavailable controls reject wheel changes.
+
+Chromium/WebKit native `wheelDeltaY` takes precedence over scroll pixels:
+an X11 upward notch produces +120 native units, while pixel deltas differ by
+host/control (WebKit reported -44/-56 pixels). DOM-only fallback uses 120 pixels,
+three lines or one page per notch; arbitrary touchpad/other-browser equivalence
+is unproven.
+`python3 tools/verify-control-wheel.py RDDP1110.EXE` executes 3,060 fixed original
+message/virtual-handler cases, including signed-short bounds, all modifier
+combinations and exact wire values. Focus, painting and notifications are stubbed.
+`--save-vectors PATH` saves compared numeric cases; `gui-wheel` CTest runs these
+offline without manufacturer code or hardware. No fuzzing is involved.
+Another 540 fixed wheel/drag events verify that wheel input changes the current
+value while retaining the pointer anchor; the next drag compares against the
+updated value. `--save-interleaved PATH` saves these numeric traces for the same
+CTest. The Playwright write suite checks actual wheel input on all nine
+knob/fader groups and interleaved input on both control adapters. The installed
+GTK checker also injects real X11 wheel events and verifies hardware recovery.
+
 `--reload-module` uses the already provisioned `sudo -n octa-capture-dev` helper
 at `/usr/local/sbin/octa-capture-dev` to unload and reinstall this module. It
 checks the absent-card page/menu, automatic same-unit reconnection, real MIDI/PCM

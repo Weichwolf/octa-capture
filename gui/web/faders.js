@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-import {knobKey, volumePosition} from './knobs.js';
+import {knobKey, volumePosition, wheelDelta, wheelValue} from './knobs.js';
 import {VOLUME} from './parameters.js';
 
 export const FADER_HEIGHT = 88, FADER_THUMB = 32;
@@ -21,7 +21,7 @@ export function faderClick(value, y, shift = false, control = false) {
 }
 
 export class ReferenceFader {
-  constructor(input, change) {
+  constructor(input, change, wheelAllowed = () => true) {
     this.input = input;
     this.changed = change;
     this.dragging = false;
@@ -37,6 +37,13 @@ export class ReferenceFader {
       if (value !== null || ['Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) event.preventDefault();
       if (value !== null && value !== Number(input.value)) this.change({value});
     });
+    input.addEventListener('wheel', event => {
+      event.preventDefault();
+      if (input.disabled || !wheelAllowed()) return;
+      input.focus();
+      const value = wheelValue(Number(input.value), 1024, wheelDelta(event));
+      if (value !== Number(input.value)) this.change({value});
+    }, {passive: false});
   }
   change(result) {
     this.input.value = result.value;
@@ -58,6 +65,7 @@ export class ReferenceFader {
   }
   move(event) {
     if (!this.dragging || this.input.disabled) return;
+    this.origin.value = Number(this.input.value);
     this.origin = faderDrag(this.origin, {x: event.clientX, y: event.clientY}, event.shiftKey, event.ctrlKey);
     if (this.origin.value !== Number(this.input.value) || this.origin.wireValue !== undefined) this.change(this.origin);
   }

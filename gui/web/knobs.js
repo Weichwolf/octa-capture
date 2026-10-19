@@ -3,6 +3,18 @@ import {VOLUME, volumeIndex} from './parameters.js';
 
 const VOLUME_STOPS = [8388607, 4184368, 2097152, 1051065, 526780, 264015, 132321, 66317, 33237, 0];
 
+export function wheelValue(value, maximum, delta) {
+  return Math.max(0, Math.min(maximum, value + Math.trunc(delta / 120)));
+}
+
+export function wheelDelta(event) {
+  // Chromium/WebKit preserve native wheel units separately from scroll pixels.
+  if (Number.isFinite(event.wheelDeltaY)) return event.wheelDeltaY;
+  if (Number.isFinite(event.wheelDelta)) return event.wheelDelta;
+  const scale = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 120 : 1;
+  return Number.isFinite(event.deltaY) ? -event.deltaY * scale : 0;
+}
+
 export function volumePosition(raw, shift, control) {
   if (control) {
     let index = 0, threshold = 0x5aaad6;

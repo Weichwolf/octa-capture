@@ -15,6 +15,7 @@ import {checkReverb} from './GuiReverb.mjs';
 import {checkMasterFaders} from './GuiMasterFaders.mjs';
 import {checkKnobDrags} from './GuiKnobDrag.mjs';
 import {checkFaderDrags} from './GuiFaderDrag.mjs';
+import {checkWheels, checkWheelDrags} from './GuiWheelBrowser.mjs';
 import {checkInputMonitor} from './GuiInputMonitor.mjs';
 import {checkFooter, checkFooterRates} from './GuiFooter.mjs';
 import {checkAutoSenseSelection, checkAutoSenseFailure} from './GuiAutoSense.mjs';
@@ -201,6 +202,8 @@ try {
   await browser.screenshot(path.join(directory, 'mixer.png'));
   if (playwright && write) await checkMasterFaders(browser, api, restoreMixer);
   if (playwright && write) await checkFaderDrags(browser, api, restoreMixer);
+  if (playwright && write) await checkWheels(browser, api, restoreMixer);
+  if (playwright && write) await checkWheelDrags(browser, api, restoreMixer);
   if (playwright && write) await checkKnobDrags(browser, api, restoreMixer);
   if (write) {
     await browser.key('[aria-label="input 1 / PAN"]', 'ArrowRight');

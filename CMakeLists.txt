@@ -149,6 +149,8 @@ add_test(NAME gui-graphs COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiGra
 add_test(NAME gui-steppers COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiSteppers.mjs")
 add_test(NAME gui-faders COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiFaders.mjs")
 add_test(NAME gui-knobs COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiKnobs.mjs")
+add_test(NAME gui-wheel COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiWheel.mjs")
+set_tests_properties(gui-wheel PROPERTIES TIMEOUT 10)
 set_tests_properties(gui-knobs PROPERTIES TIMEOUT 10)
 set_tests_properties(gui-faders PROPERTIES TIMEOUT 10)
 set_tests_properties(gui-steppers PROPERTIES TIMEOUT 10)
@@ -170,6 +172,8 @@ add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   "${CMAKE_SOURCE_DIR}/test/GuiKnobs.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiKnobDrag.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiFaderDrag.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiWheel.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiWheelBrowser.mjs"
   "${CMAKE_SOURCE_DIR}/test/BrowserClient.mjs" "${CMAKE_SOURCE_DIR}/test/GuiBrowser.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiControlMatrix.mjs" "${CMAKE_SOURCE_DIR}/test/GuiRates.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiReconnect.mjs"

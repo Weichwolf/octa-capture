@@ -113,6 +113,22 @@ complete raw/clock preservation. Linked-master preview and delayed-reply checks
 also pass. This does not establish physical gain response or native Windows
 hardware behavior.
 
+Windows wheel routing uses private message `0x80c8`, control handler
+`0x140003610` and shared virtual handler `0x140022af0`. HTML dials/faders now
+focus under the pointer and apply its fine-index steps independent of modifiers;
+open popup menus retain ownership. Original code matches 3,060 fixed cases
+across all control ranges, signed-short delta limits and all Shift/Ctrl masks.
+Sub-notch deltas truncate separately. Focus/window/notification dependencies are
+stubbed during reference execution. DOM native wheel units are preferred;
+other-browser/touchpad normalization remains a separate compatibility limit.
+Another 540 original wheel/drag events verify pointer-anchor continuity across
+all control ranges. Native Debian at 48 kHz passes 90 actual wheel events across
+nine knob/fader groups, with independent hardware readback, modifier/focus/bound
+checks, popup ownership, zoom suppression and full raw/clock preservation.
+Forty actual interleaved wheel/drag events pass on knob/fader adapters. The
+installed native GTK checker verifies trusted X11 wheel input, focus transfer,
+device change and restoration; arbitrary touchpad gestures remain unverified.
+
 ## Specific unresolved distinctions
 
 Native small-buffer streaming is not established as stable under CPU load.
