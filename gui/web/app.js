@@ -6,7 +6,7 @@ import {PopupMenus, PanelMenuBar} from './menus.js';
 import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
-import {masterFaderPreview, ReferenceFader} from './faders.js';
+import {faderPreview, ReferenceFader} from './faders.js';
 import {knobDrag, knobKey, wheelDelta, wheelValue, controlPointerHit, controlContextHit, controlContext, controlButton} from './knobs.js';
 import {DialogWindow} from './dialogs.js';
 
@@ -111,7 +111,7 @@ function queueChange(control) {
   pending.set(identifier, control.value ?? control.selection);
   queued.delete(identifier);
   queued.set(identifier, control);
-  if (control.kind === 'master' && control.parameter === 'volume') {
+  if (['master', 'mixer'].includes(control.kind) && control.parameter === 'volume') {
     faderPreviews.delete(identifier);
     faderPreviews.set(identifier, control);
     if (documentState) renderFaders(documentState.state);
@@ -523,7 +523,7 @@ function makeMasters() {
 }
 
 function renderFaders(state) {
-  const previews = new Map(masterFaderPreview(state, faderPreviews.values()).map(control => [key(control), control.value]));
+  const previews = new Map(faderPreview(state, faderPreviews.values()).map(control => [key(control), control.value]));
   for (const {input, output, read, control, interaction} of faders) {
     const identifier = key(control(0));
     const value = previews.get(identifier) ?? pending.get(identifier) ?? read(state);

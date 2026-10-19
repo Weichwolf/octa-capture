@@ -22,6 +22,7 @@ import {checkAutoSenseSelection, checkAutoSenseFailure} from './GuiAutoSense.mjs
 import {checkDialogWindows} from './GuiDialogs.mjs';
 import {checkControlHits} from './GuiControlHits.mjs';
 import {checkControlGeometry} from './GuiControlGeometry.mjs';
+import {checkChannelFaders} from './GuiChannelFaders.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -84,6 +85,7 @@ try {
   const geometryReference = JSON.parse(await fs.readFile(path.join(root, 'test/data/control-geometry.json'), 'utf8'));
   const controlGeometry = await browser.evaluate(`(${checkControlGeometry.toString()})(${JSON.stringify(geometryReference)})`);
   console.log(`PASS original main-panel control bounds: ${controlGeometry.checked} matched, ${controlGeometry.hidden} hidden at this rate`);
+  await checkChannelFaders(browser, api);
   const devices = (await api('/api/devices')).devices;
   assert.equal(devices.filter(device=>device.selected).length, 1, 'Selected card is discovered through sysfs');
   await browser.key('#device-status', 'ContextMenu');

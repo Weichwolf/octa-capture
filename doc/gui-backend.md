@@ -382,12 +382,17 @@ The Driver Settings unit selector uses the same discovered, serial-bound device
 identities as the panel selector; it is unavailable during pending device writes.
 
 The mixer uses original vector artwork for white channel and red master fader
-caps, with 18×32 pixel ribbed handles and numeric dB readouts. Linked master
-thumbs and readouts update in the same render, using the device's separate stereo
-and input/output link rules. Pending values remain visible during state polling;
+caps, with 18×32 pixel ribbed handles and numeric dB readouts. Linked channel
+thumbs and readouts update together on input and playback channels in all four
+mixers, before the device replies. Master previews use the device's separate
+stereo and input/output link rules. Only the operated fader sends a command;
+the device applies its link. Pending values remain visible during state polling;
 fresh device replies remain authoritative. The Playwright write check delays a
 control request, checks immediate peer movement and rapid queued input, then
 verifies hardware readback and complete raw restoration.
+The read-only Playwright check models delayed channel responses to verify paired
+keyboard/drag previews, stale acknowledgments, unlinked isolation and coalesced
+commands without writing channel settings to the physical device.
 
 Channel and master faders use the original Windows vertical movement and click
 rules. The 88-pixel control and 32-pixel thumb give 56 movement intervals;

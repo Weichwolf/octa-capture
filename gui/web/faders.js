@@ -91,12 +91,21 @@ export class ReferenceFader {
 }
 
 // Preview only; the device's fresh bulk reply remains authoritative.
-export function masterFaderPreview(state, controls) {
+export function faderPreview(state, controls) {
   const result = [];
   for (const control of controls) {
-    if (control.kind !== 'master' || control.parameter !== 'volume') continue;
+    if (!['master', 'mixer'].includes(control.kind) || control.parameter !== 'volume') continue;
     const mixer = state.mixers[control.bus];
-    if (!mixer || !['input', 'playback'].includes(control.source) || ![0, 1].includes(control.channel)) continue;
+    if (!mixer || !['input', 'playback'].includes(control.source)) continue;
+    if (control.kind === 'mixer') {
+      if (!Number.isInteger(control.channel) || control.channel < 0 || control.channel >= 10) continue;
+      const pair = mixer[control.source]?.pairs?.[control.channel >> 1];
+      if (!pair) continue;
+      const channels = pair.linked ? [control.channel, control.channel ^ 1] : [control.channel];
+      for (const channel of channels) result.push({...control, channel});
+      continue;
+    }
+    if (![0, 1].includes(control.channel)) continue;
     const other = control.source === 'input' ? 'playback' : 'input';
     const channels = mixer[`${control.source}_master`].linked ? [0, 1] : [control.channel];
     for (const channel of channels) result.push({...control, channel});
