@@ -173,7 +173,7 @@ class Check(Desktop):
             self.view.evaluate_javascript(script, -1, None, None, None, None, None)
             print('PASS actual X11/WebKit menu keys: F10, Alt+D/V, root/submenu arrows, '
                   'mnemonics, modal ownership and focus recovery (18 steps).', flush=True)
-            self.start_native_control() if self.write else self.start_save()
+            self.start_native_dialogs()
             return
         key, self.menu_expected = step
         self.phase = f'native-menu-{key}'
@@ -189,6 +189,104 @@ class Check(Desktop):
                     self.next_native_menu()
                 else:
                     self.GLib.timeout_add(100, self.check_native_menu)
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, checked, None)
+        return False
+
+    def caption_pointer(self, point, drag=False):
+        valid, bounds = self.view.compute_bounds(self.window)
+        if not valid:
+            raise RuntimeError('Cannot locate the native dialog caption.')
+        scale = self.view.get_scale_factor()
+        position = lambda x, y: [str(round((bounds.get_x() + x) * scale)),
+                                 str(round((bounds.get_y() + y) * scale))]
+        window = self.focus_window()
+        command = ['xdotool', 'mousemove', '--window', window, *position(point['x'], point['y'])]
+        if drag:
+            command += ['mousedown', '1', 'sleep', '0.1', 'mousemove', '--window', window,
+                        *position(point['x'] + 40, point['y'] + 20), 'sleep', '0.1', 'mouseup', '1']
+        else:
+            command += ['click', '1']
+        subprocess.run(command, check=True, timeout=3)
+
+    def start_native_dialogs(self):
+        self.phase = 'native-caption-drag'
+        script = '''(()=>{const dialog=document.querySelector('#about');dialog.showModal();
+            const r=dialog.getBoundingClientRect(),h=dialog.querySelector('.dialog-title').getBoundingClientRect();
+            window.__octaCaptionTrusted=false;
+            dialog.addEventListener('pointerdown',e=>{
+              window.__octaCaptionTrusted=e.isTrusted;
+              window.__octaCaptionPoint={x:e.clientX,y:e.clientY,target:e.target.className};
+            },{once:true});
+            dialog.addEventListener('click',e=>window.__octaCaptionClick=e.target.className,{once:true});
+            return {x:h.x+40,y:h.y+h.height/2,left:r.left,top:r.top,
+              expectedX:Math.min(r.left+40,innerWidth-r.width),expectedY:Math.min(r.top+20,innerHeight-r.height)};})();'''
+
+        def prepared(view, result, _data):
+            try:
+                self.caption_original = json.loads(view.evaluate_javascript_finish(result).to_json(0))
+                self.caption_pointer(self.caption_original, drag=True)
+                self.GLib.timeout_add(100, self.check_native_caption)
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, prepared, None)
+
+    def check_native_caption(self):
+        script = '''(()=>{const dialog=document.querySelector('#about'),r=dialog.getBoundingClientRect(),
+            close=dialog.querySelector('.dialog-close').getBoundingClientRect();
+            return {left:r.left,top:r.top,trusted:window.__octaCaptionTrusted,
+              x:close.x+close.width/2,y:close.y+close.height/2};})();'''
+
+        def checked(view, result, _data):
+            try:
+                point = json.loads(view.evaluate_javascript_finish(result).to_json(0))
+                expected = self.caption_original
+                if (not point['trusted'] or abs(point['left'] - expected['expectedX']) > 1 or
+                        abs(point['top'] - expected['expectedY']) > 1):
+                    self.GLib.timeout_add(100, self.check_native_caption)
+                    return
+                self.phase = 'native-caption-close'
+                self.caption_pointer(point)
+                self.GLib.timeout_add(100, self.reopen_native_caption)
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, checked, None)
+        return False
+
+    def reopen_native_caption(self):
+        original = self.caption_original
+        script = f'''(()=>{{const dialog=document.querySelector('#about');if(dialog.open)return {{closed:false,
+              pointer:window.__octaCaptionPoint,clicked:window.__octaCaptionClick}};
+            const previousStyle=dialog.style.cssText;
+            dialog.showModal();const r=dialog.getBoundingClientRect();
+            return {{closed:true,left:r.left,top:r.top,previousStyle,style:dialog.style.cssText,
+              centered:Math.abs(r.left-{original['left']})<1&&Math.abs(r.top-{original['top']})<1}};}})();'''
+
+        def checked(view, result, _data):
+            try:
+                value = json.loads(view.evaluate_javascript_finish(result).to_json(0))
+                if not value.get('closed') or not value['centered']:
+                    raise RuntimeError(f'Caption close/reopen failed: {value}; original={original}; '
+                                       f'surface transform={self.window.get_surface_transform()}')
+                self.phase = 'native-caption-escape'
+                self.key('Escape', focus=False)
+                self.GLib.timeout_add(100, self.finish_native_caption)
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, checked, None)
+        return False
+
+    def finish_native_caption(self):
+        script = 'delete window.__octaCaptionTrusted;delete window.__octaCaptionPoint;' \
+                 'delete window.__octaCaptionClick;!document.querySelector("#about").open;'
+
+        def checked(view, result, _data):
+            try:
+                if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
+                    raise RuntimeError('Escape did not close the reopened native dialog.')
+                print('PASS trusted X11/WebKit dialog caption drag/close, centered reopen and Escape.', flush=True)
+                self.start_native_control() if self.write else self.start_save()
             except Exception as error:
                 self.fail(error)
         self.view.evaluate_javascript(script, -1, None, None, None, checked, None)
@@ -520,8 +618,7 @@ class Check(Desktop):
                     value = json.loads(view.evaluate_javascript_finish(result).to_json(0))
                     if not value['connected'] or not value['mixer'] or self.loads != 1:
                         raise RuntimeError(f'Desktop lost its live view after Save: {value}; loads={self.loads}')
-                    subprocess.run(['import', '-window', 'root', str(self.directory / 'gtk.png')], check=True, timeout=5)
-                    self.start_load() if self.write else self.start_navigation()
+                    self.capture_saved_view()
                 except Exception as error:
                     self.fail(error)
             self.view.evaluate_javascript('({connected:document.querySelector("#connection-message").hidden,'
@@ -537,6 +634,18 @@ class Check(Desktop):
             self.pending = True
             self.GLib.timeout_add(500, self.check_navigation)
         return not self.errors
+
+    def capture_saved_view(self):
+        def captured(view, result, _data):
+            try:
+                texture = view.get_snapshot_finish(result)
+                if not texture.save_to_png(str(self.directory / 'gtk.png')):
+                    raise RuntimeError('Could not save the native WebKit snapshot.')
+                self.start_load() if self.write else self.start_navigation()
+            except Exception as error:
+                self.fail(error)
+        self.view.get_snapshot(self.WebKit.SnapshotRegion.VISIBLE, self.WebKit.SnapshotOptions.NONE,
+                               None, captured, None)
 
     def check_navigation(self):
         if not self.view.get_uri().startswith(self.server.origin + '/'):

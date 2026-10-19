@@ -19,6 +19,7 @@ import {checkWheels, checkWheelDrags} from './GuiWheelBrowser.mjs';
 import {checkInputMonitor} from './GuiInputMonitor.mjs';
 import {checkFooter, checkFooterRates} from './GuiFooter.mjs';
 import {checkAutoSenseSelection, checkAutoSenseFailure} from './GuiAutoSense.mjs';
+import {checkDialogWindows} from './GuiDialogs.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -332,6 +333,7 @@ try {
   const settings = await fs.readFile(settingsFile);
   const header = 'OCTA-CAPTURE Control Panel Data\0Ver100\0';
   assert.equal(settings.subarray(0, Buffer.byteLength(header)).toString('ascii'), header);
+  await checkAutoSenseFailure(browser);
   if (write) {
     await browser.setFiles('#load-file', [settingsFile]);
     await until(() => browser.evaluate('document.querySelector("#confirm").open'), 'load confirmation');
@@ -340,7 +342,6 @@ try {
     assert.equal(await browser.evaluate('document.querySelector("#toast").hidden'), true, 'No settings load error');
     console.log('PASS browser settings download/upload, confirmation and verified device application');
     await browser.click('#view-switch');
-    await checkAutoSenseFailure(browser);
     for (const action of ['cancel', 'finish']) {
       await browser.click('#header-action');
       await checkAutoSenseSelection(browser);
@@ -373,6 +374,7 @@ try {
   if (rates) await checkRates(browser, api, directory, [44100, 48000, 96000, 192000][payload[2]]);
   if (rates) await checkFooterRates(browser, api);
   const expectedErrors = reload ? await checkReconnect(browser, api, launch, run) : {consoleErrors: [], httpErrors: []};
+  await checkDialogWindows(browser, directory);
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');
   assert.deepEqual(browser.securityErrors, [], 'Content Security Policy violations');
   if (playwright) {

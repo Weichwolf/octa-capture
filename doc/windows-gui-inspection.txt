@@ -143,6 +143,18 @@ Cancel (0x14001b600) stop calibration and close the dialog. macOS independently
 confirms selection guards and Finish/Cancel behavior. The offline display model
 does not prove actual Windows calibration or notification behavior.
 
+Dialog window behavior, 2026-10-19
+----------------------------------
+The offline model's Patch Bay window has WS_CAPTION and WS_SYSMENU
+(observed style 0x94c800cc). A Win32 SetWindowPos displacement of 100/60 pixels
+is retained while it is open. SC_CLOSE closes that modal; reopening with Ctrl+P
+creates it at its original centered position. The observation is recorded in
+ignored build/wine-reference/dialog-window-observations.json. This checks window
+creation/system-close behavior against the model, not native Windows rendering,
+physical hardware or an original mouse-drag handler.
+Six sampled parent-panel pixels outside the modal match the corresponding
+uncovered main-view capture exactly; the reference does not dim the owner panel.
+
 Windows driver compatibility checks
 -----------------------------------
 The vendor INF registers RDWM1110.SYS with ServiceType=1

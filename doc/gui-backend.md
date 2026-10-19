@@ -459,6 +459,19 @@ Reverb pre-delay/time use read-only text and clamped arrow controls, matching
 Windows edit style `0x50800882` and both original 0..12/0..49 index ranges.
 Patch Bay's top preset row and compact output selectors, and Reverb's compact
 controls follow Windows dialog resources 178/188 and the offline Wine captures.
+Secondary dialogs have draggable captions and a caption Close button. Reopening
+returns to centered placement; viewport/content changes keep moved dialogs
+reachable. The inactive panel retains its colors, matching reference captures.
+Caption dragging preserves control focus. Close dispatches the same
+cancel event as Escape, so nested confirmations decline their action and
+Auto-Sens remains open until the backend verifies completion. Pending cancellation
+disables both Close and Cancel and suppresses duplicate Escape requests.
+Browser checks cover all eight frames, viewport bounds/resize and declined nested
+initialization. Auto-Sens cancellation/pending/failure checks intercept browser
+responses and never send calibration commands to hardware. The installed native
+GTK checker additionally verifies trusted X11/WebKit caption drag/close,
+centered reopening and Escape. Native WebKit snapshots need no ImageMagick
+executable; device state and clock are checked independently afterward.
 All 13 pre-delay strings and 50 time displays agree with both binaries. Keyboard,
 pointer, endpoint bounds and all four effect-bank writes/readbacks are checked in
 the actual browser. Offline checks verify autorepeat cancellation on release,

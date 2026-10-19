@@ -68,11 +68,13 @@ async function mnemonics(browser, highest) {
     assert.equal(await browser.evaluate('document.querySelector("#diagram").open'), true);
   }
   await page.keyboard.press('Escape');
+  await page.locator('#diagram').waitFor({state: 'hidden'});
   for (const [key, id] of [['a', 'about'], ['s', 'readme'], ['d', 'settings']]) {
     await page.keyboard.press('Alt+d'); await page.keyboard.press(key);
     await page.locator(`#${id}`).waitFor({state: 'visible'});
     assert.equal(await browser.evaluate(`document.querySelector('#${id}').open`), true, `Driver mnemonic ${key}`);
     await page.keyboard.press('Escape');
+    await page.locator(`#${id}`).waitFor({state: 'hidden'});
   }
   await page.keyboard.press('Alt+v'); await page.keyboard.press('p');
   assert.equal(await browser.evaluate('document.querySelector("#patchbay").open'), !highest,

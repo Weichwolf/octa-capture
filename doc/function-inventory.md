@@ -183,6 +183,15 @@ export settings and decline all five Initialize confirmations with full raw
 state preserved. The installed GTK checker adds 18 trusted X11/WebKit key steps.
 Other system-key/platform edge cases and complete interaction parity remain.
 
+Secondary-dialog captions now support drag, cancel-aware Close and centered
+reopening. Eight browser frame checks cover viewport bounds/resize and declined
+nested initialization; trusted native X11/WebKit checks exercise caption
+drag/close, reopening and Escape with raw state/clock preserved. Auto-Sens Close
+uses the existing verified cancellation path and blocks duplicate pending closes;
+the browser cancellation/failure test is explicitly simulated. The original
+offline Patch Bay window verifies caption/system-menu flags and system-close
+recreation, not full native Windows input/rendering parity.
+
 Windows power registration (`0x1400127e0`) selects the
 [IAdapterPowerManagement interface](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/implementing-iadapterpowermanagement).
 Allocation failure returns false; a negative PortCls registration result is not

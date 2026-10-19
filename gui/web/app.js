@@ -8,6 +8,7 @@ import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
 import {masterFaderPreview, ReferenceFader} from './faders.js';
 import {knobDrag, knobKey, wheelDelta, wheelValue} from './knobs.js';
+import {DialogWindow} from './dialogs.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -722,6 +723,7 @@ function syncAutoSense(rateIndex) {
   $('#auto-start').disabled = inFlight.has('auto-sense') || !documentState.capabilities?.auto_sense || writing || localBusy ||
     (active ? job.state !== 'running' : busy || autoSenseChannels() === 0);
   $('#auto-cancel').disabled = inFlight.has('auto-sense') || job?.state === 'cancelling';
+  $('#auto-sens .dialog-close').disabled = $('#auto-cancel').disabled;
   $('#auto-cancel').textContent = unresolved ? 'Close' : 'Cancel';
   $('#auto-all').disabled = active || unresolved; $('#auto-none').disabled = active || unresolved;
 }
@@ -745,7 +747,7 @@ async function autoSenseRequest(path, body) {
 }
 
 function cancelAutoSense() {
-  if (inFlight.has('auto-sense')) return;
+  if ($('#auto-cancel').disabled) return;
   if (documentState?.auto_sense?.active) {
     void autoSenseRequest('/api/auto-sense/stop', {action: 'cancel'});
   } else $('#auto-sens').close();
@@ -866,6 +868,7 @@ function menu(name, anchor) {
 }
 
 function setupDialogs() {
+  for (const dialog of all('dialog')) new DialogWindow(dialog);
   for (const [index, name] of REVERB_TYPES.entries()) {
     const option = el('option', '', name); option.value = index; $('#reverb-type').append(option);
   }

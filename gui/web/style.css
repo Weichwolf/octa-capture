@@ -143,10 +143,12 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .menu .shortcut { color: #555; }
 .menu .submenu-arrow { align-self: center; font-size: 9px; }
 #toast { position: fixed; z-index: 60; bottom: 18px; left: 50%; transform: translateX(-50%); max-width: 600px; padding: 12px 18px; color: #fff; background: #342b25; border: 1px solid #917c58; box-shadow: 0 3px 16px #0008; }
-dialog { min-width: 240px; max-width: 650px; padding: 0; border: 2px ridge #ccc; background: #eee; color: #111; box-shadow: 0 8px 30px #0009; font: 12px Arial,sans-serif; }
+dialog { position: fixed; min-width: 240px; max-width: min(650px, calc(100vw - 16px)); padding: 0; border: 2px ridge #ccc; background: #eee; color: #111; box-shadow: 0 8px 30px #0009; font: 12px Arial,sans-serif; }
 dialog[open] { display: flex; flex-direction: column; max-height: calc(100dvh - 16px); }
-dialog::backdrop { background: #0004; }
-dialog h2 { flex-shrink: 0; margin: 0; padding: 6px 10px; background: #d3d3d3; font-size: 12px; font-weight: normal; border-bottom: 1px solid #aaa; }
+dialog::backdrop { background: transparent; }
+dialog .dialog-title { display: flex; align-items: center; flex-shrink: 0; background: #d3d3d3; border-bottom: 1px solid #aaa; touch-action: none; user-select: none; }
+dialog h2 { flex: 1; min-width: 0; margin: 0; padding: 6px 10px; font-size: 12px; font-weight: normal; }
+.dialog-title .dialog-close { display: grid; place-items: center; flex-shrink: 0; width: 18px; min-width: 18px; height: 18px; margin: 2px 4px 2px 0; padding: 0; font: 16px/16px Arial,sans-serif; }
 .dialog-content { padding: 12px 16px; min-height: 0; overflow: auto; }
 dialog footer { flex-shrink: 0; display: flex; justify-content: flex-end; gap: 7px; padding: 8px 12px; }
 dialog button, dialog select, dialog input { color-scheme: light; color: #111; }
@@ -161,7 +163,7 @@ dialog select, dialog input[type=number] { min-width: 100px; padding: 2px 4px; f
 #patchbay, #reverb { min-width: 0; font-size: 11px; background: #f4f4f4; }
 #patchbay { width: 231px; }
 .patchbay-presets { display: grid; grid-template-columns: 53px 74px 74px; gap: 2px; align-items: center; flex-shrink: 0; padding: 10px 8px 0 10px; }
-#patchbay button, #reverb footer button { height: 21px; min-width: 74px; padding: 0; font-size: 11px; }
+#patchbay button:not(.dialog-close), #reverb footer button { height: 21px; min-width: 74px; padding: 0; font-size: 11px; }
 #patchbay-content { padding: 10px 18px 0; }
 #patchbay-content label { display: grid; grid-template-columns: 78px 111px; height: 21px; margin: 0; gap: 0; }
 #patchbay-content select, #reverb-type { height: 20px; min-width: 0; padding: 0 2px; font-size: 11px; }
@@ -189,7 +191,7 @@ dialog select, dialog input[type=number] { min-width: 100px; padding: 2px 4px; f
 .auto-channels label { flex-direction: row; justify-content: flex-start; gap: 3px; margin: 0; }
 .auto-channels input { width: 13px; height: 13px; margin: 0; }
 .auto-selection-buttons { display: flex; flex-direction: column; gap: 6px; }
-#auto-sens button { height: 21px; padding: 0; font-size: 11px; }
+#auto-sens button:not(.dialog-close) { height: 21px; padding: 0; font-size: 11px; }
 #auto-sens footer { gap: 6px; padding: 9px 15px 8px; }
 #auto-start { width: 75px; }
 #auto-cancel { width: 81px; }
