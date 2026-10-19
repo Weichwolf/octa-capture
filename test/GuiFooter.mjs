@@ -14,13 +14,32 @@ export async function checkFooter(browser, api) {
   assert.equal(await browser.evaluate(`(() => {
     const panel=document.querySelector('#panel').getBoundingClientRect();
     const bar=document.querySelector('.device-bar').getBoundingClientRect();
+    const root=document.documentElement;
     return panel.width===978 && panel.height===429 && panel.top===0 && panel.bottom<=innerHeight &&
+      root.scrollWidth===root.clientWidth && root.scrollHeight===root.clientHeight && scrollX===0 && scrollY===0 &&
       bar.bottom<=panel.bottom && bar.top>=document.querySelector('main').getBoundingClientRect().bottom &&
       ['#device-status','#footer-rate'].every(selector=>{
         const node=document.querySelector(selector),box=node.getBoundingClientRect();
         return box.height>0 && node.contains(document.elementFromPoint(box.x+box.width/2,box.y+box.height/2));
       });
   })()`), true, 'Full panel and footer controls fit and receive pointer input at the native window size');
+  const originalView = await browser.evaluate('document.querySelector("#preamp-view").hidden');
+  try {
+    for (let view = 0; view < 2; view++) {
+      if (browser.page) {
+        await browser.click('#footer-rate');
+        await browser.page.keyboard.press('Escape');
+      }
+      assert.equal(await browser.evaluate(`(() => {
+        const root=document.documentElement, panel=document.querySelector('#panel').getBoundingClientRect();
+        return root.scrollWidth===root.clientWidth && root.scrollHeight===root.clientHeight &&
+          scrollX===0 && scrollY===0 && panel.x===0 && panel.y===0;
+      })()`), true, 'Both views stay within the window after opening and dismissing the rate menu');
+      await browser.click('#view-switch');
+    }
+  } finally {
+    if (await browser.evaluate('document.querySelector("#preamp-view").hidden') !== originalView) await browser.click('#view-switch');
+  }
   await browser.call('Emulation.setDeviceMetricsOverride', {width: 1100, height: 650, deviceScaleFactor: 1, mobile: false});
   if (browser.page) {
     const originalClock = await browser.evaluate('document.querySelector("#footer-clock").textContent');

@@ -87,7 +87,7 @@ class Check(Desktop):
                 value = view.call_async_javascript_function_finish(result)
                 self.result = json.loads(value.to_json(0))
                 print(f'PASS original main-panel control bounds in WebKit: {self.result["geometry"]}', flush=True)
-                self.start_native_space()
+                self.start_native_footer()
             except Exception as error:
                 self.fail(error)
         self.view.call_async_javascript_function(source, -1, None, None, None, None, finished, None)
@@ -102,6 +102,49 @@ class Check(Desktop):
         if focus:
             self.focus_window()
         subprocess.run(['xdotool', 'key', '--clearmodifiers', key], check=True, timeout=3)
+
+    def start_native_footer(self):
+        self.phase = 'native-footer'
+        script = '''(()=>{const node=document.querySelector('#footer-rate');
+            window.__octaFooterValue=node.value;window.__octaFooterClick=false;
+            node.addEventListener('click',event=>{window.__octaFooterClick=event.isTrusted;},{once:true});
+            const box=node.getBoundingClientRect();return {x:box.x+box.width/2,y:box.y+box.height/2};})()'''
+
+        def prepared(view, result, _data):
+            try:
+                point = json.loads(view.evaluate_javascript_finish(result).to_json(0))
+                valid, bounds = self.view.compute_bounds(self.window)
+                if not valid:
+                    raise RuntimeError('Cannot locate the rate menu in the native window.')
+                scale = self.view.get_zoom_level()
+                subprocess.run(['xdotool', 'mousemove', '--window', self.focus_window(),
+                                str(round(bounds.get_x() + point['x'] * scale)),
+                                str(round(bounds.get_y() + point['y'] * scale)), 'click', '1'],
+                               check=True, timeout=3)
+                self.GLib.timeout_add(200, self.finish_native_footer)
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, prepared, None)
+
+    def finish_native_footer(self):
+        self.key('Escape', focus=False)
+        script = '''(()=>{const node=document.querySelector('#footer-rate'),root=document.documentElement;
+            const panel=document.querySelector('#panel').getBoundingClientRect();
+            const valid=window.__octaFooterClick && node.value===window.__octaFooterValue &&
+                root.scrollWidth===root.clientWidth && root.scrollHeight===root.clientHeight &&
+                scrollX===0 && scrollY===0 && panel.x===0 && panel.y===0;
+            delete window.__octaFooterClick;delete window.__octaFooterValue;return valid;})()'''
+
+        def checked(view, result, _data):
+            try:
+                if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
+                    raise RuntimeError('The native rate menu changed the panel position, overflow or sample rate.')
+                print('PASS trusted X11/WebKit rate menu opens and dismisses without scrolling or changing the rate.', flush=True)
+                self.start_native_space()
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, checked, None)
+        return False
 
     def start_native_space(self):
         self.phase = 'native-space-focus'

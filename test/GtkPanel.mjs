@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Trusted test body for WebKit.call_async_javascript_function; write is supplied by the checker.
 function checkFooter(documentState, check) {
+  const root = document.documentElement;
+  check(root.scrollWidth === root.clientWidth && root.scrollHeight === root.clientHeight && scrollX === 0 && scrollY === 0,
+    'GTK panel has no overflowing content or document scrollbars');
   const rate = [44100, 48000, 96000, 192000][parseInt(documentState.state.payload_hex.slice(4, 6), 16)];
   check(Number(document.querySelector('#footer-rate').value) === rate, 'GTK footer displays the actual device rate');
   check(document.querySelector('#footer-clock').textContent === document.querySelector('#settings-clock').textContent,
@@ -107,6 +110,7 @@ export async function checkPanel(write, outputReference) {
   }
   document.querySelector('#view-switch').click();
   check(!document.querySelector('#mixer-view').hidden, 'Direct Mixer opened');
+  checkFooter(documentState, check);
   check(document.querySelectorAll('.mixer-strip').length === 20, 'Twenty mixer strips');
   checkOutputJacks(initial, outputReference, check);
   await until(() => document.querySelectorAll('.level-lane:not(.stale)').length === mixerChannels * 2,

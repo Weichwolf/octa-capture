@@ -92,7 +92,7 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .meter-scale { position: absolute; top: 0; bottom: 0; width: 18px; font-size: 8px; }
 .meter-scale > span { position: absolute; left: 0; right: 0; }
 .meter.in .meter-scale { left: 9px; }
-.meter.out .meter-scale { left: 9px; text-align: left; }
+.meter.out .meter-scale { left: 9px; width: 13px; text-align: left; }
 .meter-name { position: absolute; bottom: -12px; left: -1px; font-size: 8px; }
 .parameters { position: absolute; top: 211px; left: 9px; display: grid; grid-template-columns: repeat(3, 38px); grid-template-rows: 46px 46px; gap: 0; padding: 0; }
 .parameters > .knob { width: 25px; }
