@@ -5,7 +5,7 @@ shopt -s nullglob
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
 if (( EUID != 0 )) || [[ $# != 1 ]]; then
-    echo 'Use sudo octa-capture-dev {status|install|unload|detach}.' >&2
+    echo 'Use sudo octa-capture-dev {status|install|unload|detach|runtime-pm}.' >&2
     exit 2
 fi
 
@@ -24,6 +24,9 @@ case "$1" in
         ;;
     unload)
         exec modprobe -r snd-octa-capture
+        ;;
+    runtime-pm)
+        exec /usr/local/libexec/octa-capture/runtime-pm
         ;;
     detach)
         for device in /sys/bus/usb/devices/*; do
@@ -45,7 +48,7 @@ case "$1" in
         exit 1
         ;;
     *)
-        echo 'Allowed actions: status, install, unload, detach.' >&2
+        echo 'Allowed actions: status, install, unload, detach, runtime-pm.' >&2
         exit 2
         ;;
 esac

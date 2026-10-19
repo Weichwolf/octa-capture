@@ -131,6 +131,13 @@ device change and restoration; arbitrary touchpad gestures remain unverified.
 
 ## Specific unresolved distinctions
 
+The USB runtime-PM checker is prepared in `tools/check-runtime-pm.py`: regular-user
+status/MIDI/quiet PCM probes with observed suspend, independent resume evidence
+and full state/clock/policy recovery. Its fixed root-helper lease only changes
+the target device's power policy, is bounded to 120 seconds and restores on
+client loss. Offline policy tests are not hardware evidence; native/WSL runtime
+suspend/resume remains unverified. See the kernel README for the helper setup.
+
 Native small-buffer streaming is not established as stable under CPU load.
 The aperiodic digital test passes all ten sources at 44.1 kHz with verified
 256/1024-frame period/buffer. Normal-priority 48 kHz runs under concurrent load

@@ -20,13 +20,14 @@ tools_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 rules_file=$(mktemp)
 trap 'rm -f -- "$rules_file"' EXIT
-printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/octa-capture-dev status, /usr/local/sbin/octa-capture-dev install, /usr/local/sbin/octa-capture-dev unload, /usr/local/sbin/octa-capture-dev detach\n' \
+printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/octa-capture-dev status, /usr/local/sbin/octa-capture-dev install, /usr/local/sbin/octa-capture-dev unload, /usr/local/sbin/octa-capture-dev detach, /usr/local/sbin/octa-capture-dev runtime-pm\n' \
     "$target_user" > "$rules_file"
 visudo -cf "$rules_file"
 
 install -d -m 0755 /usr/local/libexec/octa-capture /usr/local/sbin
 install -o root -g root -m 0755 "$tools_dir/root-helper.sh" /usr/local/sbin/octa-capture-dev
 install -o root -g root -m 0755 "$tools_dir/install-module.sh" /usr/local/libexec/octa-capture/install-module
+install -o root -g root -m 0755 "$tools_dir/runtime_pm.py" /usr/local/libexec/octa-capture/runtime-pm
 printf '%s\n' "$module_file" > /etc/octa-capture-dev-module
 chown root:root /etc/octa-capture-dev-module
 chmod 0644 /etc/octa-capture-dev-module

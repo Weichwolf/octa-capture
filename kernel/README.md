@@ -168,6 +168,39 @@ upstream issues (6.18 endpoint scoped-lock contexts, 6.12 Scarlett Boolean
 expressions). No diagnostics are suppressed. Host fuzzing does not replace
 kernel sanitizer/URB fault testing.
 
+## USB runtime suspend/resume check
+
+`tools/check-runtime-pm.py --rates` prepares a regular-user check of all four
+rates. Close the GUI and competing ALSA/MIDI/USB clients first. It waits for two
+consecutive `runtime_status=suspended` observations before each status, CTRL MIDI
+and quiet PCM/idle-meter probe, then checks measured active time, full raw state
+and clock. A durable recovery file is retained under `build/hardware/`.
+The original state, clock and USB power policy are independently checked after
+cleanup. A failed probe still fails even when restoration succeeds.
+
+The optional development helper needs its new, fixed `runtime-pm` action:
+
+```sh
+sudo tools/grant-dev-access.sh "$USER" "$PWD/build/driver-native/snd-octa-capture.ko"
+python3 tools/check-runtime-pm.py --rates
+```
+
+This updates the helper/sudoers rule without reloading the module. Only the
+root-owned isolated Python policy helper runs as root; it accepts no path/device
+arguments and requires exactly one `0582:0120` using `snd-octa-capture`. It leases
+`power/control=auto` and a zero autosuspend delay for up to 120 seconds. EOF,
+client pipe closure, handled signals or the deadline restore/read back the
+original policy. A root-owned lock excludes concurrent leases; device identity
+is rechecked before restoration. Pinned attribute descriptors prevent activation
+writes from following a replaced bus path; backend recovery also refuses a
+replacement unit.
+
+The `runtime-pm` CTest uses fake sysfs files and fixed failure cases for binding,
+policy restoration, partial writes, signals, client loss, timeout and replacement.
+It never invokes sudo, touches real sysfs or runs a device test. Native/WSL
+runtime-PM hardware results are not yet established. This checker also does not
+prove system sleep, reset-resume, physical hotplug or USB/URB fault handling.
+
 ## Isolated sanitizer kernel build
 
 The optional development fixture builds an x86_64 Linux 6.12 kernel with

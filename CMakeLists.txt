@@ -137,6 +137,8 @@ add_test(NAME mixer-audio-check COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_
 set_tests_properties(mixer-audio-check PROPERTIES TIMEOUT 10)
 add_test(NAME pcm-realtime COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/PcmRealtime.py")
 set_tests_properties(pcm-realtime PROPERTIES TIMEOUT 10)
+add_test(NAME runtime-pm COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/RuntimePm.py")
+set_tests_properties(runtime-pm PROPERTIES TIMEOUT 10)
 add_test(NAME audio-soak-check COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/AudioSoak.py")
 set_tests_properties(audio-soak-check PROPERTIES TIMEOUT 10)
 add_test(NAME gui-auto-sense COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiAutoSense.py")
