@@ -43,19 +43,29 @@ struct snd_usb_midi {
   void *dev;
 };
 
-struct snd_usb_midi_out_endpoint {
-  struct snd_usb_midi *umidi;
-};
+struct snd_usb_midi_out_endpoint;
+struct snd_rawmidi_substream;
 
 struct usbmidi_out_port {
   struct snd_usb_midi_out_endpoint *ep;
+  struct snd_rawmidi_substream *substream;
+  int active;
   uint8_t cable;
   uint8_t state;
   uint8_t data[2];
 };
 
+struct snd_usb_midi_out_endpoint {
+  struct snd_usb_midi *umidi;
+  int max_transfer;
+  struct usbmidi_out_port ports[cable_count];
+};
+
 struct snd_rawmidi_substream {
   int number;
+  const uint8_t *input;
+  size_t size;
+  size_t position;
 };
 
 struct usbmidi_in_port {
@@ -110,6 +120,13 @@ snd_rawmidi_receive(struct snd_rawmidi_substream *stream, const uint8_t *data, i
   }
   received_size[port] += size;
   return length;
+}
+
+static int snd_rawmidi_transmit(struct snd_rawmidi_substream *stream, uint8_t *data, int count) {
+  if (count != 1) { abort(); }
+  if (stream->position == stream->size) { return 0; }
+  *data = stream->input[stream->position++];
+  return 1;
 }
 
 // The verifier generates this include from audited Linux sources, preserving notices.
@@ -171,6 +188,39 @@ static bool receive(int size, uint8_t *data, unsigned long triggered) {
   return true;
 }
 
+static bool scheduled_transmit(const uint8_t *data, size_t size) {
+  if (size < 3 || size > buffer_size / 4 || data[2] >= cable_count) { return false; }
+  const int capacity = data[0] | ((int)data[1] << byte_bits);
+  if (capacity < 8 || capacity > 512 || capacity % 4 != 0) { return false; }
+  uint8_t *packet_buffer = malloc((size_t)capacity);
+  if (packet_buffer == NULL) { return false; }
+  uint8_t output[buffer_size];
+  size_t written = 0;
+  struct urb urb = {.transfer_buffer = packet_buffer};
+  const struct usb_protocol_ops ops = {.output_packet = snd_usbmidi_output_standard_packet};
+  struct snd_usb_midi device = {.usb_protocol_ops = &ops};
+  struct snd_rawmidi_substream stream = {.input = data + 3, .size = size - 3};
+  struct snd_usb_midi_out_endpoint endpoint = {.umidi = &device, .max_transfer = capacity};
+  endpoint.ports[data[2]] = (struct usbmidi_out_port){
+      .ep = &endpoint, .substream = &stream, .active = 1, .cable = (uint8_t)(data[2] << 4)};
+  bool valid = true;
+  while (endpoint.ports[data[2]].active) {
+    urb.transfer_buffer_length = 0;
+    snd_usbmidi_standard_output(&endpoint, &urb);
+    if (urb.transfer_buffer_length < 0 || urb.transfer_buffer_length > capacity ||
+        (!urb.transfer_buffer_length && endpoint.ports[data[2]].active) ||
+        (size_t)urb.transfer_buffer_length > sizeof(output) - written) {
+      valid = false;
+      break;
+    }
+    for (int index = 0; index < urb.transfer_buffer_length; ++index) {
+      output[written++] = packet_buffer[index];
+    }
+  }
+  free(packet_buffer);
+  return valid && stream.position == stream.size && write_bytes(output, written);
+}
+
 struct completion_request {
   int status;
   int submit;
@@ -214,6 +264,34 @@ static bool completion(struct completion_request request) {
   return write_bytes(result, sizeof(result));
 }
 
+struct host_request {
+  int mode;
+  int triggered;
+  uint8_t *input;
+  uint32_t size;
+};
+
+static bool handle_record(struct host_request request) {
+  switch (request.mode) {
+    case 0: return transmit(request.input, request.size);
+    case 1: return receive((int)request.size, request.input, (unsigned long)request.triggered);
+    case 2: {
+      if (request.size != 8) { return false; }
+      uint32_t status = 0;
+      uint32_t submission = 0;
+      for (unsigned int index = 0; index < 4; ++index) {
+        status |= (uint32_t)request.input[index] << (index * byte_bits);
+        submission |= (uint32_t)request.input[index + 4] << (index * byte_bits);
+      }
+      const struct completion_request result = {.status = signed_word(status),
+                                                .submit = signed_word(submission)};
+      return completion(result);
+    }
+    case 3: return scheduled_transmit(request.input, request.size);
+    default: return false;
+  }
+}
+
 int main(void) {
   uint8_t input[buffer_size];
   int mode;
@@ -224,23 +302,9 @@ int main(void) {
         fread(input, 1, size, stdin) != size) {
       return EXIT_FAILURE;
     }
-    if (mode == 0) {
-      if (!transmit(input, size)) { return EXIT_FAILURE; }
-    } else if (mode == 1) {
-      if (!receive((int)size, input, (unsigned long)triggered)) { return EXIT_FAILURE; }
-    } else if (mode == 2 && size == 8) {
-      uint32_t status = 0;
-      uint32_t submission = 0;
-      for (unsigned int index = 0; index < 4; ++index) {
-        status |= (uint32_t)input[index] << (index * 8);
-        submission |= (uint32_t)input[index + 4] << (index * 8);
-      }
-      const struct completion_request request = {.status = signed_word(status),
-                                                 .submit = signed_word(submission)};
-      if (!completion(request)) { return EXIT_FAILURE; }
-    } else {
-      return EXIT_FAILURE;
-    }
+    const struct host_request request = {
+        .mode = mode, .triggered = triggered, .input = input, .size = size};
+    if (!handle_record(request)) { return EXIT_FAILURE; }
   }
   return ferror(stdin) || fflush(stdout) != 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }

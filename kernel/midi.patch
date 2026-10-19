@@ -1,0 +1,108 @@
+Subject: [PATCH] Private OCTA-CAPTURE MIDI reference semantics
+
+Keep system ALSA unchanged; embed this helper only in snd-octa-capture.
+
+---
+--- a/sound/usb/midi.c
++++ b/sound/usb/midi.c
+@@ -58,6 +58,7 @@
+-#include "midi.h"
+-#include "power.h"
+-#include "helper.h"
+-
+-/*
+- * define this to log all USB packets
++#include "midi.h"
++#include "power.h"
++#include "helper.h"
++#include "octa-midi.h"
++
++/*
++ * define this to log all USB packets
+@@ -394,9 +395,11 @@
+-	for (i = 0; i + 3 < buffer_length; i += 4)
+-		if (buffer[i] != 0) {
+-			int cable = buffer[i] >> 4;
+-			int length = snd_usbmidi_cin_length[buffer[i] & 0x0f];
+-			snd_usbmidi_input_data(ep, cable, &buffer[i + 1],
+-					       length);
+-		}
+-}
+-
++	for (i = 0; i + 3 < buffer_length; i += 4)
++		if (buffer[i] != 0) {
++			int cable = buffer[i] >> 4;
++			int length = octa_midi_event_length(&buffer[i]);
++
++			if (length)
++				snd_usbmidi_input_data(ep, cable, &buffer[i + 1],
++						       length);
++		}
++}
++
+@@ -613,6 +616,15 @@
+-	void (*output_packet)(struct urb*, uint8_t, uint8_t, uint8_t, uint8_t) =
+-		port->ep->umidi->usb_protocol_ops->output_packet;
+-
+-	if (b >= 0xf8) {
+-		output_packet(urb, p0 | 0x0f, b, 0, 0);
+-	} else if (b >= 0xf0) {
++	void (*output_packet)(struct urb*, uint8_t, uint8_t, uint8_t, uint8_t) =
++		port->ep->umidi->usb_protocol_ops->output_packet;
++
++	if (b >= 0x80 && b < 0xf8 && port->state >= STATE_SYSEX_0) {
++		unsigned char event[4];
++
++		if (octa_midi_sysex_end(p0, port->state - STATE_SYSEX_0,
++					port->data, event))
++			output_packet(urb, event[0], event[1], event[2], event[3]);
++		port->state = STATE_UNKNOWN;
++	}
++
++	if (b >= 0xf8) {
++		output_packet(urb, p0 | 0x0f, b, 0, 0);
++	} else if (b >= 0xf0) {
+@@ -639,20 +651,6 @@
+-			port->state = STATE_UNKNOWN;
+-			break;
+-		case 0xf7:
+-			switch (port->state) {
+-			case STATE_SYSEX_0:
+-				output_packet(urb, p0 | 0x05, 0xf7, 0, 0);
+-				break;
+-			case STATE_SYSEX_1:
+-				output_packet(urb, p0 | 0x06, port->data[0],
+-					      0xf7, 0);
+-				break;
+-			case STATE_SYSEX_2:
+-				output_packet(urb, p0 | 0x07, port->data[0],
+-					      port->data[1], 0xf7);
+-				break;
+-			}
+-			port->state = STATE_UNKNOWN;
+-			break;
+-		}
+-	} else if (b >= 0x80) {
++			port->state = STATE_UNKNOWN;
++			break;
++		case 0xf7:
++			break;
++		}
++	} else if (b >= 0x80) {
+@@ -713,7 +711,9 @@
+-		struct usbmidi_out_port *port = &ep->ports[p];
+-		if (!port->active)
+-			continue;
+-		while (urb->transfer_buffer_length + 3 < ep->max_transfer) {
+-			uint8_t b;
+-			if (snd_rawmidi_transmit(port->substream, &b, 1) != 1) {
+-				port->active = 0;
++		struct usbmidi_out_port *port = &ep->ports[p];
++		if (!port->active)
++			continue;
++		/* A SysEx close followed by F6 needs two complete events. */
++		while (urb->transfer_buffer_length +
++		       (port->state >= STATE_SYSEX_0 ? 7 : 3) < ep->max_transfer) {
++			uint8_t b;
++			if (snd_rawmidi_transmit(port->substream, &b, 1) != 1) {
++				port->active = 0;

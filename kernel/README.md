@@ -1,8 +1,8 @@
 # Standalone ALSA module
 
-The driver is built as **`snd-octa-capture.ko`**, using an isolated copy of ALSA's USB audio implementation. Debian's kernel and its source tree remain untouched. The module matches only `0582:0120`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` module to coexist for other devices. It uses the kernel's existing MIDI helper.
+The driver is built as **`snd-octa-capture.ko`**, using isolated copies of ALSA's USB audio and MIDI implementations. Debian's kernel and its source tree remain untouched. The module matches only `0582:0120`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` and `snd-usbmidi-lib` modules to coexist for other devices. The embedded MIDI helper closes interrupted SysEx and filters input events like the Windows/macOS references.
 
-The module builds against Debian 6.12 and WSL 6.18 with `W=1` and `-Werror`. It exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. Native Debian 6.12 passes clock/status reads and PCM meter/lifecycle checks at 44.1/48/96/192 kHz. Mixer A digital-return PRBS streams pass on all ten playback sources at 44.1/48/96 kHz, using ten-second streams, 1024-frame periods and an 8192-frame buffer. The 192 kHz mode has four capture/playback channels and no return 11/12; its PCM checks do not establish signal integrity.
+The embedded-MIDI module builds against Debian 6.12 with `W=1` and `-Werror`; its MIDI source passes Sparse. The earlier shared-MIDI baseline also built against WSL 6.18; the updated module still needs that target's build files and runtime verification. Both supported private MIDI source copies pass the offline reference comparison. The module exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. Native Debian 6.12 passes clock/status reads and PCM meter/lifecycle checks at 44.1/48/96/192 kHz. Mixer A digital-return PRBS streams pass on all ten playback sources at 44.1/48/96 kHz, using ten-second streams, 1024-frame periods and an 8192-frame buffer. The 192 kHz mode has four capture/playback channels and no return 11/12; its PCM checks do not establish signal integrity.
 
 WSL 6.18 needs the host workaround below. Simultaneous capture/zero-playback passes ten minutes per rate with 1024/8192-frame period/buffer, but smaller periods produced underruns and digital-return tests found sample gaps without XRUNs. Physical analog response, external synchronization and broader native latency/stability testing remain required.
 
@@ -40,7 +40,15 @@ sudo ./tools/install-module.sh build/module-build/snd-octa-capture.ko
 
 On native Debian, build files normally come from `linux-headers-$(uname -r)`; source comes from the corresponding `linux-source` package. The full kernel build in the WSL setup supplies its missing build files; normal Debian installation needs only the module build. The installer configures module loading order so the dedicated driver takes precedence while `snd-usb-audio` remains available for other devices.
 
-`kernel/linux-*.patch` files modify only the private module copy. Imported Linux files retain their original copyright and license notices; original additions use GPL-2.0-only.
+`kernel/linux-*.patch` and the shared `kernel/midi.patch` modify only the private module copy. Imported Linux files retain their original copyright and license notices; original additions use GPL-2.0-only.
+
+The `midi-framing` CTest covers the portable input filter and SysEx-ending helper.
+The optional [MIDI reference check](../doc/usb-midi-protocol.txt)
+also compiles the actual prepared ALSA encoder, decoder and output scheduler with
+ASan/UBSan. While a SysEx is pending, the output scheduler reserves two complete
+USB events before consuming a byte, preventing a synthesized F7 plus F6 from
+overrunning an URB. These are host tests; kernel concurrency and fault-injection
+coverage remain separate requirements. No additional MIDI port is exposed.
 
 `tools/check-audio-soak.py --duration 600 --period-size 1024 --rate 192000`
 repeats an isolated quiet duplex run; `--rates` instead cycles all four rates.

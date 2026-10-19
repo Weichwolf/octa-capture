@@ -181,11 +181,12 @@ these paths. This Windows-internal control path is distinct from macOS/Linux
 CTRL on cable 1. Device support on cable 2 has not been tested; Linux does not
 expose it as an additional port.
 
-The comparator compiles seven unchanged ALSA MIDI functions with a serial host
+The comparator compiles eight selected ALSA MIDI functions with a serial host
 model, strict warnings, ASan/UBSan, clang-format and clang-tidy. It pins the
 selected functions/constants by hash before compilation and preserves their
-license notice. The supported 6.12 and 6.18 private copies have the same hash.
-This does not prove that a loaded kernel helper has the same machine code.
+license notice. Separate hashes identify unmodified ALSA and the prepared
+private implementation (--patched), each matching across supported 6.12 and
+6.18 source copies. Source comparison does not identify a loaded kernel binary.
 The 2,525 fixed transmit/receive cases match macOS, Windows (when supplied)
 and ALSA. They cover all musical channels and message
 families, running status, boundary data values, system-common/realtime bytes,
@@ -203,14 +204,26 @@ HZ=1000 and observes the existing 100 ms delay. A failed resubmission does not
 schedule another retry in this callback. Submission/timers are stubs, so actual
 USB faults, kernel concurrency/sanitizers and recovery remain unverified.
 
-Twelve aborted-SysEx cases establish a Windows-parity gap: Windows and macOS
-insert F7 before a new non-realtime status; ALSA discards unflushed SysEx bytes
-and starts the new message. Already emitted complete packets remain. The CTRL
-backend sends complete frames. Eleven fixed receive regressions expose another
-difference: both references discard eight selected status/CIN or data-byte
-mismatches that ALSA passes by CIN length. SysEx CINs still pass opaque bytes
-in both references; this is not comprehensive MIDI validation. These checks
-record the differences and do not change the Linux helper.
+The module embeds its own ALSA MIDI helper; the system helper is unchanged.
+kernel/midi.patch and kernel/octa-midi.h close interrupted SysEx with F7 before
+a new non-realtime status, matching both references in twelve fixed cases.
+They also preserve running status across a stray F7 outside SysEx. Another
+194 status-recovery cases compare all channel/system-common terminators,
+new SysEx, undefined statuses, F6/F7 and partial running-status messages.
+Unmodified ALSA drops unflushed interrupted-SysEx bytes instead.
+
+The private input path matches eleven fixed receive regressions: it discards
+eight selected status/CIN or data-byte mismatches that unmodified ALSA passes
+by CIN length. SysEx CINs still pass opaque bytes in both references; this is
+not comprehensive MIDI validation. The ordinary midi-framing CTest covers
+the portable filter and synthesized ending packets without manufacturer files.
+
+The actual private ALSA output scheduler executes in 48 additional boundary
+cases with separately allocated 8/12/16/512-byte URB buffers and ASan/UBSan.
+Pending SysEx reserves eight bytes before consuming the next byte: an
+interruption by F6 can emit both an ending and a tune-request event. Byte
+consumption and complete output streams match the references across URBs.
+Native scheduling, latency, saturation and kernel concurrency remain unproven.
 
 Five transmit FIFO boundary cases verify the Windows ring's 0x2800 packet
 slots, four-slot reserve and wrap. Five receive boundary cases verify its
@@ -221,11 +234,14 @@ reference observation, not a Linux behavior or a hardware saturation test.
 
   python3 tools/verify-midi-framing.py \
     doc/local/macos-analysis/midi-x86_64 build/driver-native/midi.c \
+    --patched \
     --windows doc/local/windows-kernel-analysis/RDWM1110.SYS
   # Repeat with build/driver-wsl/midi.c for the other supported source copy.
 
 This optional check needs the original hash-pinned binaries, the ALSA source
 copy, Python Unicorn and LLVM 19. Omit --windows for macOS/ALSA only.
+Omit --patched when supplying an unmodified kernel sound/usb/midi.c; that mode
+records the original ALSA differences rather than asserting reference parity.
 It sends nothing to hardware and performs no
 fuzzing. Host sanitizer checks do not replace kernel fault-injection tests.
 
@@ -235,6 +251,12 @@ queries on subdevice 1 and receives actual meters. No DIN input bytes arrive,
 and no DIN output/write API is invoked. Complete raw state and the original
 clock are preserved; ownership is released afterward. This checks logical
 port isolation/ownership, not physical DIN loopback, scheduling or saturation.
+The embedded-MIDI module also passes the four-rate PCM meter/lifecycle checks,
+including idle/normal capture/playback handover, client close/reopen and dead
+client lease expiry. Module identity is checked through its GNU build ID.
+PulseAudio discovery can select 44.1 kHz after a reload; wait for its probes to
+release PCM and restore the original rate before checking full state. These
+native checks end with the complete original raw state and 48 kHz restored.
 With the GUI closed and a quiet DIN source, reproduce as a regular user:
 
   python3 tools/check-bridge.py --din-isolation --bin-dir build/strict

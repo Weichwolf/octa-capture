@@ -36,15 +36,16 @@ trap 'rm -rf -- "$staging_dir"' EXIT
 cp -- "$source_dir/sound/usb/"*.c "$source_dir/sound/usb/"*.h "$staging_dir/"
 cp -- "$source_dir/sound/usb/Makefile" "$staging_dir/Makefile"
 patch --batch --fuzz=0 --directory="$staging_dir" -p3 < "$patch_file"
+patch --batch --fuzz=0 --directory="$staging_dir" -p3 < "$repo_dir/kernel/midi.patch"
 # Keep device-specific code shared between the supported kernel adapters.
 cp -- "$repo_dir/kernel/"*.c "$repo_dir/kernel/"*.h "$staging_dir/"
 
 # Keep the ALSA implementation private so snd-usb-audio can coexist with it.
 sed -E -i '/^EXPORT_SYMBOL(_GPL)?\([[:alnum:]_]+\);$/d' "$staging_dir/"*.c
-# Use the kernel's existing MIDI helper; build only our dedicated audio module.
+# Embed the private MIDI implementation; keep system MIDI modules untouched.
 sed -i -e 's/snd-usb-audio/snd-octa-capture/g' \
     -e '/^obj-/d' -e '/^snd-usbmidi-lib-y[[:space:]]*:=/d' "$staging_dir/Makefile"
-printf '\nobj-m += snd-octa-capture.o\n' >> "$staging_dir/Makefile"
+printf '\nsnd-octa-capture-y += midi.o\nobj-m += snd-octa-capture.o\n' >> "$staging_dir/Makefile"
 
 mv -T -- "$staging_dir" "$output_dir"
 trap - EXIT

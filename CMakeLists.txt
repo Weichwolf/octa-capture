@@ -234,6 +234,12 @@ add_test(NAME meters COMMAND meters_test)
 add_executable(midi_test test/Midi.cpp)
 target_link_libraries(midi_test PRIVATE octa_midi)
 add_test(NAME midi COMMAND midi_test)
+add_executable(midi_framing_test test/MidiFraming.cpp)
+target_include_directories(midi_framing_test PRIVATE kernel)
+target_link_libraries(midi_framing_test PRIVATE octa_quality)
+add_test(NAME midi-framing COMMAND midi_framing_test)
+set_tests_properties(midi-framing PROPERTIES TIMEOUT 10
+  ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 add_executable(midi_transport_test test/MidiTransport.cpp src/PresetDevice.cpp)
 target_link_libraries(midi_transport_test PRIVATE octa_midi PkgConfig::ALSA)
 add_test(NAME midi-transport COMMAND midi_transport_test)
@@ -243,6 +249,8 @@ add_test(NAME midi-observed-auto-sense COMMAND midi_transport_test --observed-au
 set_tests_properties(midi-observed-auto-sense PROPERTIES TIMEOUT 20)
 set_tests_properties(initialization direct-out device-status status-control protocol preamp control control-cli panel-command input-monitor panel-cli bridge state-json gui-backend gui-http gui-auto-sense gui-navigation gui-devices gui-preferences gui-warnings gui-graphs gui-install dkms-build gui-parameters gui-meters gui-javascript dsp dsp-update dsp-control preset-import preset-state preset preset preset-cli auto-sense auto-sense-cli pcm-peaks pcm-meters pcm-meter-control meters midi midi-transport midi-auto-sense-finish midi-auto-sense-cancel PROPERTIES TIMEOUT 20
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
+
+set(octa_midi_framing_sources "${CMAKE_SOURCE_DIR}/test/MidiFraming.cpp")
 
 set(octa_peak_sources "${CMAKE_SOURCE_DIR}/test/PcmPeaks.cpp"
   "${CMAKE_SOURCE_DIR}/test/PcmMeters.cpp"
@@ -278,6 +286,7 @@ add_custom_target(format-check
     ${octa_kernel_status_sources} ${octa_status_shims}
     ${octa_bridge_sources}
     ${octa_peak_sources}
+    ${octa_midi_framing_sources}
     ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/DeviceStatus.hpp"
@@ -350,6 +359,7 @@ add_custom_target(format
     ${octa_kernel_status_sources} ${octa_status_shims}
     ${octa_bridge_sources}
     ${octa_peak_sources}
+    ${octa_midi_framing_sources}
     ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
     "${CMAKE_SOURCE_DIR}/include/octa/DeviceStatus.hpp"
@@ -421,6 +431,7 @@ add_custom_target(lint
     ${octa_kernel_status_sources}
     ${octa_bridge_sources}
     ${octa_peak_sources}
+    ${octa_midi_framing_sources}
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/DeviceStatus.cpp"
     "${CMAKE_SOURCE_DIR}/src/DirectOut.cpp"

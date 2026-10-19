@@ -21,7 +21,8 @@ from reference_windows_midi import WindowsMidi
 HELPERS = runpy.run_path(str(Path(__file__).with_name('verify-pcm-peaks.py')))
 CONTEXT, PROPS, DATA, STOP = (HELPERS[name] for name in ('CONTEXT', 'PROPS', 'DATA', 'STOP'))
 MIDI_SHA256 = '4dc99de17c8228fcde71dd954a954df9c722b42633a073d29bceec06d6b98927'
-ALSA_SHA256 = '4cb3b394c6e226e85b6a907603e294a1ebed366bd924afced2dda169e4733dba'
+ALSA_SHA256 = 'f8bb633e279277bcff23397624c98f99686793290126e4a3f5a7cca17743843d'
+ALSA_PATCHED_SHA256 = 'f76cbe2be9226fe459fb11fed504adf51aa4da4f1865306c32f68b84ec66cbe8'
 LENGTHS = (0, 0, 2, 3, 3, 1, 2, 3, 3, 3, 3, 3, 2, 2, 3, 1)
 REALTIME = (0xf8, 0xfa, 0xfb, 0xfc, 0xfe, 0xff)
 require, write = HELPERS['require'], HELPERS['write']
@@ -38,11 +39,11 @@ def returned(cpu, value):
     cpu.reg_write(registers.UC_X86_REG_RSP, stack + 8)
 
 
-def extract_alsa(path):
+def extract_alsa(path, patched=False):
     source = path.read_text()
     names = ('snd_usbmidi_output_standard_packet', 'snd_usbmidi_transmit_byte',
              'snd_usbmidi_input_data', 'snd_usbmidi_standard_input', 'snd_usbmidi_urb_error',
-             'snd_usbmidi_submit_urb', 'snd_usbmidi_in_urb_complete')
+             'snd_usbmidi_submit_urb', 'snd_usbmidi_in_urb_complete', 'snd_usbmidi_standard_output')
     functions = []
     for name in names:
         match = re.search(r'^static (?:void|int) ' + name + r'\(', source, re.M)
@@ -59,19 +60,26 @@ def extract_alsa(path):
     constants += re.findall(r'^#define STATE_\w+\s+\d+.*$', source, re.M)
     constants += re.findall(r'^#define ERROR_DELAY_JIFFIES.*$', source, re.M)
     digest = hashlib.sha256('\n'.join(functions + constants).encode()).hexdigest()
-    require(digest == ALSA_SHA256, 'Unrecognized ALSA MIDI functions; audit before compiling.')
+    require(digest == (ALSA_PATCHED_SHA256 if patched else ALSA_SHA256),
+            'Unrecognized ALSA MIDI functions; audit before compiling (use --patched for the private helper).')
     notice = source[:source.index('*/') + 2]
     require(notice.startswith('/*') and 'Copyright (c) 2002-2009 Clemens Ladisch' in notice,
             'Missing original ALSA license notice.')
-    return notice + '\n#include <errno.h>\n' + '\n'.join(constants + functions) + '\n'
+    includes = '\n#include <errno.h>\n' + ('#include "octa-midi.h"\n' if patched else '')
+    return notice + includes + '\n'.join(constants + functions) + '\n'
 
 
-def build_host(source, directory, compiler):
+def build_host(source, directory, compiler, patched=False):
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / 'alsa-midi-reference.inc').write_text(extract_alsa(source))
+    (directory / 'alsa-midi-reference.inc').write_text(extract_alsa(source, patched))
     wrapper = Path(__file__).with_name('reference-midi-host.c')
+    kernel = Path(__file__).resolve().parent.parent / 'kernel'
+    if patched:
+        require(source.with_name('octa-midi.h').read_bytes() == (kernel / 'octa-midi.h').read_bytes(),
+                'Prepared MIDI header differs from the repository; regenerate the private copy.')
+    include_paths = ['-I', str(directory), '-I', str(kernel)]
     subprocess.run(['clang-format-19', '--dry-run', '--Werror', str(wrapper)], check=True, timeout=10)
-    tidy = subprocess.run(['clang-tidy-19', str(wrapper), '--', '-std=c11', '-I', str(directory)],
+    tidy = subprocess.run(['clang-tidy-19', str(wrapper), '--', '-std=c11', *include_paths],
                           capture_output=True, text=True, timeout=30)
     require(tidy.returncode == 0, tidy.stdout + tidy.stderr)
     binary = directory / 'reference-midi-host'
@@ -81,7 +89,7 @@ def build_host(source, directory, compiler):
              '-fstack-protector-strong -fstack-clash-protection -ffp-contract=off -fno-omit-frame-pointer '
              '-D_FORTIFY_SOURCE=3 -fsanitize=address,undefined -fno-sanitize-recover=all '
              '-fPIE -pie -Wl,-z,relro,-z,now,-z,noexecstack').split()
-    subprocess.run([compiler, *flags, '-I', str(directory), str(wrapper),
+    subprocess.run([compiler, *flags, *include_paths, str(wrapper),
                     '-o', str(binary)], check=True, timeout=30)
     return binary.resolve()
 
@@ -312,7 +320,7 @@ def completion_cases(binary):
     return len(cases)
 
 
-def aborted_sysex(mac, binary, windows=None):
+def aborted_sysex(mac, binary, windows=None, patched=False):
     cases = []
     for cable, length in itertools.product((0, 1), range(6)):
         raw = b'\xf0' + bytes([0x7d] * length) + bytes.fromhex('90407f')
@@ -325,17 +333,17 @@ def aborted_sysex(mac, binary, windows=None):
         complete = len(prefix) // 3 * 3
         expected = b''.join(packet(cable, 4, prefix[index:index + 3]) for index in range(0, complete, 3))
         note = packet(cable, 9, bytes.fromhex('90407f'))
-        require(linux == expected + note, 'ALSA interrupted-SysEx behavior differs.')
         final = prefix[complete:] + b'\xf7'
         require(original == expected + packet(cable, 4 + len(final), final) + note,
                 'Original no longer closes interrupted SysEx with F7.')
+        require(linux == (original if patched else expected + note), 'Linux interrupted-SysEx behavior differs.')
         if windows is not None:
             require(windows.transmit(events(cable, raw)) == original,
                     'Windows no longer closes interrupted SysEx like macOS.')
     return len(cases)
 
 
-def receive_validation(mac, binary, windows=None):
+def receive_validation(mac, binary, windows=None, patched=False):
     # Fixed parser regressions only; no generated/mutated traffic or device I/O.
     cases = (
         ('note-status-mismatch', '0980407f', ''),
@@ -353,11 +361,44 @@ def receive_validation(mac, binary, windows=None):
     results = host_records(binary, [(1, 3, bytes.fromhex(raw)) for _name, raw, _expected in cases])
     for (name, raw, expected), actual in zip(cases, results, strict=True):
         wire, expected = bytes.fromhex(raw), (bytes.fromhex(expected), b'')
-        require(actual == receiver_expected(wire), f'ALSA receive filtering changed: {name}')
+        require(actual == (expected if patched else receiver_expected(wire)), f'Linux receive filtering changed: {name}')
         require(mac.receive(wire) == expected, f'macOS receive filtering changed: {name}')
         if windows is not None:
             require(windows.receive(wire) == expected, f'Windows receive filtering changed: {name}')
     return {'cases': len(cases), 'discarded_by_references': 8}
+
+
+def patched_status_cases(mac, binary, windows=None):
+    suffixes = ('80407f', '90407f', 'a0407f', 'b0407f', 'c040', 'd040', 'e0407f',
+                'f07d02f7', 'f140', 'f20102', 'f340', 'f4', 'f5', 'f6', 'f7')
+    cases = [(cable, b'\xf0' + bytes([0x7d] * length) + bytes.fromhex(suffix) + bytes.fromhex('90407f'))
+             for cable, length, suffix in itertools.product((0, 1), range(6), suffixes)]
+    cases += [(cable, bytes.fromhex(prefix + 'f7407f'))
+              for cable, prefix in itertools.product((0, 1), ('90', '9040', 'c0', 'f1', 'f2', 'f240', 'f3'))]
+    results = host_records(binary, [(0, 0, bytes(byte for event in events(cable, raw) for byte in event))
+                                   for cable, raw in cases])
+    for (cable, raw), actual in zip(cases, results, strict=True):
+        expected = mac.transmit(events(cable, raw))
+        require(actual == expected, f'Private MIDI status/SysEx recovery differs: cable {cable}, {raw.hex()}')
+        if windows is not None:
+            require(windows.transmit(events(cable, raw)) == expected, 'Windows/macOS status recovery differs.')
+    return len(cases)
+
+
+def scheduler_cases(mac, binary, windows=None):
+    cases = []
+    for capacity, cable, length in itertools.product((8, 12, 16, 512), (0, 1), range(6)):
+        # Leave one event slot before an interrupted SysEx/F6 can emit two.
+        raw = bytes([0xf8] * (capacity // 4 - 1)) + b'\xf0' + bytes([0x7d] * length) + b'\xf6'
+        cases.append((capacity, cable, raw))
+    results = host_records(binary, [(3, 0, struct.pack('<HB', capacity, cable) + raw)
+                                   for capacity, cable, raw in cases])
+    for (_capacity, cable, raw), actual in zip(cases, results, strict=True):
+        expected = mac.transmit(events(cable, raw))
+        require(actual == expected, 'Private MIDI scheduler lost/reordered packets across URBs.')
+        if windows is not None:
+            require(windows.transmit(events(cable, raw)) == expected, 'Windows scheduler fixture framing differs.')
+    return len(cases)
 
 
 def windows_paths(windows, mac):
@@ -389,8 +430,10 @@ def main():
     parser.add_argument('--build-dir', type=Path, default=Path(__file__).resolve().parent.parent / 'build/midi-reference')
     parser.add_argument('--cc', default='clang-19')
     parser.add_argument('--windows', type=Path, help='optional original Windows x64 RDWM1110.SYS')
+    parser.add_argument('--patched', action='store_true', help='verify the prepared private MIDI implementation')
     args = parser.parse_args()
-    binary, mac = build_host(args.alsa_midi, args.build_dir.resolve(), args.cc), Mac(args.mac_midi)
+    binary = build_host(args.alsa_midi, args.build_dir.resolve(), args.cc, args.patched)
+    mac = Mac(args.mac_midi)
     windows = WindowsMidi(args.windows) if args.windows else None
     counts = compare(mac, binary, windows)
     dependencies = 'CoreMIDI packet lists/clock/endpoints; serial ALSA ports, USB submission/timers'
@@ -398,10 +441,14 @@ def main():
         dependencies += '; Windows locks, user-read notifications and suppressed URB resubmission'
     print(json.dumps({'transmit_and_receive_cases': sum(counts.values()), 'families': counts,
                       'input_gate_cases': input_gates(mac, binary, windows), 'completion_cases': completion_cases(binary),
-                      'documented_aborted_sysex_differences': aborted_sysex(mac, binary, windows),
-                      'receive_validation': receive_validation(mac, binary, windows),
+                      'aborted_sysex_cases': aborted_sysex(mac, binary, windows, args.patched),
+                      'aborted_sysex_differences': 0 if args.patched else 12,
+                      'receive_validation': receive_validation(mac, binary, windows, args.patched),
+                      'status_recovery_cases': patched_status_cases(mac, binary, windows) if args.patched else None,
+                      'urb_output_boundary_cases': scheduler_cases(mac, binary, windows) if args.patched else None,
                       'windows_paths': windows_paths(windows, mac) if windows is not None else None,
-                      'alsa_functions_sha256': ALSA_SHA256, 'sanitizers': ['address', 'undefined'],
+                      'alsa_functions_sha256': ALSA_PATCHED_SHA256 if args.patched else ALSA_SHA256,
+                      'sanitizers': ['address', 'undefined'],
                       'host_dependencies': dependencies,
                       'hardware_validation': False, 'kernel_sanitizer_validation': False}))
 

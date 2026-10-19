@@ -70,7 +70,7 @@ it does not imply calibrated audio response or native Debian validation.
 | Four sample rates, channel packing, capture/playback | macOS audio driver; Windows settings/readme | Standalone module; WSL timing and ten-minute quiet duplex checks at each rate with 1024/8192-frame period/buffer. Digital-return tests detect intermittent discontinuities without XRUNs; smaller periods also produced underruns. Native Debian 6.12 passes all-rate PCM lifecycle checks and ten-source digital-return PRBS streams at 44.1/48/96 kHz (ten seconds per source; earlier requested 1024/8192, and independently verified 256/1024-frame period/buffer). Ten sources also pass at 48 kHz with verified 128/512 frames. All four native rates pass ten-second silent duplex with actual 256/1024 frames and kernel parameter/owner checks. Analog response, 192 kHz signal routing and sustained small-buffer integrity/stress remain. |
 | Clock status and rate changes | macOS USB/status/property code; Windows settings handlers and connected footer | Kernel rate negotiation and read-only status API; native Debian phase/coherence, read-only access and concurrent reads pass. Connected footer and settings share rate/clock readback and busy guards; native Playwright verifies all four footer rates, PCM recovery and complete restoration. Missing status displays UNKNOWN (browser response simulation). External clock transitions and lock-loss behavior need hardware tests. |
 | DIGITAL AUTO/OFF | macOS `Fsc_SetDIN`; device manual | Setting values and state transitions unresolved; no live write API. |
-| MIDI DIN, CTRL isolation and endpoint routing | macOS MIDI plugin; Windows kernel encoder/decoder and queues | ALSA MIDI endpoints and exclusive CTRL sessions. Valid framing matches both references offline. Aborted-SysEx and receive-filter parity, physical DIN loopback, scheduling and transport fault coverage remain. |
+| MIDI DIN, CTRL isolation and endpoint routing | macOS MIDI plugin; Windows kernel encoder/decoder and queues | Private ALSA MIDI helper and exclusive CTRL sessions. Valid framing, interrupted SysEx and selected receive filters match both references offline. Physical DIN loopback, scheduling, transport faults and updated WSL module validation remain. |
 | Preamp sensitivity, phase, low-cut | macOS setters/tables; Windows controls | All legal safe preamp/compressor indices pass writes, independent full-state readback and restoration on all eight native inputs at 48 kHz (2,924 cases including Hi-Z on 1/2). WSL representative changes also pass. Typed sensitivity parsing matches reference code and browser/hardware tests; physical gain remains. |
 | Phantom power and Hi-Z | macOS setters; Windows controls; manual | Encoders and selector bounds implemented. Hi-Z changes/readback/restoration pass on inputs 1/2 at 48/192 kHz with phantom already off. Physical impedance response and phantom switching remain unverified. |
 | Compressor enable and six parameters | macOS transmitters/table lookups; Windows eight-channel view | Every legal index on all eight channels passes native Debian write/readback at 48 kHz, including full raw isolation. WSL writes/readback also pass. Nonlinear tables and inverse faders match both references; 1,440 filled-curve/line cases match original CPU execution. Both drawing palettes/pen widths match. GUI controls and rendered pixels tested in Chromium/GTK. Physical dynamics response remains. |
@@ -144,11 +144,16 @@ device change and restoration; arbitrary touchpad gestures remain unverified.
 ## Specific unresolved distinctions
 
 MIDI framing matches 2,525 fixed Windows/macOS/ALSA transmit/receive cases with
-host APIs stubbed. The selected ALSA functions are unchanged between supported
+host APIs stubbed. The selected private ALSA functions match between supported
 source copies and execute under ASan/UBSan; 30 input guards and 33 Linux
-receive-completion cases also pass. Twelve aborted-SysEx and eleven selected
-receive-filter cases identify Windows/macOS behavior still missing from the
-Linux helper. Windows private cable 2, active-reader routing, URB-status guards
+receive-completion cases also pass. The module now embeds its own MIDI helper:
+twelve aborted-SysEx, eleven selected receive-filter and 194 status-recovery
+cases match both references. Forty-eight actual output-scheduler boundary cases
+verify two-event reservation and byte preservation across URBs with bounded
+buffers. The system MIDI helper stays unchanged; the embedded variant has a
+native 6.12 strict/Sparse build and source-package build, while an updated
+WSL target build/runtime check remains. Windows private cable 2,
+active-reader routing, URB-status guards
 and FIFO boundaries also execute offline; cable 2 remains untested on hardware.
 Its original public receive FIFO has an insufficient space guard, documented
 as a reference limitation rather than behavior to reproduce.
@@ -157,6 +162,8 @@ DIN input/output ownership during ten CTRL state queries and meter traffic,
 without DIN writes and with full raw/clock preservation. Physical DIN loopback,
 real USB fault recovery and scheduling remain open; see the
 [protocol reference](usb-midi-protocol.txt).
+The embedded helper passes native four-rate PCM meter/lifecycle checks,
+including lease cleanup, with the complete original state/clock restored.
 
 Windows preset loading now executes through its original GUI loader, state
 copy and kernel bulk builder: 658 fixed cases match the Linux preparation,
