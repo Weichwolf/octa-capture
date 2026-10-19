@@ -6,6 +6,7 @@ import path from 'node:path';
 import process from 'node:process';
 import {PlaywrightClient} from './PlaywrightClient.mjs';
 import {until} from './BrowserClient.mjs';
+import {checkMenuBar, checkUnavailableMenus} from './GuiMenuBar.mjs';
 
 const logFile = path.resolve(process.argv[2] || 'build/gui/server.log');
 const log = await fs.readFile(logFile, 'utf8');
@@ -107,9 +108,10 @@ async function positiveCommands(highest) {
   assert.deepEqual(await browser.evaluate('[...document.querySelectorAll("#menus button")].slice(0,3).map(node=>node.disabled)'),
     [false, false, highest], 'Menu and shortcut eligibility agree');
   await page.keyboard.press('Escape');
+  const downloads = browser.downloads.length;
   let count = exports;
   await page.keyboard.press('Control+s');
-  await until(() => exports === count + 1 && browser.downloads.length > 0, 'keyboard settings export');
+  await until(() => exports === count + 1 && browser.downloads.length === downloads + 1, 'keyboard settings export');
   await Promise.all(browser.downloads);
   assert.equal((await fs.stat(path.join(directory, 'OCTA-CAPTURE.octa'))).size, 1639);
   count = choosers;
@@ -226,6 +228,7 @@ try {
   }
   if (await browser.evaluate('document.querySelector("#port-warning").open')) await browser.click('#port-warning [data-close]');
   await spaceCommands(original);
+  await checkMenuBar(browser, highest);
   await modalCommands(highest);
   await positiveCommands(highest);
   await repeatedSave();
@@ -234,9 +237,11 @@ try {
   mode = 'busy';
   await until(() => browser.evaluate('!document.querySelector("#busy-message").hidden'), 'simulated busy state');
   await blocked([], 'busy state');
+  await checkUnavailableMenus(browser, false);
   mode = 'absent';
   await until(() => browser.evaluate('!document.querySelector("#connection-message").hidden'), 'simulated missing device');
   await blocked([], 'missing device');
+  await checkUnavailableMenus(browser, true);
   mode = 'idle';
   await until(() => browser.evaluate('document.querySelector("#connection-message").hidden && document.querySelector("#busy-message").hidden'), 'reconnected shortcut test');
   await Promise.all(chooserWork);

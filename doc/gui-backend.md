@@ -146,6 +146,17 @@ Initialize and context menus have keyboard-accessible submenus. Mixer level/send
 All Ch. affects ten strips; pan offers alternating Left/Right or Center. Compressor
 Bypass Off All Ch. enables compression; Bypass On All Ch. disables it.
 
+F10 focuses the menu bar without opening a popup; Alt+D/V open Driver/Device.
+Left/Right switch root menus, while Left/Escape first close an open submenu.
+Pointer movement switches an already-open root menu. Underlined letters activate
+the first enabled matching item, including Initialize's A/M/D/R/P submenu;
+Device's S invokes Save despite the signal-flow entry sharing that letter.
+Escape restores focus through the menu levels. Modal dialogs retain keyboard
+ownership; busy/absent/rate guards also apply to mnemonic activation.
+The bindings come from Windows menu resource 128 and offline Wine observations.
+Playwright checks them against the native backend without parameter changes;
+the installed GTK checker also uses 18 actual X11/WebKit key steps.
+
 Ctrl+S/O/P and their menu items share Save/Load/Patch Bay availability. Modal
 dialogs, busy/disconnected state, pending writes and active file operations
 block them; Patch Bay also remains unavailable at 192 kHz. Extra Shift/Alt

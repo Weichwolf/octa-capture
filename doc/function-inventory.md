@@ -143,6 +143,14 @@ device change and restoration; arbitrary touchpad gestures remain unverified.
 
 ## Specific unresolved distinctions
 
+Windows menu resource 128 and the offline display model establish F10 focus,
+Alt+D/V, root-menu arrow switching and first-match letter activation. The HTML
+menu bar implements these with focus restoration, pointer switching and the
+existing modal/connection/busy guards. Native Playwright checks open dialogs,
+export settings and decline all five Initialize confirmations with full raw
+state preserved. The installed GTK checker adds 18 trusted X11/WebKit key steps.
+Other system-key/platform edge cases and complete interaction parity remain.
+
 Windows power registration (`0x1400127e0`) selects the
 [IAdapterPowerManagement interface](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/implementing-iadapterpowermanagement).
 Allocation failure returns false; a negative PortCls registration result is not

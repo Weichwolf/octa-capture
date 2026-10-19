@@ -2,7 +2,7 @@
 import {PREAMP_MAX, VOLUME, volumeIndex,
   volumeText, parameterText, panToWire, wireToPan, panText, sensitivityIndex, preDelayText, reverbTimeText} from './parameters.js';
 import {MeterBallistics, METER_TICK_MS, meterDb, meterY} from './meters.js';
-import {PopupMenus} from './menus.js';
+import {PopupMenus, PanelMenuBar} from './menus.js';
 import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
@@ -755,8 +755,8 @@ function closeMenus(restore = false) {
   popups.close(restore);
 }
 
-function openMenu(items, x, y) {
-  popups.open(items, x, y);
+function openMenu(items, x, y, anchor = null) {
+  popups.open(items, x, y, anchor);
 }
 
 function controlMenu(event, control) {
@@ -826,29 +826,29 @@ async function saveSettings() {
 function menu(name, anchor) {
   const highestRate = documentState?.state.payload_hex.slice(4, 6) === '03';
   const windowBridge = window.webkit?.messageHandlers?.octaWindow;
-  const topmost = {label: 'Always on top', disabled: true, checkbox: true, checked: false};
+  const topmost = {label: 'Always on top', mnemonic: 't', disabled: true, checkbox: true, checked: false};
   const items = name === 'driver' ? [
-    {label: 'Driver Settings…', disabled: !connected || busy, run: () => showDialog('settings')}, null,
-    topmost, {label: 'Show README', run: () => showDialog('readme')},
-    {label: 'About Driver & Control Panel…', run: () => showDialog('about')}, null,
-    {label: 'Exit', shortcut: 'Alt+F4', run: async () => {
+    {label: 'Driver Settings…', mnemonic: 'd', disabled: !connected || busy, run: () => showDialog('settings')}, null,
+    topmost, {label: 'Show README', mnemonic: 's', run: () => showDialog('readme')},
+    {label: 'About Driver & Control Panel…', mnemonic: 'a', run: () => showDialog('about')}, null,
+    {label: 'Exit', mnemonic: 'x', shortcut: 'Alt+F4', run: async () => {
       stopped = true;
       try { await api('/api/disconnect', {}); } catch { /* Closing also expires the device lease. */ }
       window.close(); setConnected(false, 'The control panel is closed. You can close this browser tab.');
     }},
   ] : [
-    {label: 'Save settings…', shortcut: 'Ctrl+S', disabled: !canRunPanelCommand('save'), run: () => runPanelCommand('save')},
-    {label: 'Load settings…', shortcut: 'Ctrl+O', disabled: !canRunPanelCommand('load'), run: () => runPanelCommand('load')}, null,
-    {label: 'Open the Patch Bay…', shortcut: 'Ctrl+P', disabled: !canRunPanelCommand('patchbay'), run: () => runPanelCommand('patchbay')}, null,
-    {label: 'Directly Output the Inputs', disabled: highestRate, run: () => operation({action: 'direct-out'}, 'This will change the patchbay and direct mixer settings. Do you want to continue?')}, null,
-    {label: 'Initialize…', children:
-      [['all', 'All'], ['preamps', 'MIC PRE'], ['direct-mix', 'DIRECT MIX'], ['reverb', 'REVERB'], ['patchbay', 'PATCHBAY']].map(([target, label]) =>
-        ({label, run: () => operation({action: 'initialize', target}, `OK to initialize ${label} settings?`)}))}, null,
-    {label: 'Show the signal flow', run: () => showDialog('diagram')},
+    {label: 'Save settings…', mnemonic: 's', shortcut: 'Ctrl+S', disabled: !canRunPanelCommand('save'), run: () => runPanelCommand('save')},
+    {label: 'Load settings…', mnemonic: 'o', shortcut: 'Ctrl+O', disabled: !canRunPanelCommand('load'), run: () => runPanelCommand('load')}, null,
+    {label: 'Open the Patch Bay…', mnemonic: 'p', shortcut: 'Ctrl+P', disabled: !canRunPanelCommand('patchbay'), run: () => runPanelCommand('patchbay')}, null,
+    {label: 'Directly Output the Inputs', mnemonic: 'd', disabled: highestRate, run: () => operation({action: 'direct-out'}, 'This will change the patchbay and direct mixer settings. Do you want to continue?')}, null,
+    {label: 'Initialize…', mnemonic: 'i', children:
+      [['all', 'All', 'a'], ['preamps', 'MIC PRE', 'm'], ['direct-mix', 'DIRECT MIX', 'd'], ['reverb', 'REVERB', 'r'], ['patchbay', 'PATCHBAY', 'p']].map(([target, label, mnemonic]) =>
+        ({label, mnemonic, run: () => operation({action: 'initialize', target}, `OK to initialize ${label} settings?`)}))}, null,
+    {label: 'Show the signal flow', mnemonic: 's', run: () => showDialog('diagram')},
   ];
   const rect = anchor.getBoundingClientRect();
   const enabledItems = name === 'device' ? items.map(item => item ? {...item, disabled: !canOperate() || item.disabled} : null) : items;
-  openMenu(enabledItems, rect.left, rect.bottom);
+  openMenu(enabledItems, rect.left, rect.bottom, anchor);
   anchor.setAttribute('aria-expanded', 'true');
   if (name === 'driver' && windowBridge) {
     const button = $('#menus [role=menuitemcheckbox]');
@@ -856,7 +856,7 @@ function menu(name, anchor) {
       if (!button.isConnected || !state.supported) return;
       button.disabled = false;
       button.setAttribute('aria-checked', String(state.above));
-      button.textContent = `${state.above ? '✓' : '\u00a0'} Always on top`;
+      popups.label(button, `${state.above ? '✓' : '\u00a0'} Always on top`, 't');
       topmost.run = async () => {
         try { await windowBridge.postMessage({action: 'set', value: !state.above}); }
         catch (error) { notify(String(error)); }
@@ -956,7 +956,7 @@ function panelSpace(event) {
 
 function setupEvents() {
   document.addEventListener('keydown', panelSpace, true);
-  for (const button of all('[data-menu]')) button.addEventListener('click', event => { event.stopPropagation(); menu(button.dataset.menu, button); });
+  new PanelMenuBar($('.menubar'), popups, menu);
   document.addEventListener('click', event => { if (!event.target.closest('.menu')) closeMenus(); });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') closeMenus();

@@ -120,7 +120,75 @@ class Check(Desktop):
                 if not json.loads(view.evaluate_javascript_finish(result).to_json(0)):
                     raise RuntimeError('Native Space did not preserve the main panel view.')
                 print('PASS actual X11/WebKit Space is consumed without activating the focused view button.', flush=True)
-                self.start_native_control() if self.write else self.start_save()
+                self.start_native_menus()
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, checked, None)
+        return False
+
+    def start_native_menus(self):
+        self.phase = 'native-menus'
+        expanded = "document.querySelector('[data-menu][aria-expanded=true]')?.dataset.menu"
+        focused = 'document.activeElement.dataset.menu'
+        depth = 'document.querySelectorAll("#menus .menu").length'
+        about = 'document.querySelector("#about").open'
+        self.menu_steps = iter((
+            ('F10', f'{focused}==="driver"&&{depth}===0'),
+            ('Right', f'{focused}==="device"'),
+            ('Down', f'{expanded}==="device"'),
+            ('Left', f'{expanded}==="driver"'),
+            ('Right', f'{expanded}==="device"'),
+            ('i', f'{depth}===2'),
+            ('Escape', f'{depth}===1'),
+            ('Escape', f'{depth}===0&&{focused}==="device"'),
+            ('Escape', 'document.activeElement.id==="view-switch"'),
+            ('alt+d', f'{expanded}==="driver"'),
+            ('a', about),
+            ('alt+v', f'{about}&&{depth}===0'),
+            ('Escape', f'!{about}'),
+            ('alt+v', f'{expanded}==="device"'),
+            ('i', f'{depth}===2'),
+            ('Escape', f'{depth}===1'),
+            ('Escape', f'{depth}===0&&{focused}==="device"'),
+            ('F10', 'document.activeElement.id==="view-switch"'),
+        ))
+        script = 'document.querySelector("#view-switch").focus();' \
+                 'window.__octaMenuTest=null;' \
+                 'window.__octaMenuListener=e=>window.__octaMenuTest=e.isTrusted;' \
+                 'document.addEventListener("keydown",window.__octaMenuListener,true);'
+
+        def prepared(view, result, _data):
+            try:
+                view.evaluate_javascript_finish(result)
+                self.next_native_menu()
+            except Exception as error:
+                self.fail(error)
+        self.view.evaluate_javascript(script, -1, None, None, None, prepared, None)
+
+    def next_native_menu(self):
+        step = next(self.menu_steps, None)
+        if step is None:
+            script = 'document.removeEventListener("keydown",window.__octaMenuListener,true);' \
+                     'delete window.__octaMenuListener;delete window.__octaMenuTest;'
+            self.view.evaluate_javascript(script, -1, None, None, None, None, None)
+            print('PASS actual X11/WebKit menu keys: F10, Alt+D/V, root/submenu arrows, '
+                  'mnemonics, modal ownership and focus recovery (18 steps).', flush=True)
+            self.start_native_control() if self.write else self.start_save()
+            return
+        key, self.menu_expected = step
+        self.phase = f'native-menu-{key}'
+        self.key(key, focus=False)
+        self.GLib.timeout_add(100, self.check_native_menu)
+
+    def check_native_menu(self):
+        script = f'window.__octaMenuTest===true&&({self.menu_expected});'
+
+        def checked(view, result, _data):
+            try:
+                if json.loads(view.evaluate_javascript_finish(result).to_json(0)):
+                    self.next_native_menu()
+                else:
+                    self.GLib.timeout_add(100, self.check_native_menu)
             except Exception as error:
                 self.fail(error)
         self.view.evaluate_javascript(script, -1, None, None, None, checked, None)

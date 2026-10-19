@@ -12,8 +12,8 @@
 <body>
   <div class="panel" id="panel">
     <nav class="menubar" aria-label="Control panel menus">
-      <button data-menu="driver">Driver</button>
-      <button data-menu="device">Device</button>
+      <button data-menu="driver" data-mnemonic="d"><u>D</u>river</button>
+      <button data-menu="device" data-mnemonic="v">De<u>v</u>ice</button>
     </nav>
     <header class="panel-header">
       <button id="header-action" class="header-action"><span class="lamp"></span><span>AUTO-SENS</span></button>
@@ -89,6 +89,9 @@
       <p>Right-click a control for its preset values and available All Ch. actions.
         Bypass On disables compression. Auto-Sens adjusts the selected inputs to
         the loudest signal you provide; Cancel restores their previous settings.</p>
+      <p>F10 focuses the menu bar. Alt+D opens Driver; Alt+V opens Device.
+        Use the arrow keys and underlined letters inside menus; Escape returns
+        through each menu level to the previous control.</p>
       <p>Device → Save settings exports an .octa file (Ctrl+S); Load settings
         imports one (Ctrl+O). The Patch Bay (Ctrl+P) selects the source for each
         output pair. Multiple Direct Mixer changes that routing to enable A–D.</p>

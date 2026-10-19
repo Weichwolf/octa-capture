@@ -10,7 +10,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focu
 .panel { position: relative; width: 978px; margin: auto; border: 2px ridge #9c9c9c; background: #999; box-shadow: 0 4px 16px #0008; }
 .menubar { display: flex; height: 18px; background: #eee; color: #111; align-items: center; }
 .menubar > button { height: 18px; padding: 0 7px; border: 0; background: transparent; color: #111; font-size: 11px; }
-.menubar > button:hover, .menubar > button[aria-expanded=true] { background: #bdd1e7; }
+.menubar > button:hover, .menubar > button:focus-visible, .menubar > button[aria-expanded=true] { background: #bdd1e7; }
 .device-bar { display: flex; height: 21px; align-items: center; gap: 2px; padding: 0 3px; border-top: 2px ridge #aaa; background: #888; color: #ccc; font-size: 9px; font-weight: bold; }
 .device-bar > * { height: 17px; border: 1px solid #aaa; background: #272727; }
 #device-status { display: flex; flex: 0 0 150px; align-items: center; gap: 5px; padding: 0 3px; color: #ccc; font-size: 9px; text-align: left; cursor: pointer; }

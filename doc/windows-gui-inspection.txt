@@ -121,6 +121,16 @@ original Windows x64 code and offline Wine observations, not hardware evidence.
 The Linux main panel therefore suppresses unmodified Space; popup menus and
 modal dialogs retain their own keyboard behavior.
 
+Menu resource 128 uses &Driver and De&vice. The offline model confirms that
+Alt+D/V open these menus, F10 focuses Driver without opening a popup, Left/Right
+switch open root menus, and I opens Initialize. Its A/M/D/R/P bindings select
+All/MIC PRE/DIRECT MIX/REVERB/PATCHBAY. In the Device popup S immediately opens
+Save, although both Save and Show the signal flow have S in the resource;
+the original MFC menu selects the first match instead of cycling. The Save
+chooser was cancelled without writing a file. Captures remain in ignored
+build/wine-reference/menu-*.png. These observations do not verify hardware
+commands or complete Windows keyboard behavior.
+
 Auto-Sens selection also opens against the offline model (local capture:
 auto-sens-selection-offline-model.png, 294x146 client pixels). It has two rows
 of four inputs, Select All/Clear All at the right and Start/Cancel below. Empty
