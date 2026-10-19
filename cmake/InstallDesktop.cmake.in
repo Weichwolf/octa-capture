@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Resolve --prefix at installation time; DESTDIR must never enter Exec.
+set(octa_desktop_binary "@CMAKE_INSTALL_BINDIR@/octa-capture")
+set(octa_desktop_directory "@CMAKE_INSTALL_DATAROOTDIR@/applications")
+foreach(octa_path IN ITEMS octa_desktop_binary octa_desktop_directory)
+  if(NOT IS_ABSOLUTE "${${octa_path}}")
+    set(${octa_path} "${CMAKE_INSTALL_PREFIX}/${${octa_path}}")
+  endif()
+endforeach()
+
+# Quote one Exec argument, then escape backslashes for the desktop key file.
+set(octa_desktop_command "${octa_desktop_binary}")
+foreach(octa_character IN ITEMS "\\" "\"" "`" "$")
+  string(REPLACE "${octa_character}" "\\${octa_character}" octa_desktop_command "${octa_desktop_command}")
+endforeach()
+string(REPLACE "%" "%%" octa_desktop_command "${octa_desktop_command}")
+string(REPLACE "\\" "\\\\" octa_desktop_command "${octa_desktop_command}")
+string(SHA256 octa_desktop_key "${octa_desktop_binary};${octa_desktop_directory}")
+set(octa_desktop_file "@CMAKE_CURRENT_BINARY_DIR@/desktop-${octa_desktop_key}/org.octa_capture.ControlPanel.desktop")
+file(READ "@CMAKE_CURRENT_SOURCE_DIR@/packaging/org.octa_capture.ControlPanel.desktop" octa_desktop_content)
+string(REPLACE "\nExec=octa-capture\n" "\nExec=\"${octa_desktop_command}\"\n"
+  octa_desktop_content "${octa_desktop_content}")
+file(WRITE "${octa_desktop_file}" "${octa_desktop_content}")
+file(INSTALL DESTINATION "${octa_desktop_directory}" TYPE FILE FILES "${octa_desktop_file}")

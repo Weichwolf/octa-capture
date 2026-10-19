@@ -25,8 +25,9 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/gui"
   DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/octa-capture" COMPONENT Runtime
   FILES_MATCHING PATTERN "*.py" PATTERN "*.js" PATTERN "*.html" PATTERN "*.css" PATTERN "*.svg"
   PATTERN "__pycache__" EXCLUDE)
-install(FILES "${CMAKE_SOURCE_DIR}/packaging/org.octa_capture.ControlPanel.desktop"
-  DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications" COMPONENT Runtime)
+configure_file("${CMAKE_SOURCE_DIR}/cmake/InstallDesktop.cmake.in"
+  "${CMAKE_BINARY_DIR}/InstallDesktop.cmake" @ONLY)
+install(SCRIPT "${CMAKE_BINARY_DIR}/InstallDesktop.cmake" COMPONENT Runtime)
 install(FILES "${CMAKE_SOURCE_DIR}/gui/web/favicon.svg"
   DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps" RENAME octa-capture.svg COMPONENT Runtime)
 install(FILES "${CMAKE_SOURCE_DIR}/LICENSE"

@@ -3,8 +3,10 @@
 
 import http.client
 import json
+import os
 from pathlib import Path
 import select
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -27,6 +29,14 @@ class Installation(unittest.TestCase):
                 result = subprocess.run([str(binary / name), '--help'], cwd=foreign,
                                         check=True, capture_output=True, text=True, timeout=5)
                 self.assertIn('--bin-dir', result.stdout)
+            desktop = prefix / 'share/applications/org.octa_capture.ControlPanel.desktop'
+            command = next(line[5:] for line in desktop.read_text().splitlines() if line.startswith('Exec='))
+            arguments = shlex.split(command)
+            self.assertEqual(arguments, [str(binary / 'octa-capture')])
+            # Xfce sessions may omit ~/.local/bin even when a login shell finds it.
+            result = subprocess.run([*arguments, '--help'], cwd=foreign, env={**os.environ, 'PATH': os.defpath},
+                                    check=True, capture_output=True, text=True, timeout=5)
+            self.assertIn('--bin-dir', result.stdout)
             for name in ('octa-bridge', 'octa-preset', 'octa-status', 'octa-audio-check',
                          'octa-auto-sense', 'octa-panel', 'octa-state', 'octa-dsp', 'octa-control'):
                 self.assertTrue((binary / name).is_file(), name)
@@ -70,6 +80,20 @@ class Installation(unittest.TestCase):
                         server.kill()
                         server.wait(timeout=3)
                 self.assertEqual(server.returncode, 0)
+
+    def test_desktop_exec_excludes_destdir(self):
+        cmake, build = sys.argv[1:3]
+        with tempfile.TemporaryDirectory(prefix='octa desktop staging ') as directory:
+            prefix = Path('/opt/octa capture')
+            root = Path(directory)
+            subprocess.run([cmake, '--install', build, '--prefix', str(prefix)],
+                           env={**os.environ, 'DESTDIR': directory}, check=True,
+                           capture_output=True, timeout=10)
+            desktop = root / prefix.relative_to('/') / 'share/applications/org.octa_capture.ControlPanel.desktop'
+            command = next(line[5:] for line in desktop.read_text().splitlines() if line.startswith('Exec='))
+            self.assertEqual(shlex.split(command), [str(prefix / 'bin/octa-capture')])
+            self.assertNotIn(directory, command)
+            self.assertTrue((root / prefix.relative_to('/') / 'bin/octa-capture').is_file())
 
 
 if __name__ == '__main__':
