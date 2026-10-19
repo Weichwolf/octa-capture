@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 :root { color-scheme: dark; font-family: Arial, sans-serif; font-size: 12px; }
 * { box-sizing: border-box; }
-body { margin: 0; padding: 20px 10px; background: #292a2c; color: #eee; }
+body { margin: 0; padding: 20px 10px; background: #292a2c; color: #eee; -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable=true] { -webkit-user-select: text; user-select: text; }
+img, svg { -webkit-user-drag: none; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled, input:disabled, select:disabled { cursor: default; opacity: .42; }

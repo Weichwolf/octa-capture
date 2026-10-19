@@ -141,6 +141,26 @@ async function headers(browser) {
   await browser.click('#reverb [data-close]');
 }
 
+async function selection(browser) {
+  const page = browser.page;
+  await view(browser, false);
+  const start = await point(page, '.group-title[data-source="input"]');
+  const end = await point(page, '.group-title[data-source="playback"]');
+  await page.evaluate(() => getSelection().removeAllRanges());
+  await page.mouse.move(start.x, start.y); await page.mouse.down();
+  try { await page.mouse.move(end.x, end.y, {steps: 20}); }
+  finally { await page.mouse.up(); }
+  assert.equal(await page.evaluate(() => getSelection().toString()), '', 'Panel text cannot be selected by dragging');
+  await view(browser, true);
+  const input = page.locator('.sensitivity input.knob-value').first();
+  await input.dblclick();
+  await page.keyboard.press('Control+A');
+  assert.equal(await input.evaluate(node => !node.readOnly && node.selectionStart === 0 && node.selectionEnd === node.value.length),
+    true, 'An editable sensitivity value retains native text selection');
+  await page.keyboard.press('Escape');
+  assert.equal(await input.evaluate(node => node.readOnly), true, 'Escape cancels the unchanged value editor');
+}
+
 export async function checkControlHits(browser, api) {
   if (!browser.page) return;
   const page = browser.page, original = await api('/api/state'), requests = [], work = [];
@@ -168,6 +188,7 @@ export async function checkControlHits(browser, api) {
       '.mixer-switches .toggle:last-child', '.master-io-link', '.master-group .toggle'], requests, settled);
     await knobsAndContexts(browser, requests, settled);
     await headers(browser);
+    await selection(browser);
     await settled();
   } finally {
     await page.mouse.up(); await page.mouse.up({button: 'right'});
@@ -176,5 +197,5 @@ export async function checkControlHits(browser, api) {
     await page.unroute('**/api/control', handler);
   }
   assert.deepEqual((await api('/api/state')).state, original.state, 'All responses were intercepted; hardware state unchanged');
-  console.log('PASS trusted skin/label hit regions, right-release timing/chords, left-release capture and keyboard activation; parameter responses simulated');
+  console.log('PASS trusted control hit regions/chords, keyboard activation and non-selectable panel with editable values; parameter responses simulated');
 }
