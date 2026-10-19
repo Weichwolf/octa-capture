@@ -150,8 +150,13 @@ This static check passes for 6.12 and 6.18. Native hardware, suspend/unplug,
 KASAN/UBSAN and malformed USB/fault-injection tests remain required.
 
 The `clock` CTest compiles the actual `kernel/octa.c` as host C against test-only
-USB/sleep adapters. It checks all rate pairs, same-rate negotiation, clock flags,
+USB/sleep adapters. It checks all rate pairs, busy same-rate completion, clock flags,
 readiness, bounded polling and USB errors/short/oversized replies at each stage.
+Both original macOS rate setters use payload prefix `0x40`, also when completing
+a busy same-rate request. The optional `tools/verify-usb-control.py` comparison
+executes both original architectures with memory-only host APIs; see the
+[protocol reference](../doc/usb-midi-protocol.txt). Busy/error states are simulated
+offline, not forced on the physical device.
 `tools/fuzz-clock.sh 120` fuzzes that same C state machine with ASan/UBSan,
 including invalid rates and status bytes. No hardware is opened and no malformed
 traffic reaches USB. Host flags never enter Kbuild; these checks do not cover

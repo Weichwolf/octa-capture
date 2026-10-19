@@ -103,8 +103,8 @@ int snd_usb_octa_capture_set_rate(struct snd_usb_audio *chip, int rate)
 	if (current_rate == rate && !(flags & 1))
 		return octa_wait_ready(chip);
 
-	/* 0x40 changes the clock; 0x01 only negotiates the current rate. */
-	data[0] = current_rate == rate ? 1 : 0x40;
+	/* Both macOS rate setters and the Windows clock request use 0x40. */
+	data[0] = 0x40;
 	data[1] = (u8)rate;
 	data[2] = (u8)(rate >> 8);
 	data[3] = (u8)(rate >> 16);

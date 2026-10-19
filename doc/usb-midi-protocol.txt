@@ -286,20 +286,48 @@ test and on native Debian with direct USB. Clock-status reads before/after
 the native query remained successful and unchanged. No DIN setting write
 has been issued; this does not establish supported setting values.
 
-SendFsC at 0x177c8 negotiates a rate with:
+SendFsC at 0x177c8 writes a rate with:
   bmRequestType=40, bRequest=03, wValue=0008, wIndex=0000, wLength=0004
-  payload: 01 rate_low rate_middle rate_high
-It then polls Fsc_GetStatChk1, checking flags and the requested rate.
-On the tested device, this does not change the clock when the requested
-rate differs. Fsc_SetFs at 0x1768e uses the same setup packet with:
   payload: 40 rate_low rate_middle rate_high
-This changes the rate. Bit 0 remains set during transition (about 0.55 s
-in the local test), then clears; the readiness query returns 01.
-The standalone module uses 40 for rate changes, polls for the requested
-rate and clear flags, then checks readiness before selecting audio alternate
-settings. It rejects status flag bit 1 rather than overriding that condition.
-ALSA stream preparation and independent USB readback have passed at all four
-supported rates under WSL. This does not establish working audio streaming.
+It then polls Fsc_GetStatChk1 up to 40 times with 200 ms delays while flag
+bit 0 remains set; a rate mismatch, transport failure or flag bit 1 fails.
+Fsc_SetFs at 0x1768e uses the same setup packet and payload, without polling.
+Both x86_64 and ARM64 machine code store 40, including SendFsC; its decompiled
+bool-typed stack variable incorrectly suggested 01. The earlier experimental
+01-prefixed write did not change a different requested rate; it is not the
+original SendFsC encoding.
+
+Hardware writes starting with 40 change the rate. Bit 0 remains set during
+transition (about 0.55 s in the local test), then clears; readiness returns 01.
+The standalone module uses 40 for every rate write, including a still-busy
+same-rate request; a stable same-rate request only checks readiness. It polls
+for the requested rate and clear flags, then checks readiness before selecting
+audio alternate settings. It rejects status flag bit 1 rather than overriding
+that condition.
+The corrected native Debian 6.12 module passes quiet PCM/meter lifecycle checks
+at all four rates, with complete raw state and the original clock restored.
+Busy/error states are tested offline, not forced on hardware. Earlier WSL
+clock/stream results predate this correction; its target build and runtime
+verification remain pending.
+
+tools/verify-usb-control.py executes 108 fixed cases per macOS architecture
+through the original setters/getters, DevReqCall2 and DeviceRequest. It checks
+setup/payload bytes, status decoding, poll limits, rate/transport failures,
+0/1/255/256-byte transfer boundaries, caller-output preservation and lock
+ownership. Objective-C mutable data, IOKit completion, locks, memcpy and sleep
+are memory-only stubs; no hardware is opened. Reproduce with local references:
+
+  python3 tools/verify-usb-control.py doc/local/macos-analysis/audio-x86_64 \
+    --arm64 doc/local/macos-analysis/audio-arm64
+
+The generic Fsc_SetDIN helper sends 40/05/0000/0000 with two bytes 40 and an
+opaque setting byte. Its paired getter returns that byte unchanged. The setter
+and Fsc_SetFs return void, so invoking them does not establish write success.
+No direct caller of Fsc_SetDIN/GetDIN has been recovered; indirect/dynamic paths
+remain unresolved. The device manual's DIGITAL AUTO/OFF is a front-panel
+utility setting: AUTO receives coaxial digital input 9/10 and follows a valid
+external rate; OFF disables that input. Its wire values are not established,
+and the Linux backend deliberately exposes no guessed DIN-setting write.
 
 Windows sample-rate combo 1130 changes the device immediately: GUI handler
 0x14002c2f0 sends IOCTL 0x222328. Kernel dispatch 0x1400292b0 queues command 6;

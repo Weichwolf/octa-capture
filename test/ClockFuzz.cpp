@@ -45,8 +45,7 @@ void check_write(const Case &test, int result) {
   constexpr unsigned int byte_shift = 8;
   constexpr unsigned int high_shift = byte_shift * 2;
   const std::array<std::uint8_t, 4> expected = {
-      static_cast<std::uint8_t>(test.initial == static_cast<unsigned int>(test.requested) ? 1
-                                                                                          : 0x40),
+      0x40,
       static_cast<std::uint8_t>(test.requested),
       static_cast<std::uint8_t>(static_cast<unsigned int>(test.requested) >> byte_shift),
       static_cast<std::uint8_t>(static_cast<unsigned int>(test.requested) >> high_shift)};

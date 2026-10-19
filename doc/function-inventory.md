@@ -29,6 +29,12 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   offline reference execution. The separate Driver Setup parameter get/set/default
   paths are traced: buffer level, recording margin and timing use CoreAudio host
   properties. Remaining platform/property paths still require analysis.
+- Both macOS audio architectures execute 108 fixed USB-control cases each through
+  the original request wrappers with memory-only host APIs. Both rate setters
+  use payload prefix `0x40`; this corrects the Linux busy same-rate path and an
+  earlier decompiler-derived `0x01` claim. Clock polling/error/transfer boundaries
+  and DIN helper bytes are covered; DIN values, call paths and physical external
+  synchronization remain unresolved.
 - Windows stream construction/channel strides and the channel counts derived
   from macOS nominal USB-frame geometry agree in isolated CPU execution at all four rates, also matching the
   cached device descriptors. Windows short-capture-packet accounting is exercised
@@ -69,7 +75,7 @@ it does not imply calibrated audio response or native Debian validation.
 | --- | --- | --- |
 | Four sample rates, channel packing, capture/playback | macOS audio driver; Windows settings/readme | Standalone module; WSL timing and ten-minute quiet duplex checks at each rate with 1024/8192-frame period/buffer. Digital-return tests detect intermittent discontinuities without XRUNs; smaller periods also produced underruns. Native Debian 6.12 passes all-rate PCM lifecycle checks and ten-source digital-return PRBS streams at 44.1/48/96 kHz (ten seconds per source; earlier requested 1024/8192, and independently verified 256/1024-frame period/buffer). Ten sources also pass at 48 kHz with verified 128/512 frames. All four native rates pass ten-second silent duplex with actual 256/1024 frames and kernel parameter/owner checks. Analog response, 192 kHz signal routing and sustained small-buffer integrity/stress remain. |
 | Clock status and rate changes | macOS USB/status/property code; Windows settings handlers and connected footer | Kernel rate negotiation and read-only status API; native Debian phase/coherence, read-only access and concurrent reads pass. Connected footer and settings share rate/clock readback and busy guards; native Playwright verifies all four footer rates, PCM recovery and complete restoration. Missing status displays UNKNOWN (browser response simulation). External clock transitions and lock-loss behavior need hardware tests. |
-| DIGITAL AUTO/OFF | macOS `Fsc_SetDIN`; device manual | Setting values and state transitions unresolved; no live write API. |
+| DIGITAL AUTO/OFF | Device manual's front-panel utility; generic macOS `Fsc_SetDIN/GetDIN` helpers | Both macOS architectures match request-05 setup and opaque-byte encoding offline; no direct caller or AUTO/OFF wire values established. Getter times out under WSL and native direct USB. No live write API; external-clock transitions remain hardware-unverified. |
 | MIDI DIN, CTRL isolation and endpoint routing | macOS MIDI plugin; Windows kernel encoder/decoder and queues | Private ALSA MIDI helper and exclusive CTRL sessions. Valid framing, interrupted SysEx and selected receive filters match both references offline. Physical DIN loopback, scheduling, transport faults and updated WSL module validation remain. |
 | Preamp sensitivity, phase, low-cut | macOS setters/tables; Windows controls | All legal safe preamp/compressor indices pass writes, independent full-state readback and restoration on all eight native inputs at 48 kHz (2,924 cases including Hi-Z on 1/2). WSL representative changes also pass. Typed sensitivity parsing matches reference code and browser/hardware tests; physical gain remains. |
 | Phantom power and Hi-Z | macOS setters; Windows controls; manual | Encoders and selector bounds implemented. Hi-Z changes/readback/restoration pass on inputs 1/2 at 48/192 kHz with phantom already off. Physical impedance response and phantom switching remain unverified. |

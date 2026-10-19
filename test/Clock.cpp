@@ -93,7 +93,7 @@ bool rate_case(const RateCase &test) {
   }
   if (writes == 0) { return true; }
   const std::array<std::uint8_t, 4> expected = {
-      static_cast<std::uint8_t>(test.initial == test.requested ? 1 : 0x40),
+      0x40,
       static_cast<std::uint8_t>(test.requested),
       static_cast<std::uint8_t>(test.requested >> byte_shift),
       static_cast<std::uint8_t>(test.requested >> high_shift)};
