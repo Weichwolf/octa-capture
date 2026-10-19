@@ -8,8 +8,8 @@ button:disabled, input:disabled, select:disabled { cursor: default; opacity: .42
 button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #e5bd52; outline-offset: 2px; }
 [hidden] { display: none !important; }
 .panel { position: relative; width: 978px; margin: auto; border: 2px ridge #9c9c9c; background: #999; box-shadow: 0 4px 16px #0008; }
-.menubar { display: flex; height: 18px; background: #eee; color: #111; align-items: center; }
-.menubar > button { height: 18px; padding: 0 7px; border: 0; background: transparent; color: #111; font-size: 11px; }
+.menubar { display: flex; height: 19px; background: #eee; color: #111; align-items: center; }
+.menubar > button { height: 19px; padding: 0 7px; border: 0; background: transparent; color: #111; font-size: 11px; }
 .menubar > button:hover, .menubar > button:focus-visible, .menubar > button[aria-expanded=true] { background: #bdd1e7; }
 .device-bar { display: flex; height: 21px; align-items: center; gap: 2px; padding: 0 3px; border-top: 2px ridge #aaa; background: #888; color: #ccc; font-size: 9px; font-weight: bold; }
 .device-bar > * { height: 17px; border: 1px solid #aaa; background: #272727; }
@@ -23,23 +23,25 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focu
 .footer-rate:has(select:disabled)::after { opacity: .42; }
 .footer-clock > span { padding: 0 8px; }
 .footer-clock output { min-width: 80px; height: 15px; padding: 1px 5px; background: #050505; color: #ddd; white-space: nowrap; text-align: center; }
-.panel-header { position: relative; display: flex; height: 28px; align-items: center; justify-content: space-between; background: linear-gradient(52deg,#c7c7c7 54%,#555 54.2%); border-block: 1px solid #888; }
-.brand { position: absolute; left: 58.1%; top: 3px; color: #fff; font-size: 18px; letter-spacing: -.6px; font-weight: bold; transform: scale(1.28,.78); transform-origin: left center; }
-.header-action { display: flex; align-items: center; gap: 5px; height: 25px; border: 0; background: transparent; padding: 1px 12px; color: #292929; font-size: 14px; font-weight: bold; }
+.panel-header { position: relative; display: flex; height: 27px; align-items: center; justify-content: space-between; background: linear-gradient(52deg,#c7c7c7 55%,#555 55.2%); border-block: 1px solid #888; }
+.brand { position: absolute; left: 572px; top: 2px; color: #fff; font-size: 18px; letter-spacing: -.6px; font-weight: bold; transform: scale(1.28,.78); transform-origin: left center; }
+.header-action { display: flex; align-items: center; gap: 5px; height: 25px; border: 0; background: transparent; padding: 1px 15px; color: #292929; font-size: 14px; font-weight: bold; }
+.header-action .lamp { width: 23px; height: 19px; }
 .lamp { display: inline-block; width: 21px; height: 20px; border: 1px solid #555; border-radius: 4px; background: radial-gradient(ellipse at 45% 20%, #888,#494949 75%); box-shadow: inset 0 0 2px #000, 0 1px 1px #eee6; }
 .lit .lamp { background: radial-gradient(ellipse at 45% 25%,#fff4af,#d0a01b 75%); box-shadow: 0 0 4px #d6aa3370, inset 0 0 2px #fff9; }
-#view-switch { margin-right: 8px; color: #ddd; background: linear-gradient(#676767,#414141); box-shadow: inset 0 0 0 2px #4d4d4d; border: 1px solid #929292; border-radius: 2px; height: 20px; min-width: 118px; font-weight: bold; font-size: 11px; font-style: italic; }
+#view-switch { margin-right: 11px; color: #ddd; background: linear-gradient(#676767,#414141); box-shadow: inset 0 0 0 2px #4d4d4d; border: 1px solid #929292; border-radius: 2px; height: 19px; min-width: 117px; font-weight: bold; font-size: 11px; font-style: italic; }
 main { position: relative; border: 4px ridge #777; height: 358px; background: #252525; }
-.preamp-view { height: 350px; display: grid; grid-template-columns: repeat(8, 1fr); padding: 0 2px; }
+.preamp-view { position: relative; left: -1px; width: 968px; height: 350px; display: grid; grid-template-columns: repeat(8, 121px); padding: 0; }
 .preamp-strip { position: relative; min-width: 0; padding: 12px 4px 0; background: linear-gradient(#fff1,#0003),linear-gradient(90deg,#565656,#626262 55%,#4a4a4a); border-right: 1px solid #444; font-family: 'Arial Narrow','Liberation Sans Narrow',Arial,sans-serif; }
 .preamp-strip:nth-child(even) { border-right: 4px ridge #757575; }
 .preamp-strip:last-child { border-right: 0; }
 .pair-title { position: absolute; top: 3px; left: 67%; width: 84px; border-radius: 8px; background: #636363; color: #ddd; text-align: center; height: 12px; line-height: 12px; font: bold 10px Arial,sans-serif; z-index: 1; }
-.preamp-controls { display: flex; gap: 4px; height: 84px; align-items: flex-end; padding-bottom: 3px; }
-.sensitivity { width: 38px; flex-shrink: 0; }
-.preamp-switches { display: grid; grid-template-columns: 1fr 1fr; width: 65px; gap: 3px; align-items: end; padding-bottom: 1px; }
+.preamp-controls { display: contents; }
+.preamp-strip .sensitivity { position: absolute; left: 9px; top: 32px; width: 37px; }
+.preamp-switches { position: absolute; left: 55px; top: 19px; display: grid; grid-template-columns: 23px 23px; gap: 5px 12px; align-items: end; padding: 0; }
+.preamp-switches .toggle, .mixer-switches .toggle { height: 32px; gap: 3px; }
 .toggle { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; border: 0; background: none; color: #eee; font-size: 9px; line-height: 10px; white-space: nowrap; }
-.toggle .lamp { width: 24px; height: 22px; border-radius: 3px; }
+.toggle .lamp { width: 23px; height: 19px; border-radius: 3px; }
 .toggle.red.lit .lamp { background: radial-gradient(ellipse at 45% 25%,#ffb2a5,#b9321e 75%); box-shadow: 0 0 4px #c3202080; }
 .placeholder { visibility: hidden; }
 .knob { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 0; touch-action: none; user-select: none; font-size: 9px; color: #eee; line-height: 12px; }
@@ -47,20 +49,21 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .toggle, .header-action { cursor: default; }
 .toggle:not(:disabled) .lamp, .header-action:not(:disabled) .lamp { cursor: pointer; }
 .knob-label { font-weight: bold; font-stretch: condensed; white-space: nowrap; }
-.knob-dial { position: relative; display: block; width: 29px; height: 29px; border-radius: 50%; border: 2px solid #444; background: radial-gradient(circle at 35% 25%,#797979 0%,#525252 34%,#2c2c2c 65%,#151515 70%,#4b4b4b 80%); box-shadow: 0 2px 2px #0009, -1px -1px 1px #8888; }
+.knob-dial { position: relative; display: block; width: 25px; height: 25px; border-radius: 50%; border: 2px solid #444; background: radial-gradient(circle at 35% 25%,#797979 0%,#525252 34%,#2c2c2c 65%,#151515 70%,#4b4b4b 80%); box-shadow: 0 2px 2px #0009, -1px -1px 1px #8888; }
 .knob-dial::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; border: 1px solid #333; }
 .knob-needle { position: absolute; inset: 2px; transform: rotate(var(--angle,-135deg)); }
-.knob-needle::after { content: ''; position: absolute; top: 0; left: 10px; width: 1px; height: 9px; background: #e6bf20; box-shadow: 0 0 1px #000; }
+.knob-needle::after { content: ''; position: absolute; top: 0; left: calc(50% - .5px); width: 1px; height: 9px; background: #e6bf20; box-shadow: 0 0 1px #000; }
 .knob-value { display: none; position: absolute; top: 38px; left: 50%; transform: translateX(-50%); z-index: 7; min-width: 46px; padding: 1px 3px; border: 1px solid #777; background: #171717; color: #f5edc9; text-align: center; white-space: nowrap; font: 10px Arial,sans-serif; }
 .knob:hover .knob-value, .knob:focus .knob-value, .knob.dragging .knob-value { display: block; }
 .sensitivity .knob-value { display: block; position: static; transform: none; background: #151515; color: #e5e5e5; font-size: 8px; order: -1; height: 12px; min-width: 38px; padding: 0; border: 0; }
-.sensitivity .knob-dial { width: 31px; height: 31px; }
-.sensitivity input.knob-value { width: 38px; cursor: text; border-radius: 0; }
+.sensitivity .knob-label { margin-top: 3px; }
+.sensitivity .knob-dial { align-self: flex-start; margin-left: 5px; }
+.sensitivity input.knob-value { width: 37px; min-width: 37px; height: 13px; cursor: text; border-radius: 0; }
 .sensitivity input.knob-value:not([readonly]) { outline: 1px solid #e2cb74; color: white; }
-.compressor { position: relative; height: 111px; border-top: 1px solid #666; border-bottom: 1px solid #5c5c5c; margin: 0 -1px; }
-.bypass { position: absolute; top: 5px; left: 23px; flex-direction: row; font-size: 9px; }
-.bypass .lamp { width: 24px; height: 21px; }
-.curve { position: absolute; top: 38px; left: calc(50% - 5px); transform: translateX(-50%); width: 51px; height: 51px; background: #634d42; }
+.compressor { position: absolute; top: 95px; left: 0; width: 121px; height: 111px; border-top: 1px solid #666; border-bottom: 1px solid #5c5c5c; margin: 0; }
+.bypass { position: absolute; top: 7px; left: 34px; flex-direction: row; font-size: 9px; height: 19px; }
+.bypass .lamp { width: 23px; height: 19px; }
+.curve { position: absolute; top: 38px; left: 32px; width: 51px; height: 51px; background: #634d42; }
 .graph-axis { position: absolute; top: 88px; left: calc(50% - 5px); width: 51px; height: 10px; transform: translateX(-50%); font-size: 8px; }
 .graph-axis span { position: absolute; transform: translateX(-50%); }
 .graph-axis span:nth-child(1) { left: 20%; }
@@ -72,7 +75,7 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .graph-y-axis span:nth-child(2) { top: 40%; }
 .graph-y-axis span:nth-child(3) { top: 80%; }
 .meter { position: absolute; top: 26px; bottom: 24px; width: 5px; background: repeating-linear-gradient(to top,#242724 0 5px,#333 5px 6px); }
-.meter.in { left: 2px; }
+.meter.in { left: 8px; }
 .meter.out { right: 14px; }
 .meter-fill { position: absolute; inset: auto 0 0; height: var(--level,0%); background: repeating-linear-gradient(to top,#adba45 0 5px,#485526 5px 6px); }
 .meter-clip { position: absolute; top: -10px; left: 0; width: 5px; height: 6px; background: #7a7a72; }
@@ -88,35 +91,40 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .meter.in .meter-scale { left: 9px; }
 .meter.out .meter-scale { left: 9px; text-align: left; }
 .meter-name { position: absolute; bottom: -12px; left: -1px; font-size: 8px; }
-.parameters { display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: 45px 45px; gap: 1px 0; padding-top: 2px; }
+.parameters { position: absolute; top: 211px; left: 9px; display: grid; grid-template-columns: repeat(3, 38px); grid-template-rows: 46px 46px; gap: 0; padding: 0; }
+.parameters > .knob { width: 25px; }
 .strip-footer { height: 40px; }
-.channel-number { position: absolute; bottom: 3px; left: 5px; display: block; padding: 0 3px; color: #ccc; font: bold 18px Arial,sans-serif; background: #252525; line-height: 20px; }
-.preamp-strip:nth-child(even) .channel-number { left: auto; right: 5px; }
-.pair-link { position: absolute; left: 100%; bottom: 25px; width: 61px; transform: translateX(-50%); z-index: 3; flex-direction: row-reverse; gap: 4px; }
-.compressor-pill { position: absolute; left: 60%; bottom: 4px; width: 100px; border-radius: 8px; background: #252525; color: #ccc; text-align: center; font: 10px Arial,sans-serif; z-index: 2; }
+.channel-number { position: absolute; bottom: 12px; left: 11px; display: block; width: 23px; height: 17px; padding: 0; color: #ccc; font: bold 18px/17px Arial,sans-serif; text-align: center; background: #252525; }
+.preamp-strip:nth-child(even) .channel-number { left: auto; right: 4px; }
+.pair-link { position: absolute; left: 110px; top: 301px; width: auto; height: 19px; z-index: 3; flex-direction: row-reverse; gap: 4px; }
+.compressor-pill { position: absolute; left: 43px; bottom: 13px; width: 129px; height: 12px; border-radius: 8px; background: #252525; color: #ccc; text-align: center; font: 10px/12px Arial,sans-serif; z-index: 2; }
 .connection-message, .busy-message { position: absolute; z-index: 15; top: 142px; left: 50%; transform: translateX(-50%); width: 516px; min-height: 78px; padding: 30px 20px; color: #141c23; background: linear-gradient(#e0e0e0,#c7c7c7); box-shadow: 1px 2px 9px #0008; border: 2px ridge #ccc; text-align: center; font-size: 12px; }
 .busy-message { z-index: 16; width: 290px; min-height: 50px; padding: 18px; }
 .disconnected main button, .disconnected .knob { pointer-events: none; }
 .disconnected .preamp-strip { filter: saturate(.5); }
 .unavailable-channel { opacity: .3; pointer-events: none; }
 .mixer-view { height: 350px; }
-.mixer-tabs { display: flex; align-items: flex-end; height: 20px; gap: 0; padding-left: 10px; background: #292929; color: #ccc; }
-.mixer-tabs button { height: 19px; width: 130px; flex-shrink: 0; border: 1px solid #999; border-bottom: 0; border-radius: 7px 7px 0 0; background: linear-gradient(#505050,#343434); color: #bbb; padding: 1px 7px; font-size: 12px; }
+.mixer-tabs { display: flex; align-items: flex-end; height: 19px; gap: 0; padding-left: 18px; background: #292929; color: #ccc; }
+.mixer-tabs button { position: relative; top: -2px; height: 18px; width: 129px; flex-shrink: 0; border: 1px solid #999; border-bottom: 0; border-radius: 7px 7px 0 0; background: linear-gradient(#505050,#343434); color: #bbb; padding: 1px 7px; font-size: 12px; }
 .mixer-tabs button[aria-selected=true] { background: linear-gradient(#424242,#252525); color: #fff; font-weight: bold; }
 .mixer-tabs .routing-summary { margin-left: auto; margin-right: 6px; align-self: center; font-size: 10px; }
-.mixer-groups { display: grid; grid-template-columns: 1fr 1fr 106px; gap: 7px; padding: 0 2px; height: 328px; }
+.mixer-groups { display: grid; grid-template-columns: 420px 420px 100px; gap: 12px; margin-left: 7px; padding: 0; height: 328px; }
 .mixer-group { min-width: 0; }
 .group-title { display: block; background: #858891; text-align: center; height: 17px; font-size: 12px; font-weight: bold; }
-.mixer-channels { display: grid; grid-template-columns: repeat(10,1fr); height: 309px; }
+.mixer-channels { display: grid; grid-template-columns: repeat(10, 42px); height: 309px; }
 .mixer-strip { position: relative; min-width: 0; padding: 2px 3px; border-right: 1px solid #555; background: linear-gradient(90deg,#313131,#292929); font-family: 'Arial Narrow','Liberation Sans Narrow',Arial,sans-serif; }
 .mixer-strip:nth-child(even) { border-right: 3px ridge #888; }
-.mixer-strip .toggle { font-size: 9px; margin: 4px 0; }
-.mixer-strip .toggle .lamp { width: 23px; height: 21px; }
-.mixer-pair-link { position: absolute; left: 100%; top: 3px; transform: translateX(-50%); z-index: 2; flex-direction: row-reverse; width: 55px; gap: 3px; }
-.mixer-switches { padding-top: 24px; }
+.mixer-strip .toggle { font-size: 9px; margin: 0; }
+.mixer-strip .toggle .lamp { width: 23px; height: 19px; }
+.mixer-pair-link { position: absolute; left: 27px; top: 4px; z-index: 2; flex-direction: row-reverse; width: auto; height: 19px; gap: 3px; }
+.mixer-switches { position: absolute; top: 24px; left: 6px; display: grid; gap: 3px; }
 .mixer-knob { height: 43px; }
-.mixer-strip .knob-dial { width: 29px; height: 29px; }
-.mixer-strip .channel-label { margin: 0; text-align: center; font-size: 10px; }
+.mixer-send { position: absolute; top: 95px; left: 4px; width: 25px; height: 37px; }
+.mixer-strip > .knob { position: absolute; top: 139px; left: 4px; width: 25px; height: 37px; }
+.mixer-strip .channel-label { position: absolute; left: 0; top: 183px; width: 34px; margin: 0; text-align: center; font-size: 10px; }
+.mixer-strip .fader { position: absolute; top: 203px; left: 0; width: 34px; height: 101px; padding: 0; justify-content: flex-end; }
+.mixer-strip .fader .level-lane { left: 5px; top: 8px; bottom: auto; height: 76px; border: 0; }
+.mixer-strip .level-lane .meter-clip { top: -10px; width: 5px; height: 6px; }
 .fader { position: relative; display: flex; height: 103px; justify-content: center; padding-top: 1px; }
 .fader { --fader-cap: url('/fader-white.svg'); }
 .master-group .fader { --fader-cap: url('/fader-red.svg'); }
@@ -130,17 +138,18 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .master-group .fader-value { font-size: 8px; }
 .fader .level-fill { position: absolute; bottom: 0; width: 100%; height: var(--level,0%); background: #c1bb72; }
 .master-panel { position: relative; background: #252525; }
-.master-controls { display: grid; grid-template-columns: 1fr 1fr; padding: 0 5px; gap: 3px; }
+.master-controls { position: absolute; left: 0; top: 163px; display: grid; grid-template-columns: 41px 41px; padding: 0; gap: 8px; }
 .output-jacks { margin: 4px 3px; padding: 2px; border: 1px solid #111; border-radius: 4px; text-align: center; background: #101010; font-size: 9px; white-space: pre-line; }
-.master-top { height: 143px; position: relative; }
-.master-io-link { position: absolute; top: 34px; left: 34px; flex-direction: row-reverse; gap: 4px; }
-.master-reverb-type { position: absolute; top: 68px; left: 4px; flex-direction: row; gap: 4px; text-align: left; white-space: pre-line; }
-.master-top > .knob { position: absolute; top: 94px; left: 4px; width: 44px; }
-.master-return .knob-label { white-space: normal; text-align: center; font-size: 9px; line-height: 9px; }
-.master-faders { position: absolute; bottom: 8px; display: flex; justify-content: center; gap: 7px; }
-.master-group .toggle { margin: 4px auto; }
-.master-group .caption { text-align: center; font: bold 9px Arial,sans-serif; height: 24px; margin-top: 8px; }
-.master-group .fader { height: 103px; }
+.master-top { height: 143px; position: relative; display: flow-root; }
+.master-io-link { position: absolute; top: 37px; left: 33px; height: 19px; flex-direction: row-reverse; gap: 4px; }
+.master-reverb-type { position: absolute; top: 72px; left: 6px; height: 19px; flex-direction: row; gap: 3px; text-align: left; white-space: pre-line; }
+.master-top > .knob { position: absolute; top: 97px; left: 6px; width: 25px; }
+.master-return .knob-label { width: 42px; height: 18px; white-space: normal; text-align: center; font-size: 9px; line-height: 9px; }
+.master-faders { position: absolute; top: 57px; left: 0; display: flex; justify-content: center; gap: 1px; }
+.master-group { position: relative; width: 41px; }
+.master-group .toggle { position: absolute; left: 7px; top: 0; width: 23px; margin: 0; gap: 2px; }
+.master-group .caption { position: absolute; top: 40px; width: 41px; text-align: center; font: bold 9px/9px 'Arial Narrow','Liberation Sans Narrow',Arial,sans-serif; height: 18px; margin: 0; }
+.master-group .fader { width: 18px; height: 102px; padding: 0; }
 .menu { position: fixed; z-index: 40; min-width: 200px; padding: 2px; border: 1px solid #777; background: #eee; color: #111; box-shadow: 2px 3px 8px #0007; }
 .menu button { display: flex; width: 100%; justify-content: space-between; gap: 20px; padding: 5px 12px; border: 0; background: none; color: #111; font-size: 12px; text-align: left; }
 .menu button:hover, .menu button:focus { background: #bdd1e7; outline: 0; }

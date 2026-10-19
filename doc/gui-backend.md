@@ -274,6 +274,32 @@ See [GTK's gesture button guard](https://github.com/GNOME/gtk/blob/4.18.6/gtk/gt
 and [WebKit's mouse gesture setup](https://github.com/WebKit/WebKit/blob/webkitgtk-2.54.0/Source/WebKit/UIProcess/API/gtk/WebKitWebViewBase.cpp).
 Native Wayland and updated WSL input behavior remain unverified.
 
+Main-panel control geometry matches 300 original Win32 child rectangles at
+96 DPI: 128 in Preamp and 172 in Direct Mixer. This includes 25×25 dials,
+23×19 switch skins, channel spacing, sensitivity editors, compressor plots,
+meter/clip windows and 18×88 fader controls. The Linux view uses our own CSS
+artwork at these positions. Both browser and GTK checks compare rendered
+rectangles with `test/data/control-geometry.json` and retain the original view.
+The native Windows menu occupies 19 pixels above its client coordinates;
+the fixture includes that translation. Other DPI settings, native Windows font
+rendering, owner-painted labels/textures and the two combined stereo master
+value displays are outside this rectangle comparison.
+Channel value windows meet the fader's lower edge; the original shared master
+value windows start one pixel lower. The browser check enforces these exact
+vertical gaps rather than adding spacing absent from the original.
+
+The read-only inspector checks the running original executable's SHA256 and can
+compare either visible view. Run it with Windows Python alongside the original
+English x64 panel, then switch views and repeat:
+
+```powershell
+py tools/inspect-windows-layout.py --compare test/data/control-geometry.json
+```
+
+`--output PATH` saves a new private observation instead of the complete stdout
+dump. The inspector also runs with Windows Python under the existing private
+Wine model. This model checks window layout, not Windows hardware control.
+
 The bridge additionally emits `pcm-meters` events with validated ALSA capture
 and playback peaks, rate/channel counts, sequences and ages. The Python cache
 retains independent MIDI/PCM receive times. The web panel uses the sources and

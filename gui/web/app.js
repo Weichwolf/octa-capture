@@ -996,7 +996,7 @@ function setupEvents() {
   $('#view-switch').addEventListener('click', () => {
     activeView = activeView === 'preamp' ? 'mixer' : 'preamp';
     $('#preamp-view').hidden = activeView !== 'preamp'; $('#mixer-view').hidden = activeView !== 'mixer';
-    $('#view-switch').textContent = activeView === 'preamp' ? 'DIRECT MIXER ▾' : 'MIC PRE ▾';
+    $('#view-switch').textContent = activeView === 'preamp' ? 'DIRECT MIXER ▾' : 'VS PREAMP ▴';
     $('#header-action > span:last-child').textContent = activeView === 'preamp' ? 'AUTO-SENS' : 'MULTIPLE DIRECT MIXER';
     if (documentState) update(documentState);
   });

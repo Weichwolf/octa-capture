@@ -76,12 +76,16 @@ class Check(Desktop):
             return
         self.phase = 'suite'
         source = (ROOT / 'test/GtkPanel.mjs').read_text().replace('export async function', 'async function')
-        source += f'\nreturn await checkPanel({str(self.write).lower()});'
+        source += (ROOT / 'test/GuiControlGeometry.mjs').read_text().replace('export ', '')
+        geometry = json.loads((ROOT / 'test/data/control-geometry.json').read_text())
+        source += f'\nconst result = await checkPanel({str(self.write).lower()});'
+        source += f'\nresult.geometry = await checkControlGeometry({json.dumps(geometry)});return result;'
 
         def finished(view, result, _data):
             try:
                 value = view.call_async_javascript_function_finish(result)
                 self.result = json.loads(value.to_json(0))
+                print(f'PASS original main-panel control bounds in WebKit: {self.result["geometry"]}', flush=True)
                 self.start_native_space()
             except Exception as error:
                 self.fail(error)

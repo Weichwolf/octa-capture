@@ -21,6 +21,7 @@ import {checkFooter, checkFooterRates} from './GuiFooter.mjs';
 import {checkAutoSenseSelection, checkAutoSenseFailure} from './GuiAutoSense.mjs';
 import {checkDialogWindows} from './GuiDialogs.mjs';
 import {checkControlHits} from './GuiControlHits.mjs';
+import {checkControlGeometry} from './GuiControlGeometry.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -80,6 +81,9 @@ try {
   await browser.call('Page.navigate', {url: launch});
   await until(() => browser.evaluate('document.querySelectorAll(".preamp-strip").length === 8 && document.querySelector("#connection-message").hidden'), 'live preamp view');
   await checkFooter(browser, api);
+  const geometryReference = JSON.parse(await fs.readFile(path.join(root, 'test/data/control-geometry.json'), 'utf8'));
+  const controlGeometry = await browser.evaluate(`(${checkControlGeometry.toString()})(${JSON.stringify(geometryReference)})`);
+  console.log(`PASS original main-panel control bounds: ${controlGeometry.checked} matched, ${controlGeometry.hidden} hidden at this rate`);
   const devices = (await api('/api/devices')).devices;
   assert.equal(devices.filter(device=>device.selected).length, 1, 'Selected card is discovered through sysfs');
   await browser.key('#device-status', 'ContextMenu');
@@ -197,10 +201,11 @@ try {
     return [...document.querySelectorAll('.fader')].every(node=>{
       const input=node.querySelector('input'), box=input.getBoundingClientRect(), label=node.querySelector('output').getBoundingClientRect();
       const cap=getComputedStyle(input).getPropertyValue('--fader-cap');
-      return box.width===18 && box.height===88 && box.top===first.top && box.bottom<label.top &&
+      const gap=node.closest('.master-group') ? 1 : 0;
+      return box.width===18 && box.height===88 && box.top===first.top && label.top===box.bottom+gap &&
         cap.includes(node.closest('.master-group') ? 'fader-red.svg' : 'fader-white.svg');
     });
-  })()`), true, 'aligned white channel/red master faders with unobstructed numeric readouts');
+  })()`), true, 'original channel/master fader alignment, colors and exact zero/one-pixel readout gaps');
   await browser.screenshot(path.join(directory, 'mixer.png'));
   if (playwright && write) await checkMasterFaders(browser, api, restoreMixer);
   if (playwright && write) await checkFaderDrags(browser, api, restoreMixer);

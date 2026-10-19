@@ -197,6 +197,23 @@ the measured child bounds remain in ignored build/wine-reference/pointer-control
 The left-release handler 0x1400032c0 releases capture and ends dragging regardless
 of the remaining mouse buttons; 0x140002e30 also resets it on capture change.
 
+Main-panel control geometry
+---------------------------
+The read-only tools/inspect-windows-layout.py verifies the running executable's
+hash, records its DPI/client/menu dimensions and reads visible Win32 child
+rectangles. Both views in the offline model report 96 DPI, a 978x410 client and
+a 19-pixel native menu. The numeric fixture test/data/control-geometry.json
+contains 128 Preamp and 172 Direct Mixer rectangles, translated by that menu
+height into our complete-panel coordinates. Both views pass --compare.
+Preamps repeat at 121 pixels; mixer channels repeat at 42 pixels, with 432 pixels
+between input/playback groups. Dials measure 25x25, switch skins 23x19, faders
+18x88. The return control and all four master faders are included.
+The original mixer header reads VS PREAMP with an upward arrow.
+The private observations remain under build/wine-reference/.
+These measurements exclude native Windows font/DPI rendering, owner-painted
+captions/backgrounds and the two shared stereo master value windows. They do
+not establish physical audio response or Windows device communication.
+
 Windows driver compatibility checks
 -----------------------------------
 The vendor INF registers RDWM1110.SYS with ServiceType=1

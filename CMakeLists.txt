@@ -145,6 +145,7 @@ add_test(NAME gui-auto-sense COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR
 add_test(NAME gui-navigation COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiNavigation.py")
 add_test(NAME gui-window COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiWindow.py")
 add_test(NAME gui-pointer COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiPointerControls.py")
+add_test(NAME gui-control-geometry COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiControlGeometry.py")
 add_test(NAME gui-devices COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiDevices.py")
 add_test(NAME gui-preferences COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiPreferences.py")
 add_test(NAME gui-warnings COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs")
@@ -192,6 +193,7 @@ add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   "${CMAKE_SOURCE_DIR}/test/GuiDialogs.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiDialogKeys.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiControlHits.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiControlGeometry.mjs"
   "${CMAKE_SOURCE_DIR}/test/GtkControlHits.mjs"
   "${CMAKE_SOURCE_DIR}/test/PlaywrightClient.mjs"
   "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs"
