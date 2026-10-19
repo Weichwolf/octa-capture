@@ -203,16 +203,31 @@ The read-only tools/inspect-windows-layout.py verifies the running executable's
 hash, records its DPI/client/menu dimensions and reads visible Win32 child
 rectangles. Both views in the offline model report 96 DPI, a 978x410 client and
 a 19-pixel native menu. The numeric fixture test/data/control-geometry.json
-contains 128 Preamp and 172 Direct Mixer rectangles, translated by that menu
+contains 128 Preamp and 174 Direct Mixer rectangles, translated by that menu
 height into our complete-panel coordinates. Both views pass --compare.
 Preamps repeat at 121 pixels; mixer channels repeat at 42 pixels, with 432 pixels
 between input/playback groups. Dials measure 25x25, switch skins 23x19, faders
-18x88. The return control and all four master faders are included.
+18x88. The return control, all four master faders and both 41x13 shared master
+value windows are included.
 The original mixer header reads VS PREAMP with an upward arrow.
 The private observations remain under build/wine-reference/.
 These measurements exclude native Windows font/DPI rendering, owner-painted
-captions/backgrounds and the two shared stereo master value windows. They do
+captions/backgrounds. They do
 not establish physical audio response or Windows device communication.
+
+The shared master readout getter 0x140019900 reads a source-specific selected
+side from state offsets 0x144c/0x1450. Callback 0x14001f040 selects that side;
+0x140017f10 invokes it on changed or forced master refreshes. Left release
+forces refresh even when a thumb click leaves the coefficient unchanged.
+The macOS CBtnMstVol::OnUpdate (0x100023844) and CValMstVol::GetFromDev
+(0x10002402c) use equivalent separate selectors at 0x1088/0x108c.
+tools/verify-master-display.py executes both selectors/getters and the Windows
+refresh path across 32 fixed traces per reference, including all four mixers,
+unequal left/right values, silent/maximum levels and unchanged polls. The web
+display matches. Visibility/painting and macOS notification scheduling are
+modeled; these checks do not exercise original device transport. Wine/X11
+observations with unequal in-memory model values additionally show the shared
+readout changing to the clicked thumb's unchanged value on release.
 
 Windows driver compatibility checks
 -----------------------------------

@@ -6,7 +6,7 @@ import {PopupMenus, PanelMenuBar} from './menus.js';
 import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
-import {faderPreview, ReferenceFader} from './faders.js';
+import {faderPreview, MasterFaderDisplay, ReferenceFader} from './faders.js';
 import {knobDrag, knobKey, wheelDelta, wheelValue, controlPointerHit, controlContextHit, controlContext, controlButton} from './knobs.js';
 import {DialogWindow} from './dialogs.js';
 
@@ -40,6 +40,7 @@ let meterSnapshot = null, meterReceived = 0, meterLastID = 0, meterLastRate = nu
 let meterTick = performance.now();
 const pending = new Map(), queued = new Map();
 const faderPreviews = new Map();
+const masterDisplay = new MasterFaderDisplay(), masterOutputs = new Map();
 const REVERB_TYPES = ['OFF', 'ECHO', 'ROOM', 'SMALL HALL', 'LARGE HALL'];
 let reverbDelay, reverbTime;
 const ROUTES = ['DIRECT MIX A', 'DIRECT MIX B', 'DIRECT MIX C', 'DIRECT MIX D',
@@ -114,6 +115,9 @@ function queueChange(control) {
   if (['master', 'mixer'].includes(control.kind) && control.parameter === 'volume') {
     faderPreviews.delete(identifier);
     faderPreviews.set(identifier, control);
+    if (documentState && control.kind === 'master') {
+      for (const peer of faderPreview(documentState.state, [control])) masterDisplay.select(peer.source, peer.channel);
+    }
     if (documentState) renderFaders(documentState.state);
   }
   if (!writing) void flushChanges();
@@ -413,15 +417,21 @@ function fader(control, read, label, channel = null, source = null) {
   input.type = 'range'; input.min = '0'; input.max = '1024'; input.step = '1';
   input.setAttribute('aria-label', label);
   input.dataset.control = '';
-  const output = el('output', 'fader-value');
-  output.setAttribute('aria-hidden', 'true');
+  const output = control(0).kind === 'master' ? null : el('output', 'fader-value');
+  output?.setAttribute('aria-hidden', 'true');
   const interaction = new ReferenceFader(input, value => {
     input.title = volumeText(value);
-    output.textContent = volumeText(value).replace(/ dB$/, '');
+    if (output) output.textContent = volumeText(value).replace(/ dB$/, '');
     queueChange(control(value));
-  }, panelWheelAllowed);
+  }, panelWheelAllowed, () => {
+    const selected = control(0);
+    if (selected.kind !== 'master') return;
+    masterDisplay.select(selected.source, selected.channel);
+    if (documentState) renderFaders(documentState.state);
+  });
   controlContext(input, event => controlMenu(event, control(0)));
-  wrapper.append(input, output);
+  wrapper.append(input);
+  if (output) wrapper.append(output);
   if (channel !== null) {
     const lane = el('span', 'level-lane');
     lane.dataset.channel = channel;
@@ -509,6 +519,7 @@ function makeMasters() {
   const groups = el('div', 'master-controls');
   for (const source of ['input', 'playback']) {
     const group = el('div', 'master-group');
+    group.dataset.source = source;
     group.append(toggle('LINK', value => mixerControl(source, 0, 'link', value, 'master'),
       state => state.mixers[bus][`${source}_master`].linked));
     group.append(el('div', 'caption', source === 'input' ? 'INPUT MIXER' : 'WAVE OUT MIXER'));
@@ -517,20 +528,27 @@ function makeMasters() {
       pair.append(fader(value => mixerControl(source, channel, 'volume', value, 'master'),
         state => state.mixers[bus][`${source}_master`].volume[channel], `${source} master ${channel + 1} volume`));
     }
-    group.append(pair); groups.append(group);
+    const output = el('output', 'master-value fader-value');
+    output.setAttribute('aria-hidden', 'true');
+    masterOutputs.set(source, output);
+    group.append(pair, output); groups.append(group);
   }
   master.append(groups); $('#mixer-groups').append(master);
 }
 
 function renderFaders(state) {
-  const previews = new Map(faderPreview(state, faderPreviews.values()).map(control => [key(control), control.value]));
+  const controls = faderPreview(state, faderPreviews.values());
+  const previews = new Map(controls.map(control => [key(control), control.value]));
   for (const {input, output, read, control, interaction} of faders) {
     const identifier = key(control(0));
     const value = previews.get(identifier) ?? pending.get(identifier) ?? read(state);
     if (!interaction.dragging) input.value = volumeIndex(value);
     input.title = volumeText(value);
-    output.textContent = volumeText(value).replace(/ dB$/, '');
+    if (output) output.textContent = volumeText(value).replace(/ dB$/, '');
     input.disabled = !connected || busy || input.closest('.unavailable-channel') !== null;
+  }
+  for (const [source, value] of Object.entries(masterDisplay.sync(state.mixers[bus], controls.filter(control => control.bus === bus)))) {
+    masterOutputs.get(source).textContent = volumeText(value).replace(/ dB$/, '');
   }
 }
 

@@ -135,7 +135,7 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .fader input::-moz-range-thumb { width: 18px; height: 32px; border: 0; border-radius: 0; background: var(--fader-cap) center / 18px 32px no-repeat; }
 .fader .level-lane { position: absolute; left: 0; top: 4px; bottom: 16px; width: 5px; background: #242724; border: 1px solid #555; }
 .fader-value { position: absolute; bottom: 0; left: 0; width: 100%; height: 13px; margin: 0; border: 1px solid #4d4d4d; background: #080808; color: #eee; text-align: center; font: bold 9px/11px Arial,sans-serif; pointer-events: none; }
-.master-group .fader-value { font-size: 8px; }
+.master-group .master-value { top: 146px; left: -2px; width: 41px; font-size: 9px; }
 .fader .level-fill { position: absolute; bottom: 0; width: 100%; height: var(--level,0%); background: #c1bb72; }
 .master-panel { position: relative; background: #252525; }
 .master-controls { position: absolute; left: 0; top: 163px; display: grid; grid-template-columns: 41px 41px; padding: 0; gap: 8px; }

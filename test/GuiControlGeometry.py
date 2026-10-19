@@ -20,7 +20,7 @@ class Geometry(unittest.TestCase):
         return result
 
     def test_complete_views_include_the_native_menu_translation(self):
-        for view, count in (('preamp', 128), ('mixer', 172)):
+        for view, count in (('preamp', 128), ('mixer', 174)):
             self.assertEqual(INSPECTOR['compare'](self.observation(view), REFERENCE), {'view': view, 'matched': count})
 
     def test_other_binary_dpi_client_size_or_menu_is_not_equivalent(self):

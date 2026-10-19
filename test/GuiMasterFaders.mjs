@@ -13,7 +13,7 @@ const volumes = state => [...state.mixers[0].input_master.volume, ...state.mixer
 export async function checkMasterFaders(browser, api, restore) {
   const read = async () => (await api('/api/state')).state;
   const displayed = () => browser.page.locator('.master-faders input').evaluateAll(inputs =>
-    inputs.map(input => ({position: Number(input.value), text: input.nextElementSibling.textContent})));
+    inputs.map(input => ({position: Number(input.value), text: input.closest('.master-group').querySelector('.master-value').textContent})));
   const base = volumeIndex(256);
   // Explicit expected peers include the device's asymmetric, one-way expansion.
   const cases = [

@@ -120,12 +120,16 @@ across button chords. Chromium and native GTK/X11 input checks intercept
 parameter replies and preserve the real raw state. The GTK host forwards
 secondary buttons around the runtime's gesture reset; its DOM events remain
 untrusted and are compared with actual GDK receipts. See the [GUI reference](gui-backend.md).
-Both main views now match 300 original control rectangles at 96 DPI in browser
+Both main views now match 302 original control rectangles at 96 DPI in browser
 and GTK rendering. The read-only Windows inspector independently compares
-128 Preamp and 172 Mixer rectangles against the numeric fixture, including
-channel spacing, dials, switches, plots, meters and faders. Owner-painted artwork,
-native Windows fonts/DPI and the shared master value displays remain outside
-that comparison; this is not complete visual parity.
+128 Preamp and 174 Mixer rectangles against the numeric fixture, including
+channel spacing, dials, switches, plots, meters, faders and both shared master
+value displays. Original Windows/macOS selectors/getters and Windows refresh
+code match 32 fixed master readout traces per reference. Browser response models
+also verify unequal stereo values and thumb-release selection on all four buses.
+Host visibility/painting and macOS notification scheduling are modeled.
+Owner-painted artwork and native Windows fonts/DPI remain outside that comparison;
+this is not complete visual parity.
 Native Debian at 44.1/48 kHz also matches 144 actual Playwright pointer events across
 the four knob families and all Shift/Ctrl combinations, with independent device
 readback and complete raw recovery. This checks control values, not analog response.

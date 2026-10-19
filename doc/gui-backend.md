@@ -274,19 +274,29 @@ See [GTK's gesture button guard](https://github.com/GNOME/gtk/blob/4.18.6/gtk/gt
 and [WebKit's mouse gesture setup](https://github.com/WebKit/WebKit/blob/webkitgtk-2.54.0/Source/WebKit/UIProcess/API/gtk/WebKitWebViewBase.cpp).
 Native Wayland and updated WSL input behavior remain unverified.
 
-Main-panel control geometry matches 300 original Win32 child rectangles at
-96 DPI: 128 in Preamp and 172 in Direct Mixer. This includes 25×25 dials,
+Main-panel control geometry matches 302 original Win32 child rectangles at
+96 DPI: 128 in Preamp and 174 in Direct Mixer. This includes 25×25 dials,
 23×19 switch skins, channel spacing, sensitivity editors, compressor plots,
 meter/clip windows and 18×88 fader controls. The Linux view uses our own CSS
 artwork at these positions. Both browser and GTK checks compare rendered
 rectangles with `test/data/control-geometry.json` and retain the original view.
 The native Windows menu occupies 19 pixels above its client coordinates;
 the fixture includes that translation. Other DPI settings, native Windows font
-rendering, owner-painted labels/textures and the two combined stereo master
-value displays are outside this rectangle comparison.
+rendering and owner-painted labels/textures are outside this rectangle comparison.
 Channel value windows meet the fader's lower edge; the original shared master
 value windows start one pixel lower. The browser check enforces these exact
 vertical gaps rather than adding spacing absent from the original.
+Each stereo master pair shares one 41×13 value window. It shows the last updated
+side independently for input/playback; releasing an unchanged thumb also selects
+that side without changing its level. Changed device values update the selection
+in left/right order; unchanged polling retains it. Pending previews survive older
+acknowledgments. Individual sliders retain their accessible values and tooltips.
+`tools/verify-master-display.py WINDOWS-GUI --macos MAC-GUI` executes the original
+selection/getter functions on both references and Windows master refresh code.
+Thirty-two traces per reference match the web display and run from numeric
+fixtures in standard tests. Visibility/painting and macOS notification scheduling
+are modeled. The browser additionally checks unequal stereo values, release
+timing and selection across views on all four buses with modeled responses.
 
 The read-only inspector checks the running original executable's SHA256 and can
 compare either visible view. Run it with Windows Python alongside the original

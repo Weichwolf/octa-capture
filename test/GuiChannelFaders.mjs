@@ -1,8 +1,38 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Real browser input with modeled, deliberately delayed device responses.
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {until} from './BrowserClient.mjs';
-import {VOLUME} from '../gui/web/parameters.js';
+import {VOLUME, volumeText} from '../gui/web/parameters.js';
+
+const displayCases = JSON.parse(readFileSync(new URL('data/master-display.json', import.meta.url), 'utf8')).cases;
+
+async function checkMasterReadouts(browser, model, settings, pollCount) {
+  const page = browser.page;
+  const displayed = () => page.locator('.master-value').allTextContents();
+  for (const step of settings.readouts.steps) {
+    const start = pollCount(), mixer = model.state.mixers[settings.bus];
+    mixer.input_master.volume = [...step.values.input];
+    mixer.playback_master.volume = [...step.values.playback];
+    await until(() => pollCount() > start, 'modeled master readout state polled');
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    if (step.select) {
+      const [source, channel] = step.select;
+      const node = page.locator(`[aria-label="${source} master ${channel + 1} volume"]`);
+      const value = Number(await node.inputValue()), box = await node.boundingBox();
+      const before = await displayed();
+      await page.mouse.move(box.x + 9, box.y + 72 - value / 1024 * 56);
+      await page.mouse.down();
+      try { assert.deepEqual(await displayed(), before, 'An unchanged thumb press retains the selected side until release'); }
+      finally { await page.mouse.up(); }
+    }
+    assert.deepEqual(await displayed(), ['input', 'playback'].map(source => volumeText(step.expected[source]).replace(/ dB$/, '')),
+      'Two visible master fields match original selection/polling traces with unequal stereo levels');
+  }
+  const before = await displayed();
+  await browser.click('#view-switch'); await browser.click('#view-switch');
+  assert.deepEqual(await displayed(), before, 'Switching views preserves the selected master sides');
+}
 
 function latch() {
   let release;
@@ -21,7 +51,8 @@ async function modeledPair(browser, original, url, settings) {
   }
   model.state.mixers[settings.bus][settings.source].pairs[settings.channel >> 1].linked = settings.linked;
   const held = [latch(), latch()], writes = [], work = [], start = browser.controls.length;
-  const stateRoute = route => route.fulfill({status: 200, json: model});
+  let polls = 0;
+  const stateRoute = async route => { await route.fulfill({status: 200, json: model}); polls++; };
   const handle = async route => {
     const control = route.request().postDataJSON();
     if (control.kind === 'mixer' && control.parameter === 'volume') {
@@ -42,6 +73,11 @@ async function modeledPair(browser, original, url, settings) {
     await until(() => browser.evaluate('document.querySelector("#connection-message")?.hidden === true'), 'modeled channel state');
     await browser.click('#view-switch');
     await browser.click(`#mixer-tabs > button:nth-of-type(${settings.bus + 1})`);
+    if (settings.readouts) {
+      await checkMasterReadouts(browser, model, settings, () => polls);
+      assert.equal(writes.length, 0, 'Thumb selection changes only the readout, never a volume command');
+      return;
+    }
     const selector = `[aria-label="${settings.source} ${settings.channel + 1} volume"]`;
     const positions = () => page.locator('.mixer-strip .fader input').evaluateAll(nodes => nodes.map(node => Number(node.value)));
     const origin = (settings.source === 'input' ? 0 : 10) + settings.channel;
@@ -106,6 +142,10 @@ export async function checkChannelFaders(browser, api) {
       {bus: 1, source: 'playback', channel: 5, linked: true},
       {bus: 2, source: 'playback', channel: 6, linked: false},
     ]) await modeledPair(browser, original, url, settings);
+    for (const readouts of displayCases) {
+      await modeledPair(browser, original, url, {bus: readouts.bus,
+        source: 'input', channel: 0, linked: false, readouts});
+    }
   } finally {
     const restore = route => route.fulfill({status: 200, json: original});
     await browser.page.route('**/api/control', restore);
@@ -119,4 +159,5 @@ export async function checkChannelFaders(browser, api) {
   }
   assert.deepEqual((await api('/api/state')).state, original.state, 'Modeled channel responses never change the device');
   console.log('PASS linked/unlinked channel faders: immediate keyboard/drag thumbs and readouts, delayed replies, stale acknowledgments and no redundant peer writes; device responses modeled');
+  console.log('PASS two shared master readouts: 32 original unequal-stereo selection/polling traces across all buses; device responses modeled');
 }

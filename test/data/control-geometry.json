@@ -306,7 +306,9 @@
       {"id":642,"selector":"[aria-label=\"input master 1 volume\"]","rect":[877,291,18,88]},
       {"id":643,"selector":"[aria-label=\"input master 2 volume\"]","rect":[896,291,18,88]},
       {"id":646,"selector":"[aria-label=\"playback master 1 volume\"]","rect":[926,291,18,88]},
-      {"id":647,"selector":"[aria-label=\"playback master 2 volume\"]","rect":[945,291,18,88]}
+      {"id":647,"selector":"[aria-label=\"playback master 2 volume\"]","rect":[945,291,18,88]},
+      {"id":644,"selector":".master-group[data-source=\"input\"] .master-value","rect":[875,380,41,13]},
+      {"id":648,"selector":".master-group[data-source=\"playback\"] .master-value","rect":[924,380,41,13]}
     ]
   }
 }

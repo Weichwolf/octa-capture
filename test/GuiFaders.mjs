@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {faderPreview, faderDrag, faderClick} from '../gui/web/faders.js';
+import {faderPreview, MasterFaderDisplay, faderDrag, faderClick} from '../gui/web/faders.js';
 import {knobKey} from '../gui/web/knobs.js';
 import {VOLUME} from '../gui/web/parameters.js';
 
@@ -77,3 +77,24 @@ for (const bus of [0, 1, 2, 3]) {
 }
 assert.equal(pairs, 320);
 console.log('PASS 320 channel fader preview cases: all buses, sources, pairs, directions, link/mono states and latest-write ordering');
+
+const display = new MasterFaderDisplay();
+const displayCases = JSON.parse(readFileSync(new URL('data/master-display.json', import.meta.url), 'utf8'));
+for (const test of displayCases.cases) {
+  for (const step of test.steps) {
+    const mixer = {input_master: {volume: step.values.input}, playback_master: {volume: step.values.playback}};
+    display.sync(mixer, []);
+    if (step.select) display.select(...step.select);
+    assert.deepEqual(display.sync(mixer, []), step.expected, 'Shared master readouts match both original binary traces');
+  }
+}
+const mixer = {input_master: {volume: [100, 200]}, playback_master: {volume: [300, 400]}};
+display.sync(mixer, []);
+display.select('input', 0);
+const preview = {...change(), value: 500};
+assert.equal(display.sync(mixer, [preview]).input, 500, 'An immediate preview replaces the selected raw value');
+assert.equal(display.sync({...mixer, input_master: {volume: [450, 200]}}, [preview]).input, 500,
+  'An older acknowledgment cannot replace the selected pending value');
+display.select('input', 1);
+assert.equal(display.sync(mixer, [preview]).input, 200, 'Clicking the other thumb selects its value while an earlier write is held');
+console.log('PASS original shared master display traces and pending acknowledgment/selection isolation');

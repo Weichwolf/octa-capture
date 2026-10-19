@@ -21,9 +21,10 @@ export function faderClick(value, y, shift = false, control = false) {
 }
 
 export class ReferenceFader {
-  constructor(input, change, wheelAllowed = () => true) {
+  constructor(input, change, wheelAllowed = () => true, finished = () => {}) {
     this.input = input;
     this.changed = change;
+    this.finished = finished;
     this.dragging = false;
     this.pointer = null;
     this.lastPointer = null;
@@ -47,6 +48,7 @@ export class ReferenceFader {
       const value = knobKey(Number(input.value), 1024, event.key);
       if (value !== null || ['Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) event.preventDefault();
       if (value !== null && value !== Number(input.value)) this.change({value});
+      else if (value !== null) this.finished();
     });
     input.addEventListener('wheel', event => {
       event.preventDefault();
@@ -61,10 +63,12 @@ export class ReferenceFader {
     this.changed(result.wireValue ?? VOLUME[result.value]);
   }
   end() {
+    const dragging = this.dragging;
     this.dragging = false;
     const pointer = this.pointer;
     this.pointer = null;
     if (pointer !== null && this.input.hasPointerCapture(pointer)) this.input.releasePointerCapture(pointer);
+    if (dragging) this.finished();
   }
   start(event, pointer = event.pointerId) {
     if (event.button !== 0 || this.input.disabled) return;
@@ -87,6 +91,31 @@ export class ReferenceFader {
     this.origin.value = Number(this.input.value);
     this.origin = faderDrag(this.origin, {x: event.clientX, y: event.clientY}, event.shiftKey, event.ctrlKey);
     if (this.origin.value !== Number(this.input.value) || this.origin.wireValue !== undefined) this.change(this.origin);
+  }
+}
+
+// The original shared master readout follows each group's last updated side.
+export class MasterFaderDisplay {
+  constructor() {
+    this.selected = {input: 0, playback: 0};
+    this.previous = {input: [], playback: []};
+  }
+  select(source, channel) { this.selected[source] = channel; }
+  sync(mixer, controls) {
+    controls = [...controls].filter(control => control.kind === 'master' && control.parameter === 'volume');
+    const pending = new Set(controls.map(control => control.source));
+    const values = {};
+    for (const source of ['input', 'playback']) {
+      values[source] = [...mixer[`${source}_master`].volume];
+      for (let channel = 0; channel < 2; channel++) {
+        if (!pending.has(source) && values[source][channel] !== this.previous[source][channel]) this.select(source, channel);
+      }
+      this.previous[source] = [...values[source]];
+    }
+    for (const control of controls) {
+      values[control.source][control.channel] = control.value;
+    }
+    return Object.fromEntries(['input', 'playback'].map(source => [source, values[source][this.selected[source]]]));
   }
 }
 

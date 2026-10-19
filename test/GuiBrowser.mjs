@@ -201,7 +201,8 @@ try {
   assert.equal(await browser.evaluate(`(() => {
     const first=document.querySelector('.mixer-strip .fader input').getBoundingClientRect();
     return [...document.querySelectorAll('.fader')].every(node=>{
-      const input=node.querySelector('input'), box=input.getBoundingClientRect(), label=node.querySelector('output').getBoundingClientRect();
+      const input=node.querySelector('input'), box=input.getBoundingClientRect();
+      const label=(node.closest('.master-group')?.querySelector('.master-value') || node.querySelector('output')).getBoundingClientRect();
       const cap=getComputedStyle(input).getPropertyValue('--fader-cap');
       const gap=node.closest('.master-group') ? 1 : 0;
       return box.width===18 && box.height===88 && box.top===first.top && label.top===box.bottom+gap &&
