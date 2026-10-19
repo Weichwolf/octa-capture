@@ -101,10 +101,6 @@ python3 tools/check-mixer-audio.py --write --rates --keep-going  # digital DSP/s
 python3 tools/check-mixer-audio.py --write --rates --integrity-seconds 10 --aperiodic \
   --period-size 256 --buffer-size 1024      # verify actual buffers and unique digital sample alignment
 ./tools/check-gui.sh                        # running-panel browser checks
-./tools/fuzz.sh 120                         # offline protocol fuzzing
-./tools/fuzz-midi.sh 120                    # simulated ALSA transport
-./tools/fuzz-clock.sh 120                   # actual clock C with USB adapters
-./tools/fuzz-kernel-status.sh 120           # actual status C with fault adapters
 ```
 
 Add `--realtime` to the digital mixer checker to request bounded RTKit
@@ -112,9 +108,12 @@ Add `--realtime` to the digital mixer checker to request bounded RTKit
 and `python3-gi`; it runs as the regular user. The checker records actual
 scheduling and rejects lost realtime policy, XRUNs and sample mismatches.
 
-Fuzzing uses LLVM libFuzzer with ASan/UBSan and sends no malformed traffic to
-hardware. Kernel code retains separate Kbuild/Sparse checks; host fuzzing does
-not replace kernel sanitizers, USB fault injection or physical lifecycle tests.
+Fuzzing is separate from standard tests and runs only on explicit user request.
+The `tools/fuzz*.sh` scripts use the dedicated `fuzz` preset with LLVM libFuzzer
+and ASan/UBSan; for example, `./tools/fuzz.sh 120` runs offline protocol fuzzing
+for 120 seconds. They send no malformed traffic to hardware. Kernel code retains
+separate Kbuild/Sparse checks; host fuzzing does not replace kernel sanitizers,
+USB fault injection or physical lifecycle tests.
 
 ## References
 

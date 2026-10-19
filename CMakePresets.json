@@ -8,7 +8,8 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang++-19",
-        "OCTA_SANITIZER": "address-undefined"
+        "OCTA_SANITIZER": "address-undefined",
+        "OCTA_FUZZING": "OFF"
       }
     },
     {
