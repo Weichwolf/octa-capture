@@ -388,6 +388,7 @@ class Check(Desktop):
                 geometry = json.loads(view.call_async_javascript_function_finish(result).to_json(0))
                 self.hit_window = self.focus_window()
                 label, dial, dy = geometry['label'], geometry['dial'], geometry['dy']
+                button, button_label, frame = geometry['button'], geometry['buttonLabel'], geometry['buttonFrame']
                 move = lambda p, dx=0, y=0: ('move', p['x'] + dx, p['y'] + y)
                 quiet = 'state.requests.length===0&&!state.dragging'
                 self.hit_steps = iter((
@@ -409,6 +410,14 @@ class Check(Desktop):
                     ('drag', [('key', 'Escape'), move(dial), ('down', 1), move(dial, 0, dy), ('up', 1)],
                      'state.requests.length===1&&!state.dragging&&!state.captured&&state.requests[0].kind==="preamp"&&'
                      f'state.requests[0].parameter==="sensitivity"&&state.requests[0].value==={geometry["expected"]}'),
+                    ('switch-down', [move(button), ('down', 1)],
+                     f'state.requests.length===1&&state.buttonFrame==={frame + 1}&&state.buttonCaptured'),
+                    ('switch-leave', [move(button_label)],
+                     f'state.requests.length===1&&state.buttonFrame==={frame}&&state.buttonCaptured'),
+                    ('switch-reenter', [move(button)],
+                     f'state.requests.length===1&&state.buttonFrame==={frame + 1}&&state.buttonCaptured'),
+                    ('switch-outside-release', [move(button_label), ('up', 1)],
+                     f'state.requests.length===1&&state.buttonFrame==={frame}&&!state.buttonCaptured'),
                 ))
                 self.next_native_hit()
             except Exception as error:

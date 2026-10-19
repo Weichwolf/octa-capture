@@ -15,23 +15,60 @@ export function controlContextHit(event, target) {
   return !(event.buttons & 1) && controlPointerHit(event, target);
 }
 
+export function switchFrame(lit, pressed, disabled) {
+  return Number(disabled) * 4 + Number(lit) * 2 + Number(pressed);
+}
+
 export function controlButton(node, selector, activate) {
-  let pressedInside = false;
+  let pressedInside = false, pressed = false, pointer = null, lastPointer = null;
   node.dataset.pointerTarget = selector;
-  node.addEventListener('pointerdown', event => {
-    if (event.button !== 0) return;
+  const paint = () => {
+    node.dataset.buttonFrame = String(switchFrame(node.classList.contains('lit'), pressed && !node.disabled, node.disabled));
+  };
+  const release = () => {
+    const previous = pointer;
+    pointer = null;
+    pressed = false;
+    if (previous !== null && node.hasPointerCapture(previous)) node.releasePointerCapture(previous);
+    paint();
+  };
+  const cancel = () => { pressedInside = false; release(); };
+  const begin = (event, id) => {
+    if (event.button !== 0 || node.disabled) return;
     pressedInside = controlPointerHit(event, node.querySelector(selector));
+    pressed = pressedInside;
+    if (pressedInside && id !== null) { pointer = id; node.setPointerCapture(id); }
+    paint();
     if (!pressedInside) event.preventDefault();
+  };
+  node.addEventListener('pointerdown', event => {
+    lastPointer = event.pointerId;
+    begin(event, event.pointerId);
   });
-  node.addEventListener('mousedown', event => {
-    if (event.button === 0) pressedInside = controlPointerHit(event, node.querySelector(selector));
+  node.addEventListener('mousedown', event => { begin(event, lastPointer); });
+  node.addEventListener('pointermove', event => {
+    if (event.pointerId !== pointer) return;
+    if (!(event.buttons & 1)) { cancel(); return; }
+    pressed = pressedInside && controlPointerHit(event, node.querySelector(selector));
+    paint();
   });
-  node.addEventListener('pointercancel', () => { pressedInside = false; });
+  for (const name of ['pointerup', 'mouseup']) {
+    node.addEventListener(name, event => { if (event.button === 0) release(); });
+  }
+  for (const name of ['pointercancel', 'lostpointercapture']) {
+    node.addEventListener(name, event => { if (event.pointerId === pointer) cancel(); });
+  }
   node.addEventListener('click', event => {
     const activatePointer = pressedInside && controlPointerHit(event, node.querySelector(selector));
-    pressedInside = false;
-    if (event.detail === 0 || activatePointer) activate(event);
+    cancel();
+    if (!node.disabled && (event.detail === 0 || activatePointer)) activate(event);
   });
+  const window = node.ownerDocument.defaultView;
+  window.addEventListener('blur', cancel);
+  node.ownerDocument.addEventListener('visibilitychange', () => { if (node.ownerDocument.hidden) cancel(); });
+  new window.MutationObserver(() => { if (node.disabled) cancel(); else paint(); })
+    .observe(node, {attributes: true, attributeFilter: ['class', 'disabled']});
+  paint();
 }
 
 export function controlContext(node, open) {

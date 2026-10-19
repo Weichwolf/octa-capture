@@ -255,7 +255,19 @@ The three Windows clips and named macOS resources are byte-identical. Their
 active face-center RGB values are amber (255,149,70), blue (101,196,255) and
 pink/red (255,165,181). The HTML panel uses its own CSS gradients with these
 colors, without shipping reference bitmaps. This is resource/constructor
-evidence; full pressed/disabled/painting and native font parity remain open.
+evidence; complete bitmap painting and native font parity remain open.
+
+Windows GetClip 0x140018df0 and macOS CBtnBmp::GetClip 0x100001be8 select
+disabled-column * 4 + active-row * 2 + pressed. The shared 46x76 resources
+contain two columns of four 23x19 clips. Disabled face centers are gray
+(138,138,138) in every row; pressing changes the enabled bevel. macOS OnDraw
+0x1000012c0 suppresses its mouse-down query when unavailable. Windows Begin/End
+0x140018940/0x140016b30 change the availability column and host enabled state.
+tools/verify-switch-frames.py compares all eight selectors on both originals
+and four Windows transitions, with repaint/enabling host calls stubbed. Numeric
+fixtures contain no manufacturer artwork. HTML uses its own CSS gray/pressed
+faces and pointer capture; exact bitmap painting and native input tracking are
+outside this selector comparison.
 
 Windows driver compatibility checks
 -----------------------------------

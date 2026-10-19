@@ -308,8 +308,14 @@ Active switch palettes also follow the shared reference resources: pink/red for
 preamp, compressor link, mixer mute/solo/link, master/reverb and Auto-Sens;
 amber/orange for compressor bypass; blue for Multiple Direct Mixer. Own CSS
 gradients use the reference face colors `#ffa5b5`, `#ff9546` and `#65c4ff`.
-Resource selection is traced in both constructors; this does not establish exact
-bitmap, pressed/disabled rendering or complete visual parity.
+Resource selection is traced in both constructors. Switches also track primary
+press, leaving/reentering the skin, release, capture loss, host focus loss and
+disabling. Disabled lamps use the original gray face instead of fading an active
+color. `tools/verify-switch-frames.py WINDOWS-GUI --macos MAC-GUI` executes both
+original clip selectors and Windows availability transitions; standard tests use
+the eight numeric clip cases. Browser input checks cover all three palettes,
+release outside, reentry and disabling during a press; host blur is modeled.
+This does not establish exact bitmap painting or complete visual parity.
 `tools/verify-output-jacks.py WINDOWS-GUI --macos MAC-GUI` executes both original
 selectors over 720 fixed rate/mixer/pair/route combinations each. Standard tests
 use the resulting numeric fixture; painting, notifications and device transport

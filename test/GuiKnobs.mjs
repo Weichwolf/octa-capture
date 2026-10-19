@@ -2,7 +2,7 @@
 // Fixed numeric traces executed by verify-knob-drag.py against the original GUI.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {knobDrag, knobKey, controlPointerHit, controlContextHit, controlContext, controlButton} from '../gui/web/knobs.js';
+import {knobDrag, knobKey, controlPointerHit, controlContextHit, controlContext, controlButton, switchFrame} from '../gui/web/knobs.js';
 import {VOLUME, panToWire} from '../gui/web/parameters.js';
 
 const cases = JSON.parse(readFileSync(new URL('data/knob-drag.json', import.meta.url), 'utf8'));
@@ -61,6 +61,14 @@ assert.equal(controlPointerHit({type: 'click', detail: 0}, target), true, 'Keybo
 assert.equal(controlPointerHit({type: 'click', detail: 1, clientX: 9, clientY: 30}, target), false);
 target.dataset = {};
 target.querySelector = () => target;
+target.classList = {contains: () => false};
+target.disabled = false;
+const window = new EventTarget(), captures = new Set();
+window.MutationObserver = class { observe() {} };
+target.ownerDocument = Object.assign(new EventTarget(), {defaultView: window});
+target.setPointerCapture = pointer => captures.add(pointer);
+target.hasPointerCapture = pointer => captures.has(pointer);
+target.releasePointerCapture = pointer => captures.delete(pointer);
 let clicks = 0;
 controlButton(target, '.lamp', () => { clicks++; });
 assert.equal(mouse('pointerdown', {button: 0, clientX: 9, clientY: 30}).defaultPrevented, true);
@@ -72,4 +80,10 @@ mouse('pointerdown', {button: 0, clientX: 10, clientY: 20});
 mouse('click', {detail: 1, clientX: 10, clientY: 20});
 mouse('click', {detail: 0});
 assert.equal(clicks, 2, 'Skin hit and keyboard click activate the button');
+const frames = JSON.parse(readFileSync(new URL('data/switch-frames.json', import.meta.url), 'utf8'));
+for (const test of frames.cases) {
+  assert.equal(switchFrame(test.lit, test.pressed, test.disabled), test.expected, 'Original Windows/macOS switch clip');
+}
+assert.equal(frames.cases.length, 8);
 console.log('PASS 192 original context hit guards, release timing, keyboard access and inactive labels');
+console.log('PASS eight original Windows/macOS switch clip selectors');

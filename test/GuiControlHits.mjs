@@ -161,6 +161,64 @@ async function selection(browser) {
   assert.equal(await input.evaluate(node => node.readOnly), true, 'Escape cancels the unchanged value editor');
 }
 
+async function switchFrames(page) {
+  await page.evaluate(async () => {
+    const {controlButton} = await import('/knobs.js');
+    const node = document.createElement('button');
+    node.id = 'switch-frame-check';
+    node.style.cssText = 'position:fixed;left:80px;top:90px;z-index:100;width:100px;height:50px';
+    node.innerHTML = '<span class="lamp"></span><span>Frame check</span>';
+    node.__activations = 0;
+    document.body.append(node);
+    controlButton(node, '.lamp', () => { node.__activations++; });
+  });
+  const node = page.locator('#switch-frame-check');
+  const frame = async expected => {
+    await until(() => node.evaluate((node, expected) => node.dataset.buttonFrame === String(expected), expected),
+      `switch frame ${expected}`);
+  };
+  try {
+    for (const className of ['toggle', 'toggle bypass', 'header-action mixer-action']) {
+      for (const lit of [false, true]) {
+        await node.evaluate((node, {className, lit}) => {
+          node.className = className; node.classList.toggle('lit', lit); node.disabled = false;
+        }, {className, lit});
+        const base = lit ? 2 : 0, before = await node.evaluate(node => node.__activations);
+        await frame(base);
+        const skin = await point(page, '#switch-frame-check .lamp');
+        const label = await point(page, '#switch-frame-check > span:not(.lamp)');
+        await page.mouse.move(skin.x, skin.y); await page.mouse.down();
+        await frame(base + 1);
+        await page.mouse.move(label.x, label.y); await frame(base);
+        await page.mouse.move(skin.x, skin.y); await frame(base + 1);
+        await page.mouse.up(); await frame(base);
+        assert.equal(await node.evaluate(node => node.__activations), before + 1, 'Reentry releases inside exactly once');
+        await page.mouse.down(); await frame(base + 1);
+        await page.mouse.move(label.x, label.y); await frame(base);
+        await page.mouse.up();
+        assert.equal(await node.evaluate(node => node.__activations), before + 1, 'Release outside cancels activation');
+        await page.mouse.move(skin.x, skin.y); await page.mouse.down(); await frame(base + 1);
+        await node.evaluate(node => { node.disabled = true; });
+        await frame(base + 4);
+        assert.deepEqual(await node.locator('.lamp').evaluate(node => {
+          const style = getComputedStyle(node);
+          return ['--lamp-light', '--lamp-face'].map(name => style.getPropertyValue(name).trim());
+        }), ['#8a8a8a', '#8a8a8a'], 'Every disabled palette uses the original gray face');
+        await page.mouse.up();
+        assert.equal(await node.evaluate(node => node.__activations), before + 1, 'Disabling during a press cancels activation');
+        await node.evaluate(node => { node.disabled = false; }); await frame(base);
+        await page.mouse.down(); await frame(base + 1);
+        await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await frame(base);
+        await page.mouse.up();
+        assert.equal(await node.evaluate(node => node.__activations), before + 1, 'Modeled host focus loss cancels activation');
+      }
+    }
+  } finally {
+    await page.mouse.up();
+    await node.evaluate(node => node.remove());
+  }
+}
+
 export async function checkControlHits(browser, api) {
   if (!browser.page) return;
   const page = browser.page, original = await api('/api/state'), requests = [], work = [];
@@ -189,6 +247,7 @@ export async function checkControlHits(browser, api) {
     await knobsAndContexts(browser, requests, settled);
     await headers(browser);
     await selection(browser);
+    await switchFrames(page);
     await settled();
   } finally {
     await page.mouse.up(); await page.mouse.up({button: 'right'});
@@ -197,5 +256,5 @@ export async function checkControlHits(browser, api) {
     await page.unroute('**/api/control', handler);
   }
   assert.deepEqual((await api('/api/state')).state, original.state, 'All responses were intercepted; hardware state unchanged');
-  console.log('PASS trusted control hit regions/chords, keyboard activation and non-selectable panel with editable values; parameter responses simulated');
+  console.log('PASS trusted control hits/chords, switch press/reentry/disable frames, keyboard activation and editable values; parameter responses and host blur simulated');
 }

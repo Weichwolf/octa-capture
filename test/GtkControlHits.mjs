@@ -30,19 +30,29 @@ export function prepareNativeControlHits(original) {
     return {x: r.x + r.width / 2, y: r.y + r.height / 2};
   };
   const value = Number(node.getAttribute('aria-valuenow')), dy = value === 100 ? 8 : -8;
+  const button = document.querySelector('[aria-label="Input 1 Hi-Z"]');
+  const buttonPoint = selector => {
+    const r = button.querySelector(selector).getBoundingClientRect();
+    return {x: r.x + r.width / 2, y: r.y + r.height / 2};
+  };
   return {label: center('.knob-label'), dial: center('.knob-dial'), dy,
+    button: buttonPoint('.lamp'), buttonLabel: buttonPoint('span:not(.lamp)'),
+    buttonFrame: button.classList.contains('lit') ? 2 : 0,
     expected: Math.max(0, Math.min(100, value + Math.trunc(-dy * 100 / 64)))};
 }
 
 export function nativeControlHitState() {
   const state = window.__octaNativeControlHits;
   const node = document.querySelector('[aria-label="Input 1 / SENS"]');
+  const button = document.querySelector('[aria-label="Input 1 Hi-Z"]');
   return {requests: state.requests, events: state.events.map(event => ({type: event.type, button: event.button,
     buttons: event.buttons, x: event.clientX, y: event.clientY, shiftKey: event.shiftKey,
     ctrlKey: event.ctrlKey, altKey: event.altKey, metaKey: event.metaKey,
     key: event.key, trusted: event.isTrusted, target: event.target?.className, prevented: event.defaultPrevented})),
   dragging: node.classList.contains('dragging'),
     captured: state.pointer !== null && node.hasPointerCapture(state.pointer),
+    buttonFrame: Number(button.dataset.buttonFrame),
+    buttonCaptured: state.pointer !== null && button.hasPointerCapture(state.pointer),
     menus: document.querySelector('#menus').childElementCount, value: Number(node.getAttribute('aria-valuenow'))};
 }
 
