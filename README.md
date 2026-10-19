@@ -77,6 +77,22 @@ The DKMS package builds only the external module for its supported kernel
 series. [WSL requires the documented USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation)
 on the tested usbipd/VBoxUSB combination.
 
+For native PulseAudio, run `octa-pulse-pairs --install` as your regular user to
+enable five Playback and six Recording stereo pairs, including Recording 11-12.
+The user service installs device-specific ALSA `dshare`/`dsnoop` definitions and
+a PulseAudio stereo profile; unrelated ALSA settings remain intact. Desktop
+stereo audio stays on its selected pair, with no surround upmix or duplicate
+multichannel endpoint. Applications needing the full interleaved stream can
+still access ALSA directly after PulseAudio releases the device.
+
+The GUI coordinates sample-rate changes with PulseAudio: streams are briefly
+paused, the card is reopened at the requested rate, then pair assignments,
+volumes and mute states are restored. At 192 kHz, only Playback/Recording 1-2
+and 3-4 exist. Stop active streams on higher pairs before switching to 192 kHz.
+Native PulseAudio 17 passes application rate changes at all four rates; other
+ALSA clients must release their streams themselves. PipeWire integration remains
+unverified. Starting the helper initially may briefly interrupt device audio.
+
 For native Debian development, first build `build/driver-native/snd-octa-capture.ko`
 against the running 6.12 kernel, then run `sudo ./tools/setup-native-dev.sh`.
 This installs development tools, grants the invoking user device access and

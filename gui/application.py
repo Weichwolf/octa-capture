@@ -16,6 +16,7 @@ from .backend import Bridge, DeviceError, InvalidControl, integer, validate_cont
 from .auto_sense import AutoSenseJob, MAX_CALIBRATION_SECONDS, ObservedAutoSense
 from .devices import discover
 from .preferences import Preferences
+from .pulse_audio import change_rate
 
 
 class Application:
@@ -296,7 +297,16 @@ class Application:
             self._set_transaction(True)
             try:
                 self.bridge.close()
-                self._run(arguments)
+                if body['action'] == 'sample-rate':
+                    try:
+                        change_rate(self.bin_dir, self.control_port, body['rate'])
+                    except (ValueError, RuntimeError) as error:
+                        raise DeviceError(str(error)) from error
+                    except (OSError, subprocess.SubprocessError) as error:
+                        print(str(error), file=sys.stderr)
+                        raise DeviceError('Could not change the sample rate. Close applications using ALSA directly and try again.') from error
+                else:
+                    self._run(arguments)
             finally:
                 self._set_transaction(False)
                 self._invalidate(preserve=True)

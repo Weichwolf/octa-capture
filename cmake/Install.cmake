@@ -8,12 +8,14 @@ install(TARGETS octa-auto-sense octa-preset octa-probe octa-pcm-meters
 
 file(RELATIVE_PATH OCTA_GUI_RELATIVE "${CMAKE_INSTALL_FULL_BINDIR}"
   "${CMAKE_INSTALL_FULL_LIBEXECDIR}/octa-capture")
-foreach(OCTA_ENTRY IN ITEMS desktop server)
+foreach(OCTA_ENTRY IN ITEMS desktop server pulse_audio)
   set(OCTA_GUI_MODULE "gui.${OCTA_ENTRY}")
   if(OCTA_ENTRY STREQUAL "desktop")
     set(OCTA_LAUNCHER octa-capture)
-  else()
+  elseif(OCTA_ENTRY STREQUAL "server")
     set(OCTA_LAUNCHER octa-capture-http)
+  else()
+    set(OCTA_LAUNCHER octa-pulse-pairs)
   endif()
   configure_file("${CMAKE_SOURCE_DIR}/cmake/GuiLauncher.py.in"
     "${CMAKE_BINARY_DIR}/launchers/${OCTA_LAUNCHER}" @ONLY)

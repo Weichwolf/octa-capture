@@ -190,10 +190,9 @@ class Selection(unittest.TestCase):
                 patch('gui.application.Bridge'), \
                 patch.object(self.application, '_directory', return_value=Path('/unused')), \
                 patch.object(self.application, 'snapshot', return_value={'restored': True}), \
-                patch.object(self.application, '_run') as run:
+                patch('gui.application.change_rate') as rate_change:
             self.assertEqual(self.application.action({'action': 'sample-rate', 'rate': 48000}), {'restored': True})
-        run.assert_called_once_with(['/missing/bin/octa-audio-check', '48000', 'prepare-capture',
-                                     'hw:CARD=OCTACAPTURE_2,DEV=0'])
+        rate_change.assert_called_once_with(Path('/missing/bin'), 'hw:CARD=OCTACAPTURE_2', 48000)
 
     def test_all_live_operations_check_selected_identity_before_io_or_backup_creation(self):
         self.application._selected_identity = 'serial:GONE'

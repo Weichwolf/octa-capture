@@ -160,6 +160,8 @@ set_tests_properties(gui-faders PROPERTIES TIMEOUT 10)
 set_tests_properties(gui-steppers PROPERTIES TIMEOUT 10)
 add_test(NAME gui-install COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiInstall.py"
   "${CMAKE_COMMAND}" "${CMAKE_BINARY_DIR}")
+add_test(NAME pulse-pairs COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/PulsePairs.py")
+set_tests_properties(pulse-pairs PROPERTIES TIMEOUT 10)
 add_test(NAME dkms-build COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/DkmsBuild.py")
 add_test(NAME kernel-vm-build COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/KernelVmBuild.py")
 set_tests_properties(kernel-vm-build PROPERTIES TIMEOUT 10)
