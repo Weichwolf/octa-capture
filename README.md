@@ -85,6 +85,12 @@ the connected device's bus and must be renewed after reboot.
 
 ## Verification
 
+Native userspace builds retain strict warnings, stack and stack-clash protection,
+Fortify 3, libstdc++ assertions, full RELRO and a non-executable stack. CMake
+requires PIE support and builds executables as PIE; Linux/x86 builds also use
+`-fcf-protection=full`. Sanitizer presets add their instrumentation to this
+baseline. The kernel module uses only Kbuild's own hardening settings.
+
 Hardware checkers are read-only by default unless their purpose explicitly
 requires streaming. `--write` checks change device parameters and use recovery
 snapshots. Power switching and persistent memory require separate attention;
