@@ -316,6 +316,25 @@ fresh device replies remain authoritative. The Playwright write check delays a
 control request, checks immediate peer movement and rapid queued input, then
 verifies hardware readback and complete raw restoration.
 
+Knob pointer movement follows the original Windows `CCtrlWnd` handler: the
+dominant axis determines the change (vertical on ties), integer changes truncate
+toward zero, and the pointer anchor advances before parameter quantization.
+The original 65-position resource defines 64 movement intervals. Sensitivity,
+compressor, pan and send/return controls retain their separate normal/Shift
+scales, including the negative Shift sensitivity coefficient. Normal pan rounds
+up to 5-% steps, normal sends/return to eight fader indices; Shift bypasses
+these steps. Ctrl snaps pan to left/center/right and sends/return to the original
+level presets, preserving their exact wire coefficients. Arrow keys move one
+index, including 1-% pan steps; Home/End leave knobs unchanged.
+
+`python3 tools/verify-knob-drag.py RDDP1110.EXE` executes 2,304 fixed mouse
+events and 144 key cases in the hash-pinned original binary. Window capture,
+painting and backend notifications are memory stubs. `gui-knobs` CTest uses the
+compared numeric traces in `test/data/knob-drag.json`, without manufacturer
+code/assets or a device. `--save-vectors PATH` regenerates those traces only
+after a successful comparison. The Playwright write suite also checks actual
+pointer events against these traces and independent device readback.
+
 `--reload-module` uses the already provisioned `sudo -n octa-capture-dev` helper
 at `/usr/local/sbin/octa-capture-dev` to unload and reinstall this module. It
 checks the absent-card page/menu, automatic same-unit reconnection, real MIDI/PCM

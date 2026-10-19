@@ -53,7 +53,7 @@ class Installation(unittest.TestCase):
                             return response.status, response.read()
                         finally:
                             client.close()
-                    for asset in ('/', '/app.js', '/graphs.js', '/warnings.js', '/menus.js', '/steppers.js', '/style.css', '/favicon.svg', '/signal-flow.svg'):
+                    for asset in ('/', '/app.js', '/graphs.js', '/warnings.js', '/menus.js', '/steppers.js', '/knobs.js', '/style.css', '/favicon.svg', '/signal-flow.svg'):
                         self.assertEqual(request(asset)[0], 200, asset)
                     self.assertEqual(request('/api/preferences')[0], 200)
                     status, body = request('/api/preferences', '{"show_port_warning":false}')

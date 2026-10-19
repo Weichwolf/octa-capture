@@ -148,6 +148,8 @@ add_test(NAME gui-warnings COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiW
 add_test(NAME gui-graphs COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiGraphs.mjs")
 add_test(NAME gui-steppers COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiSteppers.mjs")
 add_test(NAME gui-faders COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiFaders.mjs")
+add_test(NAME gui-knobs COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiKnobs.mjs")
+set_tests_properties(gui-knobs PROPERTIES TIMEOUT 10)
 set_tests_properties(gui-faders PROPERTIES TIMEOUT 10)
 set_tests_properties(gui-steppers PROPERTIES TIMEOUT 10)
 add_test(NAME gui-install COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiInstall.py"
@@ -164,6 +166,9 @@ add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   "${CMAKE_SOURCE_DIR}/gui/web/warnings.js"
   "${CMAKE_SOURCE_DIR}/gui/web/graphs.js"
   "${CMAKE_SOURCE_DIR}/gui/web/steppers.js"
+  "${CMAKE_SOURCE_DIR}/gui/web/knobs.js"
+  "${CMAKE_SOURCE_DIR}/test/GuiKnobs.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiKnobDrag.mjs"
   "${CMAKE_SOURCE_DIR}/test/BrowserClient.mjs" "${CMAKE_SOURCE_DIR}/test/GuiBrowser.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiControlMatrix.mjs" "${CMAKE_SOURCE_DIR}/test/GuiRates.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiReconnect.mjs"

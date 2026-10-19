@@ -78,7 +78,7 @@ export async function checkControlMatrix(browser, api) {
           const control = {kind: 'mixer', source, bus, channel};
           const read = parameter => state => state.mixers[bus][source].channels[channel][parameter];
           await knob(`[aria-label="${source} ${channel + 1} / PAN"]`, {...control, parameter: 'pan'},
-            read('pan'), panToWire, 5, wireToPan);
+            read('pan'), panToWire, 1, wireToPan);
           await fader(`[aria-label="${source} ${channel + 1} volume"]`, {...control, parameter: 'volume'}, read('volume'));
           for (const parameter of ['mute', 'solo']) {
             await toggle(`.mixer-strip[data-source="${source}"][data-channel="${channel}"] .mixer-switches .toggle:nth-of-type(${parameter === 'mute' ? 1 : 2})`,

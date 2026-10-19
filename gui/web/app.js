@@ -7,6 +7,7 @@ import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
 import {masterFaderPreview} from './faders.js';
+import {knobDrag, knobKey} from './knobs.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -153,12 +154,12 @@ function preampValue(state, channel, parameter) {
 }
 
 class Knob {
-  constructor(label, maximum, format, control, read, extraClass = '', step = 1) {
+  constructor(label, maximum, format, control, read, extraClass = '') {
     this.maximum = maximum;
     this.format = format;
     this.control = control;
     this.read = read;
-    this.step = step;
+    this.kind = maximum === 1024 ? 'volume' : extraClass === 'sensitivity' ? 'sensitivity' : maximum === 200 ? 'pan' : 'compressor';
     this.value = 0;
     this.dragging = false;
     this.node = el('div', `knob ${extraClass}`);
@@ -201,12 +202,14 @@ class Knob {
     this.value = Math.max(0, Math.min(this.maximum, value));
     this.display(caption);
   }
-  change(value) {
+  change(value, wireValue) {
     const next = Math.max(0, Math.min(this.maximum, Math.round(value)));
-    if (next === this.value) return;
+    if (next === this.value && wireValue === undefined) return;
     this.value = next;
     this.display();
-    queueChange(this.control(next));
+    const control = this.control(next);
+    if (wireValue !== undefined) control.value = wireValue;
+    queueChange(control);
   }
   start(event) {
     if (event.target === this.output && this.output instanceof HTMLInputElement) return;
@@ -214,15 +217,14 @@ class Knob {
     event.preventDefault();
     this.node.focus();
     this.node.setPointerCapture(event.pointerId);
-    this.origin = {x: event.clientX, y: event.clientY, value: this.value};
+    this.origin = {x: Math.trunc(event.clientX), y: Math.trunc(event.clientY), anchor: this.value, value: this.value};
     this.dragging = true;
     this.node.classList.add('dragging');
   }
   move(event) {
     if (!this.dragging) return;
-    const delta = (this.origin.y - event.clientY + (event.clientX - this.origin.x) / 2);
-    const scale = event.shiftKey ? 12 : 3;
-    this.change(Math.round((this.origin.value + delta / scale) / this.step) * this.step);
+    this.origin = knobDrag(this.kind, this.maximum, this.origin, {x: event.clientX, y: event.clientY}, event.shiftKey, event.ctrlKey);
+    this.change(this.origin.value, this.origin.wireValue);
   }
   end() {
     this.dragging = false;
@@ -230,13 +232,8 @@ class Knob {
   }
   keyboard(event) {
     if (!connected || busy || this.editing || this.node.closest('.unavailable-channel')) return;
-    let value = this.value;
-    const step = event.shiftKey ? 1 : this.step;
-    if (['ArrowUp', 'ArrowRight'].includes(event.key)) value += step;
-    else if (['ArrowDown', 'ArrowLeft'].includes(event.key)) value -= step;
-    else if (event.key === 'Home') value = 0;
-    else if (event.key === 'End') value = this.maximum;
-    else return;
+    const value = knobKey(this.value, this.maximum, event.key);
+    if (value === null) return;
     event.preventDefault();
     this.change(value);
   }
@@ -446,7 +443,7 @@ function makeMixers() {
       strip.append(send);
       const pan = new Knob(`${source} ${channel + 1} / PAN`, 200, panText,
         value => mixerControl(source, channel, 'pan', panToWire(value)),
-        state => wireToPan(mixerValue(state, source, channel, 'pan')), 'mixer-knob', 5);
+        state => wireToPan(mixerValue(state, source, channel, 'pan')), 'mixer-knob');
       strip.append(pan.node, el('p', 'channel-label', String(channel + 1)),
         fader(value => mixerControl(source, channel, 'volume', value),
           state => mixerValue(state, source, channel, 'volume'), `${source} ${channel + 1} volume`,

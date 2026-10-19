@@ -87,6 +87,17 @@ writes `AlwaysTop` to the profile. Window creation (`0x14002e520`) reads it with
 default zero; the menu update handler (`0x14002e650`) reflects that state. Linux
 keeps this host preference separate from the device and audio-port warning.
 
+Original Windows knob mouse handler `0x140003300`, key handler `0x140003150`
+and parameter-specific movement/quantization callbacks execute offline against
+2,304 fixed pointer events and 144 key cases. The web controls match dominant-axis
+selection, Shift/Ctrl behavior, anchor rebasing, truncation and exact wire values.
+Arrow keys use single indices (1-% pan); Home/End do not change a knob. This
+comparison uses host-window/notification stubs and does not establish complete
+mouse/keyboard behavior for every control or dialog.
+Native Debian at 48 kHz also matches 144 actual Playwright pointer events across
+the four knob families and all Shift/Ctrl combinations, with independent device
+readback and complete raw recovery. This checks control values, not analog response.
+
 ## Specific unresolved distinctions
 
 Native small-buffer streaming is not established as stable under CPU load.

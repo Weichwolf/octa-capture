@@ -13,6 +13,7 @@ import {checkReconnect} from './GuiReconnect.mjs';
 import {checkControlMatrix} from './GuiControlMatrix.mjs';
 import {checkReverb} from './GuiReverb.mjs';
 import {checkMasterFaders} from './GuiMasterFaders.mjs';
+import {checkKnobDrags} from './GuiKnobDrag.mjs';
 import {checkInputMonitor} from './GuiInputMonitor.mjs';
 import {checkFooter, checkFooterRates} from './GuiFooter.mjs';
 import {checkAutoSenseSelection, checkAutoSenseFailure} from './GuiAutoSense.mjs';
@@ -145,8 +146,15 @@ try {
     await hardware(state => state.preamps[0].low_cut !== before.preamps[0].low_cut, 'low-cut hardware readback');
     await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'low-cut', value: Number(before.preamps[0].low_cut)});
     const attack = '[aria-label="Input 1 / ATTACK"]';
+    const requests = browser.controls.length;
     await browser.key(attack, 'End');
+    assert.equal((await api('/api/state')).state.preamps[0].compressor.attack_index,
+      before.preamps[0].compressor.attack_index, 'End leaves a reference knob unchanged');
+    assert.equal(browser.controls.length, requests, 'End sends no knob command');
+    await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'attack', value: 25});
     await hardware(state => state.preamps[0].compressor.attack_index === 25, 'nonlinear attack endpoint');
+    await until(() => browser.evaluate(`document.querySelector(${JSON.stringify(attack)}).getAttribute("aria-valuetext") === '100 ms'`),
+      'nonlinear attack endpoint display');
     assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(attack)}).getAttribute("aria-valuetext")`), '100 ms');
     await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'attack', value: before.preamps[0].compressor.attack_index});
     const outputMeter = '.preamp-strip:first-child .meter.out';
@@ -191,11 +199,12 @@ try {
   })()`), true, 'aligned white channel/red master faders with unobstructed numeric readouts');
   await browser.screenshot(path.join(directory, 'mixer.png'));
   if (playwright && write) await checkMasterFaders(browser, api, restoreMixer);
+  if (playwright && write) await checkKnobDrags(browser, api, restoreMixer);
   if (write) {
     await browser.key('[aria-label="input 1 / PAN"]', 'ArrowRight');
     const initialPan = before.mixers[0].input.channels[0].pan;
     const initialPosition = Math.floor((initialPan * 100 + 8192) / 16384);
-    const expected = Math.floor((Math.min(200, initialPosition + 5) * 16384 + 50) / 100);
+    const expected = Math.floor((Math.min(200, initialPosition + 1) * 16384 + 50) / 100);
     await hardware(state => state.mixers[0].input.channels[0].pan === expected, 'mixer pan hardware readback');
     await api('/api/control', {kind: 'mixer', source: 'input', bus: 0, channel: 0, parameter: 'pan', value: initialPan});
     console.log('PASS direct mixer pan: reference rounding and hardware readback');
