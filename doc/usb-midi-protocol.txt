@@ -2,8 +2,12 @@ OCTA-CAPTURE USB/MIDI protocol
 =============================
 
 Device: Roland UA-1010, USB VID:PID 0582:0120.
-Reference binaries: Windows 1.5.3 and macOS 1.5.9, identified in
-drivers-manifest.json. Addresses below refer to the macOS x86_64 slices.
+Reference packages: Windows 1.5.3 and macOS 1.5.9, identified in
+drivers-manifest.json. The Windows archive includes a legacy x86 1.5.2 branch
+(INF DriverVer=07/21/2015,1.05.02.0000; English README version 1.5.2), alongside
+x64 1.5.3 (INF DriverVer=09/24/2021,1.05.03.0000). The x86 kernel's placeholder
+VERSIONINFO 1.0.0.0 does not identify its package version.
+Addresses below refer to the macOS x86_64 slices unless specified otherwise.
 Status: static analysis unless explicitly marked as a hardware observation.
 Preamp/compressor writes listed below have passed hardware readback tests.
 
@@ -529,6 +533,30 @@ device dispatcher and encoder using synthetic initialized contexts and a
 nonidentity logical-input map. Only the final MIDI send, DeviceIoControl
 and IRP completion are replaced with memory-only stubs. It also checks
 disabled monitoring and IOCTL failure. This reference execution uses no hardware.
+
+The legacy Windows x86 kernel uses the same wire codec: builder 0x26a80 matches
+all 910 C++ frames. Its conversion function 0x268e0 and model-specific dispatcher
+0x261b0 (IOCTL 0x222144) each pass 2,400 fixed requests, including pan/gain
+boundaries, both mute states, ignored output choices and invalid input indices.
+Unlike x64, it accepts only inputs 0..9 plus broadcast -1; 10/11 emit no frame.
+Four ready/connected combinations per legacy path confirm that both flags gate
+the final MIDI transport at 0x1eeb0. Memory imports and that transport are stubs;
+the original frame initializer, checksum, conversion and dispatcher execute.
+This comparison does not cover the x86 ASIO DLL, outer request validation or
+physical signal response.
+
+tools/verify-windows-x86.py pins both original kernel hashes and also compares
+the complete 92-byte descriptor-parser result from x86 0x32a80 with x64
+0x140014ea0 using cached bcdDevice 0200 descriptors. All four capture/playback
+alternates and packet sizes match. This is not x86 audio-stream verification.
+
+  python3 tools/verify-windows-x86.py \
+    doc/local/windows-x86-analysis/RDWM1110.SYS \
+    doc/local/windows-kernel-analysis/RDWM1110.SYS \
+    build/strict/input_monitor_test /sys/bus/usb/devices/3-3/descriptors
+
+The final argument is a cached descriptor file; adapt the USB path to the
+connected device or use a saved copy. The checker sends no USB/MIDI requests.
 
 Native Debian device checks establish that the command updates Mixer A input
 mute, pan and volume. A linked input copies mute/volume to its peer but preserves

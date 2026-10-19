@@ -1,7 +1,7 @@
 # Reference functionality and verification gaps
 
 Completeness is **not established**. This inventory separates behavior traced in
-the Windows 1.5.3/macOS 1.5.9 references from implemented and hardware-tested
+the Windows 1.5.3 package/macOS 1.5.9 references from implemented and hardware-tested
 behavior. Resource names and function counts alone do not prove functionality.
 The [protocol reference](usb-midi-protocol.txt) contains wire details and test limits.
 
@@ -13,6 +13,17 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   The kernel binary has been imported and its functions/call sites inventoried;
   selected PortCls power callbacks now execute offline. Complete IOCTL/property,
   USB and power-management behavior is not yet traced.
+- Windows x86: the package's legacy branch is version 1.5.2 according to its INF
+  and English README, whereas x64 is 1.5.3. The x86 kernel inventory contains
+  1,120 functions and 3,037 call sites, including unresolved indirect calls.
+  Its complete 92-byte descriptor result matches x64 for the cached native
+  device, including all four rates.
+  The monitor codec matches 910 C++ frames; 2,400 fixed requests execute through
+  both its conversion function and model-specific IOCTL dispatcher, with final
+  transport and memory imports stubbed. Its individual-input limit is 0..9,
+  versus x64's 0..11; broadcast is common. Four transport readiness combinations
+  also pass per path. This does not establish x86 streaming, ASIO DLL behavior,
+  complete IOCTL validation or a complete legacy-driver audit.
 - macOS x86_64: control-panel transmitters, state decoders, preset operations,
   audio USB/clock/stream paths and MIDI routing have selected decompilation and
   offline reference execution. The separate Driver Setup parameter get/set/default
@@ -40,7 +51,7 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   descriptor parsing, interface selection and audio-open sequences also match
   x86_64/Windows at all four rates, using architecture-specific structure offsets
   and host-open stubs; interface 4 remains unresolved. Other ARM64 GUI, audio and
-  property paths still need independent comparison; Windows x86 remains unaudited.
+  property paths still need independent comparison.
   Shared artwork does not establish shared control logic.
 - `tools/ghidra/ExportReferenceInventory.java` exports function and call-site TSVs
   from an analyzed program. Indirect calls remain explicitly unresolved. Outputs,
