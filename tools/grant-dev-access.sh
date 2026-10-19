@@ -20,7 +20,7 @@ tools_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 rules_file=$(mktemp)
 trap 'rm -f -- "$rules_file"' EXIT
-printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/octa-capture-dev status, /usr/local/sbin/octa-capture-dev install, /usr/local/sbin/octa-capture-dev unload, /usr/local/sbin/octa-capture-dev detach, /usr/local/sbin/octa-capture-dev runtime-pm\n' \
+printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/octa-capture-dev status, /usr/local/sbin/octa-capture-dev install, /usr/local/sbin/octa-capture-dev unload, /usr/local/sbin/octa-capture-dev runtime-pm\n' \
     "$target_user" > "$rules_file"
 visudo -cf "$rules_file"
 

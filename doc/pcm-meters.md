@@ -84,20 +84,8 @@ Close the control panel before this exclusive test. It saves a private recovery
 frame, restores the original rate and verifies complete raw state afterward.
 Clock recovery failure cannot skip a needed raw recovery attempt.
 
-The tested WSL USB/IP path has produced intermittent zero samples and a PRBS
-sequence jump inside otherwise correct digital returns, even without an ALSA
-XRUN. Successful timed transfers and quiet soak checks therefore do not establish
-audio integrity. The checker reports these comparisons as failures; its
-`--keep-going` option only collects sample mismatches, never suppresses I/O,
-output-isolation or restoration failures.
-
-A separate RAM-only USB observer found discontinuities in completed input
-payloads while the submitted output PRBS remained continuous. The observation
-had no monitor drops, malformed packet lengths or reported ISO packet errors.
-This places those errors before ALSA capture processing; it does not identify
-whether USB/IP scheduling, the host driver or the device caused them.
-
-To compare that boundary, start `tools/observe-usb-prbs.py --device 1-1
+To compare submitted output and completed input payloads, start
+`tools/observe-usb-prbs.py --device 1-1
 --seconds 360` in one terminal, using the device's USB sysfs name. It requires
 `usbmon` and access to that bus's `/dev/usbmonN`. In another terminal run the
 continuous digital-return checker above. Ctrl+C or SIGTERM ends observation
@@ -123,9 +111,8 @@ over 200 ms of subsequent zeros, read-clear behavior and negative rejection.
 It checks both directions at all rates, different period
 sizes, idle/normal PCM handover, close/reopen during capture, playback and
 duplex, continued meter progress in each active direction, client death,
-and restoration of the original rate and complete raw state. These checks pass
-on the connected WSL device with strict and release builds. Active idle-stream
-module unload/reload also passes. Native Debian, physical signal calibration,
+and restoration of the original rate and complete raw state. Native Debian
+passes all-rate PCM lifecycle checks. Physical signal calibration,
 system suspend/unplug and kernel sanitizer/fault-injection coverage remain.
 The bridge pause check suspends its child process beyond the subscription lease,
 checks that idle audio stops, then resumes it and requires fresh meters without

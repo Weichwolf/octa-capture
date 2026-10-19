@@ -2,7 +2,7 @@ Implementation requirements and evidence
 ========================================
 
 Scope: full independent implementation of OCTA-CAPTURE Windows driver
-functionality and GUI for native Debian and the local WSL2 environment.
+functionality and GUI for native Debian.
 macOS binaries are an additional protocol and behavior reference.
 
 The following requirements remain open until verified individually:
@@ -23,7 +23,7 @@ The following requirements remain open until verified individually:
 7. GTK4/WebKitGTK wrapper: same UI with restricted native message bridge.
 8. Reproducible build, installation, tests, GPL-2.0-only notices, and English
    repository content. Keep vendor downloads and derived code local.
-9. Real hardware verification on WSL2 and native Debian, distinguishing
+9. Real hardware verification on native Debian, distinguishing
    observations, static-analysis findings, hypotheses, and simulations.
 
 Verification sources

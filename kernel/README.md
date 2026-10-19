@@ -2,9 +2,9 @@
 
 The driver is built as **`snd-octa-capture.ko`**, using isolated copies of ALSA's USB audio and MIDI implementations. Debian's kernel and its source tree remain untouched. The module matches only `0582:0120`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` and `snd-usbmidi-lib` modules to coexist for other devices. The embedded MIDI helper closes interrupted SysEx and filters input events like the Windows/macOS references.
 
-The embedded-MIDI module builds against Debian 6.12 with `W=1` and `-Werror`; its MIDI source passes Sparse. The earlier shared-MIDI baseline also built against WSL 6.18; the updated module still needs that target's build files and runtime verification. Both supported private MIDI source copies pass the offline reference comparison. The module exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. Native Debian 6.12 passes clock/status reads and PCM meter/lifecycle checks at 44.1/48/96/192 kHz. Mixer A digital-return PRBS streams pass on all ten playback sources at 44.1/48/96 kHz, using ten-second streams, 1024-frame periods and an 8192-frame buffer. The 192 kHz mode has four capture/playback channels and no return 11/12; its PCM checks do not establish signal integrity.
+The embedded-MIDI module builds against Debian 6.12 with `W=1` and `-Werror`; its MIDI source passes Sparse. The private MIDI source passes the offline reference comparison. The module exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. Native Debian 6.12 passes clock/status reads and PCM meter/lifecycle checks at 44.1/48/96/192 kHz. Mixer A digital-return PRBS streams pass on all ten playback sources at 44.1/48/96 kHz, using ten-second streams, 1024-frame periods and an 8192-frame buffer. The 192 kHz mode has four capture/playback channels and no return 11/12; its PCM checks do not establish signal integrity.
 
-WSL 6.18 needs the host workaround below. Simultaneous capture/zero-playback passes ten minutes per rate with 1024/8192-frame period/buffer, but smaller periods produced underruns and digital-return tests found sample gaps without XRUNs. Physical analog response, external synchronization and broader native latency/stability testing remain required.
+Physical analog response, external synchronization and broader native latency/stability testing remain required.
 
 Native Debian also passes ten seconds of simultaneous capture/zero-playback at
 each rate with actual 256-frame periods and a 1024-frame buffer. Both running
@@ -38,7 +38,7 @@ KDIR=/path/to/kernel-build KERNEL_CC=gcc-13 \
 sudo ./tools/install-module.sh build/module-build/snd-octa-capture.ko
 ```
 
-On native Debian, build files normally come from `linux-headers-$(uname -r)`; source comes from the corresponding `linux-source` package. The full kernel build in the WSL setup supplies its missing build files; normal Debian installation needs only the module build. The installer configures module loading order so the dedicated driver takes precedence while `snd-usb-audio` remains available for other devices.
+On native Debian, build files normally come from `linux-headers-$(uname -r)`; source comes from the corresponding `linux-source` package. Installation needs only the module build. The installer configures module loading order so the dedicated driver takes precedence while `snd-usb-audio` remains available for other devices.
 
 `kernel/linux-*.patch` and the shared `kernel/midi.patch` modify only the private module copy. Imported Linux files retain their original copyright and license notices; original additions use GPL-2.0-only.
 
@@ -89,7 +89,6 @@ loading priority and device-specific audio-group/uaccess rules. DKMS rebuilds
 only the external module when matching-series headers change. Each source package
 is restricted to its prepared kernel series; `SOURCE-KERNEL` records its ALSA
 baseline and `BUILD-SERIES` defines the supported headers. Other series are skipped.
-Source generation and module builds also support the WSL 6.18 adapter.
 `octa-capture-activate --check` reports binding without root or device writes.
 Activation loads the installed module and rebinds only `0582:0120` if generic
 `snd-usb-audio` already owns it. Other USB audio devices stay attached. The loading
@@ -111,8 +110,7 @@ Install the optional test tools with `sudo apt install umockdev bubblewrap udev`
 Native Debian service/hotplug integration still requires a physical test.
 
 The Debian 6.12.113 DKMS build and signing passed in an unprivileged development
-tree with matching headers. The WSL 6.18 DKMS artifact also passed actual module
-loading and browser/device checks at all four rates with complete raw restoration.
+tree with matching headers.
 The userspace Debian package passed installed-layout,
 actual browser/device and GTK/native-Save checks after extraction. Native Debian
 package installation/removal and hardware checks remain required. Original ALSA
@@ -142,17 +140,16 @@ nonzero rate, using at most four interrupt reads with 250 ms timeouts each.
 A private mutex serializes readers; the standard USB-audio power/shutdown
 guard and heap-backed buffers cover the transfer lifetime.
 
-Status reads passed at all four rates under WSL, including concurrent
-48 kHz duplex audio and CTRL/meter traffic. Module builds pass for both
-supported kernel series. After installing `sparse`, the new source can be
-checked separately with the matching compiler/build directory:
+Status reads and concurrent-reader checks pass on native Debian 6.12.
+Module builds use matching native headers. After installing `sparse`, the new
+source can be checked separately with the matching compiler/build directory:
 
 ```bash
 make -C "$KDIR" M="$PWD/build/module-build" CC="$KERNEL_CC" \
   W=1 KCFLAGS=-Werror C=2 CF=-Wsparse-error octa-status.o
 ```
 
-This static check passes for 6.12 and 6.18. Native hardware, suspend/unplug,
+This static check passes for 6.12. Suspend/unplug,
 KASAN/UBSAN and malformed USB/fault-injection tests remain required.
 
 The `clock` CTest compiles the actual `kernel/octa.c` as host C against test-only
@@ -182,10 +179,9 @@ original-driver CPU comparisons and `tools/fuzz-pcm-peaks.sh`. Streaming callbac
 now publish actual capture/playback peaks; a leased zero-output idle engine
 yields to normal PCM opens. See [PCM meter controls](../doc/pcm-meters.md) for
 the ABI and hardware checks. The new device sources and PCM/card hooks pass
-Sparse for both kernels. A whole ALSA-tree Sparse run still reports existing
-upstream issues (6.18 endpoint scoped-lock contexts, 6.12 Scarlett Boolean
-expressions). No diagnostics are suppressed. Host fuzzing does not replace
-kernel sanitizer/URB fault testing.
+Sparse for 6.12. A whole ALSA-tree Sparse run still reports existing
+upstream Scarlett Boolean-expression issues. No diagnostics are suppressed.
+Host fuzzing does not replace kernel sanitizer/URB fault testing.
 
 ## USB runtime suspend/resume check
 
@@ -216,7 +212,7 @@ replacement unit.
 
 The `runtime-pm` CTest uses fake sysfs files and fixed failure cases for binding,
 policy restoration, partial writes, signals, client loss, timeout and replacement.
-It never invokes sudo, touches real sysfs or runs a device test. Native/WSL
+It never invokes sudo, touches real sysfs or runs a device test. Native
 runtime-PM hardware results are not yet established. This checker also does not
 prove system sleep, reset-resume, physical hotplug or USB/URB fault handling.
 
@@ -273,7 +269,7 @@ checking stays enabled and the checker rejects these reports. A clean kernel
 sanitizer lifecycle result is not established; the base-kernel findings need
 resolution before device-specific sanitizer coverage can be claimed.
 
-## WSL USB/IP timing investigation
+## Passive USB timing observation
 
 `tools/observe-usb-prbs.py --device 1-1 --seconds 360` passively observes the
 PRBS11 test from `tools/check-mixer-audio.py` through usbmon. It keeps audio and
@@ -284,41 +280,3 @@ The summary includes submit failures (`E` events), incomplete associations and
 monitor drops; kernel addresses and audio payloads are not logged. Exit 2 means
 the required outgoing/return patterns were not verified, even if queue timing
 was observed. The observer itself does not configure or silence any output.
-
-An independent libusb test with this module unloaded reproduces the 1/8
-input rate at 48 kHz. The host-side workaround is verified on the tested setup:
-usbipd-win `aa3db8b` does not issue VBoxUSB `GET_DEVICE`; in VirtualBox
-7.2.2 that request initializes the cached high-speed flag used for
-isochronous scheduling. Without it, eight high-speed packets are scheduled eight Windows frames
-apart instead of one. Issuing GET_DEVICE restored correct transfer timing:
-capture and playback passed at 44.1/48/96/192 kHz, each transferring one
-second of frames in approximately 1002..1005 ms without ALSA errors.
-This validates the workaround for usbipd-win 5.3.0-54 (`aa3db8b`) with
-VBoxUSB 7.2.2.170484; it does not establish signal integrity or stability.
-
-With audio stopped and the device still attached to WSL, run in 64-bit
-Windows PowerShell from the repository directory:
-
-```powershell
-.\tools\initialize-usbipd-high-speed.ps1
-```
-
-The helper selects only an attached `0582:0120` device through `usbipd state`
-and sends the metadata query on its VBoxUSB interface. It does not install
-a driver or reset/claim the device. `-BusId 2-3` optionally selects a bus.
-Repeat after a fresh attach if the host still omits this initialization.
-The helper passed PSScriptAnalyzer and Windows execution on this setup.
-If Windows execution policy blocks the UNC path, use a process-only option:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "\\wsl.localhost\Debian\home\cosmo\Git\octa-capture\tools\initialize-usbipd-high-speed.ps1"
-```
-
-Adjust the distribution/repository path as needed. Afterward rerun both
-Linux streaming checks at 48000 Hz. No Windows helper is needed on native
-Debian.
-
-References: [usbipd-win host revision](https://github.com/dorssel/usbipd-win/blob/aa3db8b82c4cb5071fd31bc54211606c70886912/Usbipd/VBoxUsb.cs)
-and the official [VirtualBox 7.2.2 source archive](https://download.virtualbox.org/virtualbox/7.2.2/VirtualBox-7.2.2.tar.bz2),
-`VBoxUsbRt.cpp` (`vboxUsbRtDispatchGetDevice`, isochronous scheduling),
-`include/VBox/usblib-win.h` (`USBSUP_GETDEV`, `SUPUSB_IOCTL_GET_DEVICE`).

@@ -272,7 +272,7 @@ The event reader uses the public GTK C API because this PyGObject runtime
 delivers the opaque `GdkEvent` signal argument as `None`.
 See [GTK's gesture button guard](https://github.com/GNOME/gtk/blob/4.18.6/gtk/gtkgesturesingle.c)
 and [WebKit's mouse gesture setup](https://github.com/WebKit/WebKit/blob/webkitgtk-2.54.0/Source/WebKit/UIProcess/API/gtk/WebKitWebViewBase.cpp).
-Native Wayland and updated WSL input behavior remain unverified.
+Native Wayland input behavior remains unverified.
 
 Main-panel control geometry matches 302 original Win32 child rectangles at
 96 DPI: 128 in Preamp and 174 in Direct Mixer. This includes 25×25 dials,
@@ -398,8 +398,8 @@ actual X11 keyboard and native Save/Open checks.
 `--rates` also checks immediate sample-rate selection, Close/Escape semantics, kernel/bulk rate agreement,
 channel availability, 192 kHz menu/dialog restrictions and PCM meter recovery,
 then restores the original rate. The Initialize submenu stays available at 192
-kHz, as in both reference dispatchers. WSL device tests pass at all four rates;
-native Debian and physical signal quality remain separate requirements.
+kHz, as in both reference dispatchers. Native Debian device tests pass at all
+four rates; physical signal quality remains a separate requirement.
 
 `--matrix` additionally checks 427 actual browser changes: every preamp knob,
 safe phase/low-cut/compressor switch, strip pan/volume/mute/solo on all four buses,
@@ -497,7 +497,7 @@ GTK checker also injects real X11 wheel events and verifies hardware recovery.
 at `/usr/local/sbin/octa-capture-dev` to unload and reinstall this module. It
 checks the absent-card page/menu, automatic same-unit reconnection, real MIDI/PCM
 meters and full raw preservation. It does not detach/reset USB or install the
-helper. This passes on WSL and native Debian; physical unplug, suspend/resume
+helper. This passes on native Debian; physical unplug, suspend/resume
 and USB faults remain separate. Module installation runs in a finally block
 after successful unload. Playwright requires zero unexpected HTTP, console,
 network, JavaScript or CSP errors. During deliberate absence it specifically
@@ -661,8 +661,8 @@ path before import confirmation and compares hardware readback with the prepared
 preset, including the documented 192 kHz header behavior. Preset import can reset
 fields omitted by the original file format; the checker finally restores a fresh
 complete raw snapshot. Screenshots and recovery files remain private under `build/gui/`.
-These desktop integration checks pass on WSL and native Debian; they do not
-establish audio signal quality. The remaining feature gaps still apply to both hosts.
+These desktop integration checks pass on native Debian; they do not establish
+audio signal quality. The remaining feature gaps still apply.
 
 `cmake --install build/release --prefix PREFIX` installs the runtime independently
 of the checkout, with `PREFIX/bin/octa-capture` and `octa-capture-http`. Native

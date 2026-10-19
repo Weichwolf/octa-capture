@@ -50,5 +50,7 @@ set(CPACK_DEBIAN_PACKAGE_SECTION sound)
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python3, python3-gi, python3-xlib, gir1.2-gtk-4.0 (>= 4.10), gir1.2-webkit-6.0, fonts-liberation")
 set(CPACK_SOURCE_GENERATOR TXZ)
-set(CPACK_SOURCE_IGNORE_FILES "/[.]git/;/build/;/doc/local/;/doc/[^/]*[.](zip|tgz)$;/__pycache__/;[.]pyc$;/compile_commands[.]json$")
+set(CPACK_SOURCE_IGNORE_FILES
+  "/[.]git/;/build/;/doc/local/;/doc/[^/]*[.](zip|tgz)$;/__pycache__/;[.]pyc$;/compile_commands[.]json$"
+  "/doc/check-[^/]*[.]txt$;/doc/kernel-config[.]txt$;/doc/tools-inventory[.]json$;/doc/roland-[^/]*-download[.]html$")
 include(CPack)

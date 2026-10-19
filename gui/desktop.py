@@ -67,7 +67,7 @@ class Desktop:
         settings.set_allow_universal_access_from_file_urls(False)
         settings.set_enable_webgl(False)
         settings.set_enable_media(False)
-        # The small 2D control panel must also render without a GPU in WSL/Xvfb.
+        # The small 2D control panel must also render without a GPU under Xvfb.
         settings.set_hardware_acceleration_policy(self.WebKit.HardwareAccelerationPolicy.NEVER)
         self.view.connect('decide-policy', self.decide_policy)
         self.view.connect('permission-request', self.permission_request)

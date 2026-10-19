@@ -14,7 +14,7 @@ Preamp/compressor writes listed below have passed hardware readback tests.
 USB interfaces (observed from the connected device descriptors)
 --------------------------------------------------------------
 All five interfaces are vendor-specific; bcdDevice=0200. The same descriptor
-layout has been read at 480 Mbit/s through USB/IP and direct native USB.
+layout has been read at 480 Mbit/s through direct native USB.
 
   Interface  Endpoint(s)       Transfer type / purpose
   0          05 OUT           asynchronous isochronous audio output
@@ -58,15 +58,10 @@ Reproduce offline with:
 The checker uses hash-pinned binaries and cached descriptors (a sysfs
 descriptors file is also accepted). Each architecture checks 35 selector cases
 and five macOS open sequences; host interface opening is stubbed, with no USB transfers.
-WSL hardware reads report the matching rate at 44.1/48/96/192 kHz, with
-capture/playback timing checks still passing. Four concurrent status
-readers also passed alongside 48 kHz duplex audio, meters and shared CTRL
-queries/writes; the full raw device state was preserved. ALSA rejects writes
-to this control. Both 6.12 and 6.18 module builds pass Kbuild W=1/-Werror;
-the new status source passes Sparse with warnings as errors. Native Debian
-6.12 also passes phase-coherent, read-only status and four concurrent-reader
-checks. Suspend, physical disconnect and malformed-device/fault-injection
-checks remain required; this is not kernel-fuzzing evidence.
+Native Debian 6.12 passes phase-coherent, read-only status and four concurrent-reader
+checks. Kbuild W=1/-Werror and Sparse checks pass for the native module sources.
+Suspend, physical disconnect and malformed-device/fault-injection checks remain
+required; this is not kernel-fuzzing evidence.
 
 The clock-display mapping is established by the original macOS path:
 CuFscDev::GetAllStat (0xd50e) caches byte 6 and a boolean from byte 7;
@@ -88,10 +83,8 @@ reading. Invalid metadata is rejected without a value read. octa-status
 raw_status_hex as JSON. Fake-ALSA tests cover invalid ports/metadata,
 open/info/read failures and malformed packets without device access;
 the pure decoder is also included in the offline protocol fuzzer.
-The C++ reader passed on WSL alongside four concurrent status readers,
-48 kHz duplex audio and shared CTRL/meter traffic, preserving full raw
-state. Clock-source/activation edge cases are synthetic reference-based
-tests; physical external-clock transitions and native Debian remain open.
+Clock-source/activation edge cases are synthetic reference-based tests;
+physical external-clock transitions remain open.
 
 Audio alternate settings 1,2,3,4 advertise 44100,48000,96000,192000 Hz.
 Descriptors advertise 10 output/12 input channels at the first three rates
@@ -185,8 +178,8 @@ The comparator compiles eight selected ALSA MIDI functions with a serial host
 model, strict warnings, ASan/UBSan, clang-format and clang-tidy. It pins the
 selected functions/constants by hash before compilation and preserves their
 license notice. Separate hashes identify unmodified ALSA and the prepared
-private implementation (--patched), each matching across supported 6.12 and
-6.18 source copies. Source comparison does not identify a loaded kernel binary.
+private implementation (--patched) for Linux 6.12. Source comparison does not
+identify a loaded kernel binary.
 The 2,525 fixed transmit/receive cases match macOS, Windows (when supplied)
 and ALSA. They cover all musical channels and message
 families, running status, boundary data values, system-common/realtime bytes,
@@ -236,7 +229,6 @@ reference observation, not a Linux behavior or a hardware saturation test.
     doc/local/macos-analysis/midi-x86_64 build/driver-native/midi.c \
     --patched \
     --windows doc/local/windows-kernel-analysis/RDWM1110.SYS
-  # Repeat with build/driver-wsl/midi.c for the other supported source copy.
 
 This optional check needs the original hash-pinned binaries, the ALSA source
 copy, Python Unicorn and LLVM 19. Omit --windows for macOS/ALSA only.
@@ -277,12 +269,12 @@ Verified response at the device's current 48 kHz setting:
   response: 80 bb 00 00
   decoded: 48000 Hz, flags=00
 Implemented in src/Usb.cpp (octa-probe), without claiming interfaces or
-changing settings. Repeated reads at 48 kHz work after USB/IP reconnection.
+changing settings.
 
 Fsc_GetStatChk2 at 0x1757e reads c0/03/0002/0000, length 1, and compares
 the result with 01. The hardware returned 01. Fsc_GetDIN at 0x17606 reads
-c0/05/0000/0000, length 1; that query timed out both in the initial USB/IP
-test and on native Debian with direct USB. Clock-status reads before/after
+c0/05/0000/0000, length 1; that query timed out on native Debian with direct USB.
+Clock-status reads before/after
 the native query remained successful and unchanged. No DIN setting write
 has been issued; this does not establish supported setting values.
 
@@ -306,9 +298,7 @@ audio alternate settings. It rejects status flag bit 1 rather than overriding
 that condition.
 The corrected native Debian 6.12 module passes quiet PCM/meter lifecycle checks
 at all four rates, with complete raw state and the original clock restored.
-Busy/error states are tested offline, not forced on hardware. Earlier WSL
-clock/stream results predate this correction; its target build and runtime
-verification remain pending.
+Busy/error states are tested offline, not forced on hardware.
 
 tools/verify-usb-control.py executes 108 fixed cases per macOS architecture
 through the original setters/getters, DevReqCall2 and DeviceRequest. It checks
@@ -412,7 +402,7 @@ Its optional --macos audio-x86_64 also executes 36 CuPowerMgr events at 0x10ef0
 and 0x10f1c; those update their cache after the optional callback. Actual Windows
 MIDI builders/checksum routines execute, while USB/status, locks, timers, worker
 exchange and ring operations are memory stubs. This establishes reference
-control flow and frames, not native/Windows/WSL hardware power recovery.
+control flow and frames, not Linux/Windows hardware power recovery.
 
 SysEx envelope
 --------------
@@ -578,17 +568,7 @@ repeatable. Full-range checks require all physical outputs routed to available
 mixers with both input/playback master pairs at zero; at 192 kHz only mixer A
 is accepted. The checker does not change routing or mute outputs itself.
 
-Hardware-verified through WSL/USB-IP: low-cut, phase, sensitivity,
-compressor enable, gate, attack, release, threshold, ratio, and gain on all
-eight channels. Each was changed by one index, independently read back,
-and restored; other preamp channels were checked for unexpected changes.
-The complete 1146-byte bulk payload matched the initial state afterward.
-The four active preamps at 192 kHz and Hi-Z on inputs 1/2 at both 48 and
-192 kHz also passed change/readback/restoration checks. The original sample
-rate and complete bulk state were independently restored afterward.
-Every legal index on input 1, including both Hi-Z values, passed 367 independent
-writes/readbacks at each of 48 and 192 kHz, with other preamps unchanged.
-Native Debian at 48 kHz additionally passes every legal safe index on all eight
+Native Debian at 48 kHz passes every legal safe index on all eight
 inputs: 2,924 writes/readbacks including both Hi-Z values on inputs 1/2. Every
 write compares the complete decoded state and all 1146 raw bytes against the
 expected single-field change. Phantom power is not toggled; physical outputs
@@ -605,9 +585,8 @@ passed all four link enable/disable cycles and 160 scalar cases covering
 four pairs, two link states, both directions and ten safe parameters.
 tools/check-preamp-links.py --write reproduces these checks and compares
 all 1146 raw bytes after each change, then restores the exact original state.
-Strict and release binaries passed on WSL. The same four cycles and 160
-coupling cases also pass on native Debian at 48 kHz with the strict build and
-exact full-state restoration. Phantom/Hi-Z changes are excluded and the
+The four cycles and 160 coupling cases pass on native Debian at 48 kHz with the
+strict build and exact full-state restoration. Phantom/Hi-Z changes are excluded and the
 fixture requires those switches off. Physical compressor response and
 power-switch behavior still require hardware checks.
 
@@ -730,8 +709,7 @@ sources and pan points 0000/2000/4000/6000/8000 give linear left/right weights
 200000 (within one S24 LSB for the tested nonintegral strip products). A soloed
 strip suppresses nonsoloed strips; mute also suppresses a soloed strip. The
 checker tools/check-mixer-audio.py restores the complete raw state and original
-rate. WSL USB/IP has intermittent return-sample discontinuities, including
-without an ALSA XRUN; nominal DSP values do not establish streaming integrity.
+rate. Nominal DSP values do not establish streaming integrity.
 These tests do not measure analog paths, compressors or mixers B-D.
 
 The digital checker accepts --period-size/--buffer-size and verifies each
@@ -829,12 +807,6 @@ combinations, comparing every raw byte. --section switches|masters runs one
 part. It saves a private raw snapshot before changes and attempts complete
 restoration on completion, error or SIGINT/SIGTERM. Physical DSP behavior
 and native Debian still require verification.
-All 92 switch cycles and 128 master-volume combinations passed full raw
-readback/isolation checks on WSL hardware at 48 kHz, followed by exact
-restoration of the original state. Input and playback links/mono were
-checked on all five pairs of all four buses, and all eight stereo masters
-and four input/output master links were exercised. This is control-state
-evidence; no inference about analog downmixing or signal quality is made.
 
 Reverb, routing and persistence
 ------------------------------
@@ -876,15 +848,6 @@ exhaustive. The isolated transport never opens USB or MIDI. Reproduce with:
   python3 tools/verify-dsp-transmitters.py gui-arm64 --architecture arm64
 These are encoder checks, not physical DSP response or complete driver parity.
 
-Readback from the connected device and synthetic boundary tests validate
-the layout. Under WSL, 361 scalar DSP changes passed write/readback and
-restoration checks: mute, solo, pan and volume on all four buses and both
-source groups; master volumes; reverb sends, return, type and all active
-parameter banks; all five output routes. Expected stereo coupling was
-checked. The complete raw payload matched the snapshot after every
-restoration. Additional switch/coupling checks are described below; physical
-DSP response remains unverified.
-
 Routing presets
 ---------------
 CDlgPatchBay::OnSetSelAlt (0x100026646) sends five TxOutSel calls in pair
@@ -903,9 +866,7 @@ original patchbay is unavailable at 192 kHz (manual, p. 51); presets reject
 rate index 3 or unknown indices before any route write. Failure/interruption
 can leave intermediate routes until recovery succeeds; disconnection or
 forced termination can prevent restoration. Retain the raw recovery file.
-Both presets and exact full-state restoration passed on WSL at 48 kHz with
-strict and release binaries; an existing backup file was preserved without
-parameter changes. tools/check-routing-presets.py is read-only by default;
+tools/check-routing-presets.py is read-only by default;
 --write runs these checks and independently restores/checks the raw state.
 Offline fault tests cover partial transfer, unrelated state changes,
 interruption and the 192 kHz write guard. Native Debian remains unverified.
@@ -957,13 +918,7 @@ partial transfer, signal recovery and the rate guard; fuzzing is offline.
 tools/check-direct-out.py is read-only by default. --write applies the
 command, independently compares all raw bytes and restores/checks the exact
 initial state, including after a failed test.
-All 206 writes, exact final state, private backup/collision behavior and
-complete restoration passed on WSL hardware at 48 kHz with strict and
-release binaries. This tests control state, not physical analog routing or
-signal quality. The linked-master variant also passed at 48 kHz: all four
-input/output links were enabled with reduced master levels, and Direct Out
-set both input and playback master levels to unity. The checker restores
-the original state even when using this variant:
+The optional linked-master check is:
   python3 tools/check-direct-out.py --write --linked-masters
 Native Debian and physical signal response remain unverified.
 
@@ -978,8 +933,7 @@ validate selectors before I/O, query before/after, and reject unrelated state
 changes. B-D display selection is rejected at 192 kHz. The observed bulk
 byte 4 can remain unchanged; the preservation check also accepts the selected
 bus there. Bulk replies do not confirm physical LCD selection or blinking.
-All five standalone commands and browser requests preserve the complete raw
-audio state in WSL tests. Physical panel confirmation remains outstanding.
+Physical panel confirmation remains outstanding.
 
 The Multiple Direct Mixer header is a routing action. macOS CBtnPatch::Do
 (0x100001340) and Windows 0x140016e60 confirm: if any output selects B-D,
@@ -1044,16 +998,7 @@ signals, recovery and all five targets at 192 kHz. Fuzzing stays offline.
 tools/check-initialization.py is read-only by default; --write checks Reverb,
 Patch Bay and Direct Mix from changed states and restores the complete raw
 snapshot. It does not automatically initialize preamps or All.
-Reverb, Patch Bay and Direct Mix passed WSL hardware checks at 48 kHz with
-strict and release binaries. Bounded parameter changes were reset to the
-same complete defaults on a
-second initialization; unrelated fields, private snapshots, backup-file
-collisions and exact restoration were checked. The release checks also
-passed during 16 seconds of concurrent 48 kHz S24_3LE PCM (12 capture and
-10 zero-playback channels, 480-frame periods, 1920-frame buffers), without
-XRUN/errors and with exact final state restoration. Preamps/All initialization,
-192 kHz initialization, physical response and native Debian remain
-hardware-unverified.
+Native initialization and physical response remain hardware-unverified.
 
 TxSaveLoad at 0x10002a946 writes one command byte to 00 00 00 01.
 The confirmed callers at 0x10002a328 (Store Memory) and 0x10002a2ea
@@ -1087,7 +1032,7 @@ live import requires exact full readback. A private raw snapshot is saved
 before writing; failed/interrupted application attempts restoration using
 a fresh CTRL connection. Raw restoration preserves fields absent from the
 file format. Current-preset, pan and attack imports and full restoration
-passed on WSL hardware and at all four native Debian rates.
+passed at all four native Debian rates.
 Windows x64's actual file loader, state-copy functions and kernel bulk sender
 also match 658 fixed offline import cases through IOCTL 0x22225c selector 5;
 selector 0x2f updates a cached flag afterward. The full frame, checksum, mono/
@@ -1260,56 +1205,13 @@ Native 48 kHz/input-1 checks pass both actions with a requested one-ms duration,
 and Playwright passes actual start/finish/cancel with full raw/rate recovery.
 These checks do not measure physical gain calibration or absolute timing.
 
-On the attached WSL device at 48 kHz, short input-1 finish/cancel runs
-received activity/completion notifications and passed complete result-state
-checks. SIGINT/SIGTERM restored the exact raw snapshot. Strict and release
-binaries also passed a finish case with compressor link 1/2 enabled and
-distinct ADC sensitivity indices; input 2 and every other unselected field
-remained unchanged. A short run also overlapped 12-in/10-out duplex smoke checks
-without ALSA errors. An idle cancel emitted no notification and left the
-raw state unchanged; recovery therefore does not require its acknowledgement.
-tools/check-auto-sense.py is read-only unless --write is supplied, which
-runs these short operations and independently restores/checks the full raw
-state after each case. These checks establish command/notification flow and
-state recovery, not analog calibration or optimal gain with a test signal.
-Native Debian and calibrated gain response remain unverified.
-
-Audio packing and initial hardware tests
----------------------------------------
+Audio sample packing
+--------------------
 The macOS CPortProps::BytesPerUsbFrame at 0x13856 multiplies sample counts
 by channel count and three bytes per sample. This agrees with the device's
 three-byte/24-bit format descriptors. The stock Linux fixed quirk advertises
 S32_LE instead; the standalone module uses descriptor-based S24_3LE.
 Correct packing and successful preparation do not establish valid streaming.
-
-Initial tests on the existing unmodified WSL driver:
-  arecord -q -D hw:0,0 -f S32_LE -c 12 -r 44100 -d 1 -t raw /dev/null
-  aplay -q -D hw:0,0 -f S32_LE -c 10 -r 44100 -d 1 -t raw /dev/zero
-Both terminated with Input/output error. The capture was discarded; playback
-contained only zero samples. USB/IP completion messages were present in the
-kernel log. No native-Debian streaming result is available yet.
-
-With the standalone module, octa-audio-check distinguishes preparation from
-streaming and verifies wall time. At 48 kHz under WSL, eight-packet input
-URBs complete about every 8 ms; packet lengths are normally 216 bytes
-(six 12-channel frames). The aggregate input rate is approximately 6000
-frames/s rather than 48000, and both capture and playback fail the timed
-check before the host workaround. An independent asynchronous libusb
-capture, with the ALSA module unloaded, reproduces the same 1/8 rate.
-
-The tested usbipd-win revision aa3db8b omits VBoxUSB GET_DEVICE. VirtualBox
-7.2.2 initializes its cached high-speed flag only in that request and uses
-it for isochronous frame scheduling. The targeted Windows metadata query
-in tools/initialize-usbipd-high-speed.ps1 restored correct timing: capture
-and playback at all four supported rates passed octa-audio-check with no
-ALSA errors and approximately 1002..1005 ms per second of frames. The
-Windows driver version is 7.2.2.170484. This is a transport timing result;
-signal integrity, channel identity and long-duration stability remain open.
-A simultaneous 30-second 48 kHz test (12-channel capture discarded,
-10-channel zero playback, S24_3LE) completed in 30.04 s with both tools
-returning zero and no underrun/overrun messages. This is a short smoke
-test, not long-duration or signal-quality verification.
-See kernel/README.md for the repeatable host workaround.
 
 Evidence and remaining verification
 ----------------------------------

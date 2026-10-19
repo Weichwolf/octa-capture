@@ -188,18 +188,16 @@ tools/check-preset-import.py is read-only by default. --write checks an
 existing recovery-file collision, current-preset application, a one-unit
 pan change and a one-unit compressor-attack change. Each case checks the
 full target and restores the original raw state independently. These
-checks pass on WSL with strict and release binaries and on native Debian
-with strict binaries at all four rates (12 applications and exact raw
-restorations, plus backup collisions at each rate). The original rate and
+checks pass on native Debian with strict binaries at all four rates (12
+applications and exact raw restorations, plus backup collisions at each rate).
+The original rate and
 complete raw state are independently restored afterward. The checker accepts
 only the same bounded 192 kHz prefix-byte exception as the backend; its offline
 tests reject changes to every other payload byte in both accepted variants.
 To reproduce at a selected rate, close the panel to release CTRL, then run:
   python3 tools/check-preset-import.py --write --bin-dir build/strict
 Repeat after selecting each required rate; return to the original rate afterward.
-SIGINT and SIGTERM after transmission also restored the full raw state
-in a separate WSL hardware check; native interrupted-import recovery remains
-unverified.
+Native interrupted-import recovery after SIGINT/SIGTERM remains unverified.
 Device Store/Load Memory is separate:
   octa-preset memory-store NEW-RECOVERY.syx [hw:CTRL-port]
   octa-preset memory-load NEW-RECOVERY.syx [hw:CTRL-port]

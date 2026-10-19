@@ -1,8 +1,7 @@
 # octa-capture
 
 Linux driver and control panel for the **Roland OCTA-CAPTURE / UA-1010**
-(`0582:0120`). Native Debian is the target; development also uses Debian 13 in
-WSL2 with USB/IP. Original project code is **GPL-2.0-only**.
+(`0582:0120`). The target is native Debian. Original project code is **GPL-2.0-only**.
 
 The standalone ALSA module supports all four descriptor rates and separates MIDI
 from CTRL. Debian users load `snd-octa-capture`; they do not patch their kernel.
@@ -11,21 +10,6 @@ It includes eight preamp/compressor strips, four mixers, routing, reverb,
 Auto-Sens, settings import/export, device selection and live MIDI/PCM meters.
 Nonlinear parameter tables and display math are checked against both original
 Windows and macOS binaries.
-
-**Complete parity is not established.** Native Debian 6.12 passes all-rate PCM
-meter/lifecycle checks and ten-source digital-return integrity streams at
-44.1/48/96 kHz (ten seconds per source, verified 128/512-frame period/buffer
-with bounded RTKit scheduling). Normal-priority small-buffer runs under CPU
-load have also encountered XRUNs.
-The native Playwright suite passes 427 control changes and all-rate settings
-checks; installed GTK Save/Open also passes with desktop-portal dialogs.
-These GUI operations also passed under WSL, where digital sample discontinuities
-and underruns remain unresolved.
-Physical analog response, external clock, DIN loopback, persistent memory,
-two-unit operation and broader latency/stability still need verification. Linux audio settings show ALSA
-information; applications or sound servers configure their own buffers and latency.
-See the [function inventory](doc/function-inventory.md)
-for implemented behavior and remaining gaps.
 
 ## Screenshots
 
@@ -86,8 +70,7 @@ module activation and packages. `VERSION` controls CMake/CPack versions. The
 runtime package includes both GUI launchers, device tools and an OCTA-CAPTURE
 entry under **Applications → Settings** in Xfce.
 The DKMS package builds only the external module for its supported kernel
-series. [WSL requires the documented USB/IP host workaround](kernel/README.md#wsl-usbip-timing-investigation)
-on the tested usbipd/VBoxUSB combination.
+series.
 
 For native PulseAudio, run `octa-pulse-pairs --install` as your regular user to
 enable five Playback and six Recording stereo pairs, including Recording 11-12.

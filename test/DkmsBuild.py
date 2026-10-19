@@ -61,7 +61,7 @@ class Build(unittest.TestCase):
 
     def test_wrong_series_and_unprepared_headers_never_invoke_make(self):
         release = self.headers / 'include/config/kernel.release'
-        release.write_text('6.18.54.1-microsoft-standard-WSL2\n')
+        release.write_text('6.13.0-test\n')
         self.assertEqual(self.invoke().returncode, 1)
         self.assertFalse(self.record.exists())
         release.write_text('6.12.113+deb13-amd64\n')
@@ -89,9 +89,9 @@ class Build(unittest.TestCase):
                                             f'SUBLEVEL = {patch}\nEXTRAVERSION = {extra}\n')
         version(6, 12, 113)
         self.assertEqual(parse(source), ('6.12.113', '6.12'))
-        version(6, 18, 54, '.1')
-        self.assertEqual(parse(source), ('6.18.54.1', '6.18'))
-        for values in ((6, 19, 0, ''), (6, 12, 0, '-rc1'), ('bad', 12, 113, '')):
+        version(6, 12, 113, '.1')
+        self.assertEqual(parse(source), ('6.12.113.1', '6.12'))
+        for values in ((6, 13, 0, ''), (6, 19, 0, ''), (6, 12, 0, '-rc1'), ('bad', 12, 113, '')):
             version(*values)
             with self.assertRaises(ValueError):
                 parse(source)

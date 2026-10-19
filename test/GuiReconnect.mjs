@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Optional development-helper test on native Debian or WSL: reload our module.
+// Optional development-helper test on native Debian: reload our module.
 import assert from 'node:assert/strict';
 import {until} from './BrowserClient.mjs';
 
