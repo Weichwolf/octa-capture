@@ -1,4 +1,68 @@
 // SPDX-License-Identifier: GPL-2.0-only
+import {knobKey, volumePosition} from './knobs.js';
+import {VOLUME} from './parameters.js';
+
+export const FADER_HEIGHT = 88, FADER_THUMB = 32;
+const TRAVEL = FADER_HEIGHT - FADER_THUMB;
+
+export function faderDrag(state, point, shift = false, control = false) {
+  const x = Math.trunc(point.x), y = Math.trunc(point.y);
+  const raw = Math.max(0, Math.min(1024, state.anchor + Math.trunc((y - state.y) * (shift ? -1 : -1024 / TRAVEL))));
+  const result = {x: state.x, y: state.y, anchor: state.anchor, ...volumePosition(raw, shift, control)};
+  if (raw !== state.value) Object.assign(result, {x, y, anchor: raw});
+  return result;
+}
+
+export function faderClick(value, y, shift = false, control = false) {
+  const top = Math.round((1024 - value) * TRAVEL / 1024);
+  if (y >= top && y < top + FADER_THUMB) return null;
+  const raw = Math.max(0, Math.min(1024, Math.trunc((FADER_HEIGHT - FADER_THUMB / 2 - y) * 1024 / TRAVEL + 0.5)));
+  return volumePosition(raw, shift, control);
+}
+
+export class ReferenceFader {
+  constructor(input, change) {
+    this.input = input;
+    this.changed = change;
+    this.dragging = false;
+    input.addEventListener('input', () => change(VOLUME[Number(input.value)]));
+    input.addEventListener('pointerdown', event => this.start(event));
+    input.addEventListener('pointermove', event => this.move(event));
+    for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+      input.addEventListener(name, () => { this.dragging = false; });
+    }
+    input.addEventListener('keydown', event => {
+      if (input.disabled) return;
+      const value = knobKey(Number(input.value), 1024, event.key);
+      if (value !== null || ['Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) event.preventDefault();
+      if (value !== null && value !== Number(input.value)) this.change({value});
+    });
+  }
+  change(result) {
+    this.input.value = result.value;
+    this.changed(result.wireValue ?? VOLUME[result.value]);
+  }
+  start(event) {
+    if (event.button !== 0 || this.input.disabled) return;
+    event.preventDefault();
+    this.input.focus();
+    this.input.setPointerCapture(event.pointerId);
+    const value = Number(this.input.value);
+    this.origin = {x: Math.trunc(event.clientX), y: Math.trunc(event.clientY), anchor: value, value};
+    this.dragging = true;
+    const clicked = faderClick(value, Math.trunc(event.clientY - this.input.getBoundingClientRect().top), event.shiftKey, event.ctrlKey);
+    if (clicked) {
+      this.change(clicked);
+      this.origin.anchor = this.origin.value = clicked.value;
+    }
+  }
+  move(event) {
+    if (!this.dragging || this.input.disabled) return;
+    this.origin = faderDrag(this.origin, {x: event.clientX, y: event.clientY}, event.shiftKey, event.ctrlKey);
+    if (this.origin.value !== Number(this.input.value) || this.origin.wireValue !== undefined) this.change(this.origin);
+  }
+}
+
 // Preview only; the device's fresh bulk reply remains authoritative.
 export function masterFaderPreview(state, controls) {
   const result = [];

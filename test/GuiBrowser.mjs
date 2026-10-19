@@ -14,6 +14,7 @@ import {checkControlMatrix} from './GuiControlMatrix.mjs';
 import {checkReverb} from './GuiReverb.mjs';
 import {checkMasterFaders} from './GuiMasterFaders.mjs';
 import {checkKnobDrags} from './GuiKnobDrag.mjs';
+import {checkFaderDrags} from './GuiFaderDrag.mjs';
 import {checkInputMonitor} from './GuiInputMonitor.mjs';
 import {checkFooter, checkFooterRates} from './GuiFooter.mjs';
 import {checkAutoSenseSelection, checkAutoSenseFailure} from './GuiAutoSense.mjs';
@@ -193,12 +194,13 @@ try {
     return [...document.querySelectorAll('.fader')].every(node=>{
       const input=node.querySelector('input'), box=input.getBoundingClientRect(), label=node.querySelector('output').getBoundingClientRect();
       const cap=getComputedStyle(input).getPropertyValue('--fader-cap');
-      return box.width===18 && box.top===first.top && box.bottom<label.top &&
+      return box.width===18 && box.height===88 && box.top===first.top && box.bottom<label.top &&
         cap.includes(node.closest('.master-group') ? 'fader-red.svg' : 'fader-white.svg');
     });
   })()`), true, 'aligned white channel/red master faders with unobstructed numeric readouts');
   await browser.screenshot(path.join(directory, 'mixer.png'));
   if (playwright && write) await checkMasterFaders(browser, api, restoreMixer);
+  if (playwright && write) await checkFaderDrags(browser, api, restoreMixer);
   if (playwright && write) await checkKnobDrags(browser, api, restoreMixer);
   if (write) {
     await browser.key('[aria-label="input 1 / PAN"]', 'ArrowRight');

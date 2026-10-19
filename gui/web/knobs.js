@@ -3,6 +3,17 @@ import {VOLUME, volumeIndex} from './parameters.js';
 
 const VOLUME_STOPS = [8388607, 4184368, 2097152, 1051065, 526780, 264015, 132321, 66317, 33237, 0];
 
+export function volumePosition(raw, shift, control) {
+  if (control) {
+    let index = 0, threshold = 0x5aaad6;
+    while (VOLUME[raw] < threshold && index < 9) { threshold = Math.trunc(threshold / 2); index++; }
+    const value = VOLUME_STOPS[index];
+    const wireValue = value < 33237 ? 0 : value > 4184368 ? 8388607 : value;
+    return {value: volumeIndex(wireValue), wireValue};
+  }
+  return {value: shift ? raw : Math.trunc((raw + 7) / 8) * 8};
+}
+
 export function knobKey(value, maximum, key) {
   if (key === 'ArrowUp' || key === 'ArrowRight') return Math.min(maximum, value + 1);
   if (key === 'ArrowDown' || key === 'ArrowLeft') return Math.max(0, value - 1);
@@ -25,14 +36,7 @@ export function knobDrag(kind, maximum, state, point, shift = false, control = f
     if (!shift && !control) result.value = Math.trunc((raw + 4) / 5) * 5;
     if (control) result.value = Math.trunc(raw / 67) * 100;
   } else if (kind === 'volume') {
-    if (!shift && !control) result.value = Math.trunc((raw + 7) / 8) * 8;
-    if (control) {
-      let index = 0, threshold = 0x5aaad6;
-      while (VOLUME[raw] < threshold && index < 9) { threshold = Math.trunc(threshold / 2); index++; }
-      const value = VOLUME_STOPS[index];
-      result.wireValue = value < 33237 ? 0 : value > 4184368 ? 8388607 : value;
-      result.value = volumeIndex(result.wireValue);
-    }
+    Object.assign(result, volumePosition(raw, shift, control));
   }
   return result;
 }

@@ -6,7 +6,7 @@ import {PopupMenus} from './menus.js';
 import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
-import {masterFaderPreview} from './faders.js';
+import {masterFaderPreview, ReferenceFader} from './faders.js';
 import {knobDrag, knobKey} from './knobs.js';
 
 const $ = selector => document.querySelector(selector);
@@ -383,10 +383,14 @@ function fader(control, read, label, channel = null, source = null) {
   input.type = 'range'; input.min = '0'; input.max = '1024'; input.step = '1';
   input.setAttribute('aria-label', label);
   input.dataset.control = '';
-  input.addEventListener('input', () => queueChange(control(VOLUME[Number(input.value)])));
-  input.addEventListener('contextmenu', event => controlMenu(event, control(0)));
   const output = el('output', 'fader-value');
   output.setAttribute('aria-hidden', 'true');
+  const interaction = new ReferenceFader(input, value => {
+    input.title = volumeText(value);
+    output.textContent = volumeText(value).replace(/ dB$/, '');
+    queueChange(control(value));
+  });
+  input.addEventListener('contextmenu', event => controlMenu(event, control(0)));
   wrapper.append(input, output);
   if (channel !== null) {
     const lane = el('span', 'level-lane');
@@ -396,7 +400,7 @@ function fader(control, read, label, channel = null, source = null) {
       model: new MeterBallistics()});
     wrapper.append(lane);
   }
-  faders.push({input, output, control, read});
+  faders.push({input, output, control, read, interaction});
   return wrapper;
 }
 
@@ -490,10 +494,10 @@ function makeMasters() {
 
 function renderFaders(state) {
   const previews = new Map(masterFaderPreview(state, faderPreviews.values()).map(control => [key(control), control.value]));
-  for (const {input, output, read, control} of faders) {
+  for (const {input, output, read, control, interaction} of faders) {
     const identifier = key(control(0));
-    const value = previews.get(identifier) ?? read(state);
-    if (previews.has(identifier) || !pending.has(identifier)) input.value = volumeIndex(value);
+    const value = previews.get(identifier) ?? pending.get(identifier) ?? read(state);
+    if (!interaction.dragging) input.value = volumeIndex(value);
     input.title = volumeText(value);
     output.textContent = volumeText(value).replace(/ dB$/, '');
     input.disabled = !connected || busy || input.closest('.unavailable-channel') !== null;

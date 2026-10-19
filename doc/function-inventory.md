@@ -98,6 +98,21 @@ Native Debian at 48 kHz also matches 144 actual Playwright pointer events across
 the four knob families and all Shift/Ctrl combinations, with independent device
 readback and complete raw recovery. This checks control values, not analog response.
 
+Channel/master faders share the original Windows parameter, movement and click
+handlers (`0x140021ed0`, `0x140019e00`, `0x14001f820`). The web controls match
+288 fixed drag events, 504 thumb/track clicks and 18 key cases executed offline,
+including 56-pixel travel, vertical-only movement, Shift/Ctrl, eight-index normal
+steps, exact level coefficients and thumb hit-testing. Original geometry and
+volume functions execute; host APIs, display interval getters and notifications
+are stubbed. macOS range/scale and resource geometry agree. Numeric fixtures
+are public; manufacturer binaries/assets remain private.
+Native Debian at 48 kHz also passes 240 actual Playwright fader pointer events
+across input/playback channels and both master groups, all Shift/Ctrl
+combinations and thumb/track boundaries, with independent wire readback and
+complete raw/clock preservation. Linked-master preview and delayed-reply checks
+also pass. This does not establish physical gain response or native Windows
+hardware behavior.
+
 ## Specific unresolved distinctions
 
 Native small-buffer streaming is not established as stable under CPU load.

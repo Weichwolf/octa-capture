@@ -72,7 +72,7 @@ export async function checkMasterFaders(browser, api, restore) {
         await browser.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve())));
         const dragged = await displayed();
         target = dragged[settings.origin].position;
-        assert(target > base + 3 && target < base + 200, 'actual pointer drag changes the native range');
+        assert(target > base + 3 && target < base + 200, 'actual pointer drag changes the reference fader');
         assert.deepEqual(dragged.map(value => value.position), names.map((_, index) =>
           settings.peers.includes(index) ? target : base), 'pointer-dragged peers move before any reply');
         // State polls still report the old hardware value while this request is held.

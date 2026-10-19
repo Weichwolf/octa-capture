@@ -316,6 +316,26 @@ fresh device replies remain authoritative. The Playwright write check delays a
 control request, checks immediate peer movement and rapid queued input, then
 verifies hardware readback and complete raw restoration.
 
+Channel and master faders use the original Windows vertical movement and click
+rules. The 88-pixel control and 32-pixel thumb give 56 movement intervals;
+normal drag changes by -1024/56 indices per downward pixel, Shift by -1.
+Normal movement rounds up to eight indices; Ctrl selects the same exact level
+coefficients as send/return knobs. Clicking the thumb preserves its value;
+clicking the track jumps to its rounded position before applying modifiers.
+Arrow keys change one index; Home/End leave the value unchanged. Pending channel
+and master readouts update immediately, and polling preserves the active drag.
+The macOS `CCtrlLevelBase` range/scales and `CRsVrHV` geometry agree with these
+Windows values. This is reference-code evidence, not original hardware control.
+
+`python3 tools/verify-knob-drag.py RDDP1110.EXE --faders` executes 288 fixed
+drag events, 504 thumb/track click cases and 18 key cases against the hash-pinned
+Windows code, including its actual geometry and volume conversion functions.
+Channel/master handler equivalence and resource dimensions are checked. Host
+capture, display interval getters, `PtInRect`, painting and device notifications
+are memory stubs. `--save-vectors PATH --save-clicks PATH` saves the compared
+numeric traces; `gui-faders` CTest uses them without manufacturer code/assets
+or a device. These are deterministic checks, not fuzz runs.
+
 Knob pointer movement follows the original Windows `CCtrlWnd` handler: the
 dominant axis determines the change (vertical on ties), integer changes truncate
 toward zero, and the pointer anchor advances before parameter quantization.

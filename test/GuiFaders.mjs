@@ -1,6 +1,38 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import assert from 'node:assert/strict';
-import {masterFaderPreview} from '../gui/web/faders.js';
+import {readFileSync} from 'node:fs';
+import {masterFaderPreview, faderDrag, faderClick} from '../gui/web/faders.js';
+import {knobKey} from '../gui/web/knobs.js';
+import {VOLUME} from '../gui/web/parameters.js';
+
+const traces = JSON.parse(readFileSync(new URL('data/fader-drag.json', import.meta.url), 'utf8'));
+let events = 0, keys = 0;
+for (const test of traces) {
+  let position = {x: 0, y: 0, anchor: test.initial, value: test.initial};
+  for (const [index, [x, y, flags]] of test.events.entries()) {
+    position = faderDrag(position, {x, y}, Boolean(flags & 4), Boolean(flags & 8));
+    assert.deepEqual([position.x, position.y, position.anchor, position.value,
+      position.wireValue ?? VOLUME[position.value]], test.expected[index], `fader start ${test.initial}, event ${index}`);
+    events++;
+  }
+  for (const [key, expected] of Object.entries(test.keys || {})) {
+    assert.equal(knobKey(test.initial, 1024, key) ?? test.initial, expected);
+    keys++;
+  }
+}
+assert.equal(events, 288);
+assert.equal(keys, 18);
+console.log(`PASS ${events} original fader drag vectors and ${keys} key cases`);
+const clicks = JSON.parse(readFileSync(new URL('data/fader-click.json', import.meta.url), 'utf8'));
+for (const test of clicks) {
+  const result = faderClick(test.initial, test.y, Boolean(test.flags & 4), Boolean(test.flags & 8));
+  const actual = result ? [result.value, result.value, result.wireValue ?? VOLUME[result.value]] :
+    [test.initial, test.initial, VOLUME[test.initial]];
+  assert.deepEqual(actual, test.expected, `fader click ${JSON.stringify(test)}`);
+}
+assert.equal(clicks.length, 504);
+console.log('PASS 504 original thumb/track click cases');
+
 const state = (input, playback, io) => ({mixers: [{input_master: {linked: input},
   playback_master: {linked: playback}, input_output_link: io}]});
 const change = (source = 'input', channel = 0, value = 123) =>

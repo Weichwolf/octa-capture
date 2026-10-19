@@ -112,10 +112,10 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .mixer-knob { height: 43px; }
 .mixer-strip .knob-dial { width: 29px; height: 29px; }
 .mixer-strip .channel-label { margin: 0; text-align: center; font-size: 10px; }
-.fader { position: relative; display: flex; height: 103px; justify-content: center; padding-top: 3px; }
+.fader { position: relative; display: flex; height: 103px; justify-content: center; padding-top: 1px; }
 .fader { --fader-cap: url('/fader-white.svg'); }
 .master-group .fader { --fader-cap: url('/fader-red.svg'); }
-.fader input { writing-mode: vertical-lr; direction: rtl; appearance: none; width: 18px; height: 86px; background: transparent; margin: 0; }
+.fader input { writing-mode: vertical-lr; direction: rtl; appearance: none; width: 18px; height: 88px; background: transparent; margin: 0; touch-action: none; }
 .fader input::-webkit-slider-runnable-track { width: 3px; height: 100%; background: linear-gradient(transparent 13px,#080808 13px,#080808 calc(100% - 13px),transparent calc(100% - 13px)); }
 .fader input::-webkit-slider-thumb { appearance: none; width: 18px; height: 32px; margin-left: -7.5px; border: 0; border-radius: 0; background: var(--fader-cap) center / 18px 32px no-repeat; }
 .fader input::-moz-range-track { width: 3px; height: calc(100% - 26px); background: #080808; border-right: 1px solid #777; }
