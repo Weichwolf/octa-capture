@@ -145,7 +145,10 @@ class Check(Desktop):
             ('alt+d', f'{expanded}==="driver"'),
             ('a', about),
             ('alt+v', f'{about}&&{depth}===0'),
-            ('Escape', f'!{about}'),
+            ('Tab', 'document.activeElement.id==="show-port-warning"'),
+            ('Tab', 'document.activeElement.matches("#about [data-close]")'),
+            ('shift+Tab', 'document.activeElement.id==="show-port-warning"'),
+            ('Return', f'!{about}'),
             ('alt+v', f'{expanded}==="device"'),
             ('i', f'{depth}===2'),
             ('Escape', f'{depth}===1'),
@@ -154,7 +157,7 @@ class Check(Desktop):
         ))
         script = 'document.querySelector("#view-switch").focus();' \
                  'window.__octaMenuTest=null;' \
-                 'window.__octaMenuListener=e=>window.__octaMenuTest=e.isTrusted;' \
+                 'window.__octaMenuListener=e=>window.__octaMenuTest=e;' \
                  'document.addEventListener("keydown",window.__octaMenuListener,true);'
 
         def prepared(view, result, _data):
@@ -172,20 +175,25 @@ class Check(Desktop):
                      'delete window.__octaMenuListener;delete window.__octaMenuTest;'
             self.view.evaluate_javascript(script, -1, None, None, None, None, None)
             print('PASS actual X11/WebKit menu keys: F10, Alt+D/V, root/submenu arrows, '
-                  'mnemonics, modal ownership and focus recovery (18 steps).', flush=True)
+                  'mnemonics, modal ownership, dialog Tab/default Enter and focus recovery (21 steps).', flush=True)
             self.start_native_dialogs()
             return
         key, self.menu_expected = step
         self.phase = f'native-menu-{key}'
+        self.menu_status = None
         self.key(key, focus=False)
         self.GLib.timeout_add(100, self.check_native_menu)
 
     def check_native_menu(self):
-        script = f'window.__octaMenuTest===true&&({self.menu_expected});'
+        script = f'''({{passed:window.__octaMenuTest?.isTrusted===true&&({self.menu_expected}),
+            key:window.__octaMenuTest?.key,shift:window.__octaMenuTest?.shiftKey,
+            code:window.__octaMenuTest?.code,keyCode:window.__octaMenuTest?.keyCode,
+            prevented:window.__octaMenuTest?.defaultPrevented,focus:document.activeElement.outerHTML}});'''
 
         def checked(view, result, _data):
             try:
-                if json.loads(view.evaluate_javascript_finish(result).to_json(0)):
+                self.menu_status = json.loads(view.evaluate_javascript_finish(result).to_json(0))
+                if self.menu_status['passed']:
                     self.next_native_menu()
                 else:
                     self.GLib.timeout_add(100, self.check_native_menu)
@@ -595,7 +603,7 @@ class Check(Desktop):
 
     def _tick(self):
         if time.monotonic() > self.deadline:
-            self.fail(f'GTK check timed out in {self.phase}.')
+            self.fail(f'GTK check timed out in {self.phase}. Last menu input: {getattr(self, "menu_status", None)}')
             return False
         if self.phase in ('native-change', 'native-restore', 'native-wheel-change', 'native-wheel-restore'):
             self.native_progress()

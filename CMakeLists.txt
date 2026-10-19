@@ -189,6 +189,7 @@ add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   "${CMAKE_SOURCE_DIR}/test/GuiShortcuts.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiMenuBar.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiDialogs.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiDialogKeys.mjs"
   "${CMAKE_SOURCE_DIR}/test/PlaywrightClient.mjs"
   "${CMAKE_SOURCE_DIR}/test/GtkPanel.mjs" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs"
   "${CMAKE_SOURCE_DIR}/test/WindowPanel.mjs"

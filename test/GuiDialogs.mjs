@@ -2,6 +2,7 @@
 // Trusted caption input; device writes and calibration are not part of this test.
 import assert from 'node:assert/strict';
 import {until} from './BrowserClient.mjs';
+import {checkDialogKeys} from './GuiDialogKeys.mjs';
 
 async function bounds(page, selector) {
   const box = await page.locator(selector).boundingBox();
@@ -69,8 +70,9 @@ async function resizeAndCancel(browser) {
   if (wasPreamp) await browser.click('#view-switch');
 }
 
-export async function checkDialogWindows(browser, directory) {
+export async function checkDialogWindows(browser, directory, api) {
   if (!browser.page) return;
+  await checkDialogKeys(browser, await api('/api/state'));
   const writes = [];
   const record = request => {
     if (request.method() === 'POST') writes.push(new URL(request.url()).pathname);

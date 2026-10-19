@@ -15,7 +15,6 @@ export async function checkRates(browser, api, directory, originalRate) {
     await until(() => browser.evaluate('document.querySelector("#settings").open'), 'driver settings');
     await browser.key('#sample-rate', 'Home');
     for (let step = 0; step < index; step++) await browser.key('#sample-rate', 'ArrowDown');
-    await browser.key('#sample-rate', 'Enter');
     assert.equal(await browser.evaluate('Number(document.querySelector("#sample-rate").value)'), rate);
     await until(async () => {
       const document = await api('/api/state');

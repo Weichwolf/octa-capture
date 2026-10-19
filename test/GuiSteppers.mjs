@@ -48,6 +48,9 @@ function fixture(maximum, format, unit) {
 const delay = fixture(12, preDelayText, 'ms');
 assert.equal(delay.input.value, '0.0');
 assert.equal(delay.input.disabled, true);
+assert.equal(delay.input.tabIndex, -1, 'Original read-only edit is outside the dialog Tab cycle');
+assert.equal(delay.up.tabIndex, -1);
+assert.equal(delay.down.tabIndex, -1);
 fire(delay.input, 'keydown', {key: 'ArrowUp'});
 fire(delay.up, 'click', {detail: 0});
 assert.deepEqual(delay.sent, []);

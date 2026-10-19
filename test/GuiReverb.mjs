@@ -19,7 +19,6 @@ export async function checkReverb(browser, api) {
     for (let bank = 1; bank <= 4; bank++) {
       await browser.key('#reverb-type', 'Home');
       for (let step = 0; step < bank; step++) await browser.key('#reverb-type', 'ArrowDown');
-      await browser.key('#reverb-type', 'Enter');
       await until(async () => (await api('/api/state')).state.reverb.type === bank, 'reverb type hardware readback');
       for (const [parameter, field, selector, format, maximum, suffix] of [
         ['pre-delay', 'pre_delay_indices', '#reverb-delay', preDelayText, 12, 'pre-delay'],

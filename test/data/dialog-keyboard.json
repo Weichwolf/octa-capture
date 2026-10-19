@@ -1,0 +1,21 @@
+{
+  "patchbay": {"resource": 178, "default_id": 1, "controls": [
+    [1, "[data-close]"], [1084, "[data-action=multi-monitor]"], [1083, "[data-action=routing-default]"],
+    [1072, "select[data-pair='0']"], [1073, "select[data-pair='1']"], [1074, "select[data-pair='2']"],
+    [1075, "select[data-pair='3']"], [1076, "select[data-pair='4']"]
+  ]},
+  "reverb": {"resource": 188, "default_id": 1, "controls": [
+    [1, "[data-close]"], [1109, "[data-action=reverb-default]"], [1110, "#reverb-type"]
+  ]},
+  "about": {"resource": 100, "default_id": 1, "controls": [
+    [1, "[data-close]"], [1142, "#show-port-warning"]
+  ]},
+  "port-warning": {"resource": 266, "default_id": 1, "controls": [
+    [1, "[data-close]"], [1139, "#hide-port-warning"]
+  ]},
+  "auto-sens": {"resource": 289, "default_id": 1, "controls": [
+    [1, "#auto-start"], [2, "#auto-cancel"], [1160, "input[value='0']"], [1161, "input[value='1']"],
+    [1162, "input[value='2']"], [1163, "input[value='3']"], [1164, "input[value='4']"], [1165, "input[value='5']"],
+    [1166, "input[value='6']"], [1167, "input[value='7']"], [1168, "#auto-all"], [1169, "#auto-none"]
+  ]}
+}

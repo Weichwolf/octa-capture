@@ -5,6 +5,8 @@ export class ReferenceStepper {
     this.node = node;
     this.input = node.querySelector('input');
     this.buttons = [...node.querySelectorAll('button')];
+    // The original read-only edit/up-down pairs have no WS_TABSTOP.
+    for (const control of [this.input, ...this.buttons]) control.tabIndex = -1;
     this.maximum = maximum;
     this.format = format;
     this.unit = unit;

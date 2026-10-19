@@ -71,7 +71,11 @@ async function mnemonics(browser, highest) {
   await page.locator('#diagram').waitFor({state: 'hidden'});
   for (const [key, id] of [['a', 'about'], ['s', 'readme'], ['d', 'settings']]) {
     await page.keyboard.press('Alt+d'); await page.keyboard.press(key);
-    await page.locator(`#${id}`).waitFor({state: 'visible'});
+    try { await page.locator(`#${id}`).waitFor({state: 'visible'}); }
+    catch (error) {
+      console.error(await browser.evaluate('({focus:document.activeElement.outerHTML, menus:document.querySelector("#menus").innerHTML, busy:!document.querySelector("#busy-message").hidden, connected:document.querySelector("#connection-message").hidden})'));
+      throw error;
+    }
     assert.equal(await browser.evaluate(`document.querySelector('#${id}').open`), true, `Driver mnemonic ${key}`);
     await page.keyboard.press('Escape');
     await page.locator(`#${id}`).waitFor({state: 'hidden'});

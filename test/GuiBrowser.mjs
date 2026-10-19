@@ -374,7 +374,7 @@ try {
   if (rates) await checkRates(browser, api, directory, [44100, 48000, 96000, 192000][payload[2]]);
   if (rates) await checkFooterRates(browser, api);
   const expectedErrors = reload ? await checkReconnect(browser, api, launch, run) : {consoleErrors: [], httpErrors: []};
-  await checkDialogWindows(browser, directory);
+  await checkDialogWindows(browser, directory, api);
   assert.deepEqual(browser.exceptions, [], 'JavaScript exceptions');
   assert.deepEqual(browser.securityErrors, [], 'Content Security Policy violations');
   if (playwright) {

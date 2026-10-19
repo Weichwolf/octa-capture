@@ -155,7 +155,7 @@ Escape restores focus through the menu levels. Modal dialogs retain keyboard
 ownership; busy/absent/rate guards also apply to mnemonic activation.
 The bindings come from Windows menu resource 128 and offline Wine observations.
 Playwright checks them against the native backend without parameter changes;
-the installed GTK checker also uses 18 actual X11/WebKit key steps.
+the installed GTK checker also uses 21 actual X11/WebKit menu/dialog key steps.
 
 Ctrl+S/O/P and their menu items share Save/Load/Patch Bay availability. Modal
 dialogs, busy/disconnected state, pending writes and active file operations
@@ -475,6 +475,26 @@ responses and never send calibration commands to hardware. The installed native
 GTK checker additionally verifies trusted X11/WebKit caption drag/close,
 centered reopening and Escape. Native WebKit snapshots need no ImageMagick
 executable; device state and clock are checked independently afterward.
+
+Dialog initial focus, Tab/Shift+Tab wrap and unmodified Enter follow the five
+original resource orders in `test/data/dialog-keyboard.json`. The bottom buttons
+keep their visual placement while participating first in the applicable Tab
+orders. Reverb's read-only spinners stay outside that order but retain pointer
+and focused arrow-key operation. Enter activates a focused pushbutton or the
+dialog's default; an open native combo popup keeps its own Enter handling.
+Empty Auto-Sens opens on Cancel, while enabled Start remains the default from
+a checkbox. Confirmation opens on OK; focusing Cancel makes Enter decline it.
+Browser checks cover the fixed orders, closed/open combos and disabled/pending
+Start. Accepted confirmation/calibration responses are intercepted in the browser;
+these checks send no such hardware commands. Trusted X11/WebKit input additionally
+checks About's Tab wrap, reverse Tab and default Enter with raw state/clock
+preserved. WebKit's `Unidentified` Shift+Tab is recognized through physical
+`code=Tab`; other unidentified keys do not navigate. The optional reference command is:
+
+```bash
+python3 tools/verify-dialog-resources.py doc/local/windows-gui-analysis/RDDP1110.EXE
+```
+
 All 13 pre-delay strings and 50 time displays agree with both binaries. Keyboard,
 pointer, endpoint bounds and all four effect-bank writes/readbacks are checked in
 the actual browser. Offline checks verify autorepeat cancellation on release,

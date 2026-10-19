@@ -18,6 +18,10 @@ export class DialogWindow {
       if (dialog.dispatchEvent(new Event('cancel', {cancelable: true})) && dialog.open) dialog.close();
     });
     this.caption.append(close);
+    // Resource order starts with the bottom buttons in these Windows dialogs.
+    if (dialog.hasAttribute('data-footer-first')) this.caption.after(dialog.querySelector(':scope > footer'));
+    dialog.addEventListener('keydown', event => this.keyboard(event));
+    dialog.addEventListener('focusin', () => this.defaultStyle());
     this.caption.addEventListener('pointerdown', event => this.start(event));
     this.caption.addEventListener('pointermove', event => this.move(event));
     for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) {
@@ -26,19 +30,51 @@ export class DialogWindow {
       });
     }
     dialog.addEventListener('close', () => this.reset());
-    new MutationObserver(() => {
+    new MutationObserver(records => {
+      if (!records.some(record => record.target === dialog && record.attributeName === 'open')) {
+        this.defaultStyle(); return;
+      }
       this.reset();
       if (!dialog.open) return;
       // HTML dialog autofocus includes tabindex=-1; keep the caption out of it.
-      if (document.activeElement === close) {
-        const content = [...dialog.querySelectorAll('button, input, select, textarea, a[href], [tabindex]')];
-        content.find(node => node !== close && !node.disabled && node.tabIndex >= 0 && node.getClientRects().length)?.focus();
+      if (document.activeElement === close || document.activeElement === dialog) {
+        this.controls()[0]?.focus();
       }
-    }).observe(dialog, {attributes: true, attributeFilter: ['open']});
+      this.defaultStyle();
+    }).observe(dialog, {attributes: true, subtree: true, attributeFilter: ['open', 'disabled']});
     new ResizeObserver(() => { if (dialog.open && dialog.style.inset) this.fit(); }).observe(dialog);
     window.addEventListener('resize', () => { if (dialog.open && dialog.style.inset) this.fit(); });
     window.addEventListener('blur', () => this.stop());
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.stop(); });
+  }
+  controls() {
+    return [...this.dialog.querySelectorAll('button, input, select, textarea, a[href], [tabindex]')]
+      .filter(node => !node.disabled && node.tabIndex >= 0 && node.getClientRects().length);
+  }
+  defaultButton() {
+    const focused = document.activeElement?.closest('button:not(.dialog-close)');
+    return focused && this.dialog.contains(focused) ? focused : this.dialog.querySelector('[data-default]');
+  }
+  defaultStyle() {
+    const selected = this.defaultButton();
+    for (const button of this.dialog.querySelectorAll('button')) {
+      button.classList.toggle('dialog-default', button === selected && !button.disabled);
+    }
+  }
+  keyboard(event) {
+    if (event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey) return;
+    // WebKit/GTK X11 reports Shift+Tab as Unidentified with physical code Tab.
+    if (event.key === 'Tab' || (event.key === 'Unidentified' && event.code === 'Tab')) {
+      const controls = this.controls(), index = controls.indexOf(document.activeElement);
+      const next = index < 0 ? (event.shiftKey ? controls.length - 1 : 0)
+        : (index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
+      event.preventDefault(); controls[next]?.focus();
+    } else if (event.key === 'Enter' && !event.shiftKey) {
+      // Native open combo popups own Enter; a closed combo uses the default.
+      try { if (event.target.matches('select:open')) return; } catch { /* Older WebKit has no :open. */ }
+      event.preventDefault();
+      this.defaultButton()?.click();
+    }
   }
   start(event) {
     if (event.button !== 0 || !event.isPrimary || event.target.closest('button')) return;

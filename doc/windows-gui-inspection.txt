@@ -155,6 +155,26 @@ physical hardware or an original mouse-drag handler.
 Six sampled parent-panel pixels outside the modal match the corresponding
 uncovered main-view capture exactly; the reference does not dim the owner panel.
 
+Dialog keyboard behavior
+------------------------
+Resources 100/178/188/266/289 declare default pushbutton ID 1. Their 27 Tab
+stops are recorded as numeric IDs in test/data/dialog-keyboard.json; optional
+tools/verify-dialog-resources.py checks them against the hash-pinned executable.
+Patch Bay cycles Close, Multi-Monitor, Initial Setting and output selectors 1–5.
+Reverb cycles Close, Initial Setting and Type; its read-only edit/up-down pairs
+have no WS_TABSTOP. About and the port warning put OK/Close before the checkbox.
+Auto-Sens orders Start, Cancel, inputs 1–8, Select All and Clear All; disabled
+controls are skipped, so empty idle selection initially focuses Cancel.
+
+GetGUIThreadInfo/DM_GETDEFID and actual X11 keys in the offline Wine model
+confirm initial focus, Tab wrap and Enter for Patch Bay, Reverb, About and idle
+Auto-Sens. Enter from a closed Reverb combo closes the dialog; F4 opens the
+combo, whose first Enter only commits/closes its popup. About's focused checkbox
+also uses the default OK action on Enter. An original confirmation starts on OK;
+Tab selects Cancel and Enter declines it. Numeric observations remain under
+ignored build/wine-reference/dialog-keyboard-observations.json. No calibration,
+initialization or device writes were tested against real Windows hardware.
+
 Windows driver compatibility checks
 -----------------------------------
 The vendor INF registers RDWM1110.SYS with ServiceType=1

@@ -42,20 +42,20 @@
   <div id="menus"></div>
   <div id="toast" role="alert" hidden></div>
   <input id="load-file" type="file" accept=".octa" hidden>
-  <dialog id="patchbay" aria-labelledby="patchbay-title">
+  <dialog id="patchbay" aria-labelledby="patchbay-title" data-footer-first>
     <h2 id="patchbay-title">PATCH BAY</h2>
     <div class="patchbay-presets"><span>Preset :</span><button data-action="multi-monitor">Multi-Monitor</button><button data-action="routing-default">Initial Setting</button></div>
     <div class="dialog-content" id="patchbay-content"></div>
-    <footer><button data-close>Close</button></footer>
+    <footer><button data-close data-default autofocus>Close</button></footer>
   </dialog>
-  <dialog id="reverb" aria-labelledby="reverb-title">
+  <dialog id="reverb" aria-labelledby="reverb-title" data-footer-first>
     <h2 id="reverb-title">REVERB</h2>
     <div class="dialog-content reverb-fields">
       <label>TYPE: <select id="reverb-type"></select></label>
       <label>PRE DELAY [ms] : <span class="reference-stepper" id="reverb-delay-stepper"><input id="reverb-delay" type="text" readonly aria-label="Reverb pre-delay"><button type="button" data-step="1" aria-label="Increase reverb pre-delay">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb pre-delay">▾</button></span></label>
       <label>TIME [sec] : <span class="reference-stepper" id="reverb-time-stepper"><input id="reverb-time" type="text" readonly aria-label="Reverb time"><button type="button" data-step="1" aria-label="Increase reverb time">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb time">▾</button></span></label>
     </div>
-    <footer><button data-action="reverb-default">Initial Setting</button><button data-close>Close</button></footer>
+    <footer><button data-close data-default autofocus>Close</button><button data-action="reverb-default">Initial Setting</button></footer>
   </dialog>
   <dialog id="settings" aria-labelledby="settings-title">
     <h2 id="settings-title">OCTA-CAPTURE Linux Audio Settings</h2>
@@ -65,20 +65,20 @@
       <fieldset><legend>Linux Audio</legend><label>Audio API: <output>ALSA</output></label><label>Hardware format: <output>24-bit PCM</output></label><label>ALSA capture / playback: <output id="settings-channels">--</output></label><p id="settings-capture-note"></p><p>Direct monitoring uses the OCTA-CAPTURE hardware mixer.</p></fieldset>
       <fieldset><legend>Buffer Size and Latency</legend><p>Set the period and buffer size in your audio application or sound server, such as PipeWire or JACK. Sample-rate changes here take effect immediately.</p></fieldset>
     </div>
-    <footer><button data-close>Close</button></footer>
+    <footer><button data-close data-default>Close</button></footer>
   </dialog>
-  <dialog id="auto-sens" aria-labelledby="auto-sens-title">
+  <dialog id="auto-sens" aria-labelledby="auto-sens-title" data-footer-first>
     <h2 id="auto-sens-title">AUTO-SENS</h2>
     <div class="dialog-content auto-sens-content">
       <fieldset><legend>Channel</legend><div class="auto-selection"><div id="auto-channels" class="auto-channels"></div><div class="auto-selection-buttons"><button id="auto-all">Select All</button><button id="auto-none">Clear All</button></div></div></fieldset>
       <p id="auto-status" role="status"></p>
     </div>
-    <footer><button id="auto-start" disabled>Start</button><button id="auto-cancel">Cancel</button></footer>
+    <footer><button id="auto-start" data-default autofocus disabled>Start</button><button id="auto-cancel">Cancel</button></footer>
   </dialog>
   <dialog id="diagram" aria-labelledby="diagram-title">
     <h2 id="diagram-title">OCTA-CAPTURE Signal Flow</h2>
     <div class="dialog-content signal-flow"><img src="/signal-flow.svg" width="945" height="500" alt="Signal flow: eight analog inputs through preamps and compressors, digital input, USB audio and MIDI, four direct mixers, Mixer A reverb, patchbay, phones and analog/digital outputs."><p>At 192 kHz: inputs/outputs 1–4 and Mixer A; reverb and patchbay unavailable.</p></div>
-    <footer><button data-close>Close</button></footer>
+    <footer><button data-close data-default>Close</button></footer>
   </dialog>
   <dialog id="readme" aria-labelledby="readme-title">
     <h2 id="readme-title">OCTA-CAPTURE Linux — README</h2>
@@ -102,22 +102,22 @@
         (or press Shift+F10) to select a connected OCTA-CAPTURE. Closing the
         panel releases its control connection; audio applications continue running.</p>
     </div>
-    <footer><button data-close>Close</button></footer>
+    <footer><button data-close data-default>Close</button></footer>
   </dialog>
-  <dialog id="about" aria-labelledby="about-title">
+  <dialog id="about" aria-labelledby="about-title" data-footer-first>
     <h2 id="about-title">About Driver &amp; Control Panel</h2>
     <div class="dialog-content"><strong>OCTA-CAPTURE Linux Control Panel</strong><p>Independent Linux implementation · GPL-2.0-only</p><p>Roland OCTA-CAPTURE / UA-1010</p><label><input id="show-port-warning" type="checkbox" checked disabled> Show a warning about audio ports that cannot be used.</label></div>
-    <footer><button data-close>OK</button></footer>
+    <footer><button data-close data-default autofocus>OK</button></footer>
   </dialog>
-  <dialog id="port-warning" aria-labelledby="port-warning-title">
+  <dialog id="port-warning" aria-labelledby="port-warning-title" data-footer-first>
     <h2 id="port-warning-title">OCTA-CAPTURE — Audio Ports</h2>
     <div class="dialog-content"><p>At 192 kHz, only inputs 1–4 and outputs 1–4 are available.<br>Other audio ports cannot be used at this sample rate.</p><label><input id="hide-port-warning" type="checkbox"> Do not show this message again.</label></div>
-    <footer><button data-close>OK</button></footer>
+    <footer><button data-close data-default autofocus>Close</button></footer>
   </dialog>
   <dialog id="confirm" aria-labelledby="confirm-title">
     <h2 id="confirm-title">OCTA-CAPTURE</h2>
     <div class="dialog-content"><p id="confirm-text"></p></div>
-    <footer><button id="confirm-no">Cancel</button><button id="confirm-yes">OK</button></footer>
+    <footer><button id="confirm-yes" data-default autofocus>OK</button><button id="confirm-no">Cancel</button></footer>
   </dialog>
 </body>
 </html>

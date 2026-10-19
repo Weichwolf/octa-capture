@@ -186,7 +186,7 @@ Alt+D/V, root-menu arrow switching and first-match letter activation. The HTML
 menu bar implements these with focus restoration, pointer switching and the
 existing modal/connection/busy guards. Native Playwright checks open dialogs,
 export settings and decline all five Initialize confirmations with full raw
-state preserved. The installed GTK checker adds 18 trusted X11/WebKit key steps.
+state preserved. The installed GTK checker adds 21 trusted X11/WebKit menu/dialog key steps.
 Other system-key/platform edge cases and complete interaction parity remain.
 
 Secondary-dialog captions now support drag, cancel-aware Close and centered
@@ -197,6 +197,18 @@ uses the existing verified cancellation path and blocks duplicate pending closes
 the browser cancellation/failure test is explicitly simulated. The original
 offline Patch Bay window verifies caption/system-menu flags and system-close
 recreation, not full native Windows input/rendering parity.
+
+Five original dialog resources independently match 27 numeric Tab stops and
+their default pushbuttons. Wine/X11 observations additionally check initial
+focus, cyclic Tab, closed/open-combo Enter and the original confirmation's
+OK/Cancel behavior. The HTML dialogs implement these orders, default actions
+and focus-dependent default-button styling. Native Debian's Playwright checks
+exercise all five orders; confirmation acceptance and Auto-Sens Start/pending
+responses are simulated and never sent to the hardware. The separate Linux
+audio-settings and README dialogs remain platform-specific. The installed native
+GTK checker verifies About's Tab wrap, Shift+Tab and default Enter with independent
+raw/clock preservation; WebKit's unidentified reverse Tab retains physical code
+`Tab`, which the shared dialog handler recognizes.
 
 Windows power registration (`0x1400127e0`) selects the
 [IAdapterPowerManagement interface](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/implementing-iadapterpowermanagement).
