@@ -40,7 +40,7 @@ sudo ./tools/install-module.sh build/module-build/snd-octa-capture.ko
 
 On native Debian, build files normally come from `linux-headers-$(uname -r)`; source comes from the corresponding `linux-source` package. The full kernel build in the WSL setup supplies its missing build files; normal Debian installation needs only the module build. The installer configures module loading order so the dedicated driver takes precedence while `snd-usb-audio` remains available for other devices.
 
-`kernel/*.patch` files modify only the private module copy. Imported Linux files retain their original copyright and license notices; original additions use GPL-2.0-only.
+`kernel/linux-*.patch` files modify only the private module copy. Imported Linux files retain their original copyright and license notices; original additions use GPL-2.0-only.
 
 `tools/check-audio-soak.py --duration 600 --period-size 1024 --rate 192000`
 repeats an isolated quiet duplex run; `--rates` instead cycles all four rates.
@@ -167,6 +167,59 @@ Sparse for both kernels. A whole ALSA-tree Sparse run still reports existing
 upstream issues (6.18 endpoint scoped-lock contexts, 6.12 Scarlett Boolean
 expressions). No diagnostics are suppressed. Host fuzzing does not replace
 kernel sanitizer/URB fault testing.
+
+## Isolated sanitizer kernel build
+
+The optional development fixture builds an x86_64 Linux 6.12 kernel with
+KASAN, UBSAN, fault-injection support, dummy HCD and raw gadget support, then
+builds `snd-octa-capture.ko` against its matching `Module.symvers`. It installs
+and loads nothing on the development host. It is separate from standard tests
+and does not run fuzzing. The `kernel-vm-build` CTest checks only patch application
+and build-lock behavior; it never compiles or boots a kernel.
+
+Use a private, extracted Linux source tree; do not use the source or build tree
+of a running host build. The fixture applies documentation fixes from
+`vm-linux-6.12.patch` to that private source, retaining `W=1` and `-Werror`.
+LLVM 19 and the usual kernel build dependencies are required.
+
+```bash
+mkdir -p build/kernel-vm/source
+tar -xf /usr/src/linux-source-6.12.tar.xz --strip-components=1 \
+  -C build/kernel-vm/source
+python3 tools/build-kernel-vm.py build/kernel-vm/source build/kernel-vm --jobs 2
+```
+
+Reuse the extracted source and the same command to resume a failed build.
+A lock prevents concurrent fixture builds in the same output directory.
+The kernel image is `build/kernel-vm/kernel-build/arch/x86/boot/bzImage`;
+`build/kernel-vm/module-path` records the completed standalone module directory.
+These are VM-only artifacts. Building them does not establish runtime sanitizer,
+USB fault, suspend/resume or physical device coverage; those checks remain open.
+
+For a bounded module lifecycle check, use QEMU, a statically linked x86_64
+BusyBox (Debian package `busybox-static`) and KVM access:
+
+```bash
+python3 tools/check-kernel-vm.py build/kernel-vm --busybox /bin/busybox
+```
+
+The checker constructs a private initramfs, verifies the running guest's
+sanitizer configuration and loads/unloads both ALSA modules together three
+times. Kernel warnings, sanitizer reports, missing completion markers and a
+120-second timeout fail the check. Console output stays in a fresh
+`build/kernel-vm/check-*/console.log`. `--accel tcg` supports hosts without KVM;
+`--timeout` can increase the bound to at most 600 seconds. `--qemu`, `--bios` and
+`--firmware-dir` accept local tool/firmware paths. No host USB device or network is passed to
+the guest. This checks module initialization/exit, not device-specific USB,
+audio streaming, fault injection or suspend/resume. It does not run fuzzing.
+
+The Linux 6.12.113 fixture builds successfully, including instrumented clock,
+status and PCM meter objects. Its strict VM boot currently fails on UBSAN
+alignment reports in the base kernel before loading our module (BIOS reads,
+page-table list traversal, ACPI and runtime-constant text patching). Alignment
+checking stays enabled and the checker rejects these reports. A clean kernel
+sanitizer lifecycle result is not established; the base-kernel findings need
+resolution before device-specific sanitizer coverage can be claimed.
 
 ## WSL USB/IP timing investigation
 

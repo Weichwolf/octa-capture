@@ -1,0 +1,219 @@
+Subject: [PATCH] Complete kernel-doc annotations for the sanitizer VM build
+
+Keep W=1 and warnings-as-errors enabled for the private test kernel.
+This changes documentation only; no host kernel is patched or installed.
+
+--- a/arch/x86/entry/common.c
++++ b/arch/x86/entry/common.c
+@@ -185,6 +185,7 @@
+ 
+ /**
+  * do_int80_emulation - 32-bit legacy syscall C entry from asm
++ * @regs: Saved register state from the syscall entry.
+  *
+  * This entry point can be used by 32-bit and 64-bit programs to perform
+  * 32-bit system calls.  Instances of INT $0x80 can be found inline in
+--- a/kernel/reboot.c
++++ b/kernel/reboot.c
+@@ -222,6 +222,7 @@
+ 
+ /**
+  *	do_kernel_restart - Execute kernel restart handler call chain
++ *	@cmd: Restart command string, or NULL.
+  *
+  *	Calls functions registered with register_restart_handler.
+  *
+@@ -959,6 +960,7 @@
+ 
+ /**
+  * hw_failure_emergency_poweroff - Trigger an emergency system poweroff
++ * @poweroff_delay_ms: Delay in milliseconds before forced poweroff.
+  *
+  * This may be called from any critical situation to trigger a system shutdown
+  * after a given period of time. If time is negative this is not scheduled.
+--- a/kernel/time/tick-broadcast.c
++++ b/kernel/time/tick-broadcast.c
+@@ -1028,6 +1028,8 @@
+ 
+ /**
+  * tick_broadcast_setup_oneshot - setup the broadcast device
++ * @bc: Broadcast clock event device, or NULL.
++ * @from_periodic: Whether switching from periodic broadcast mode.
+  */
+ static void tick_broadcast_setup_oneshot(struct clock_event_device *bc,
+ 					 bool from_periodic)
+--- a/kernel/time/tick-oneshot.c
++++ b/kernel/time/tick-oneshot.c
+@@ -19,6 +19,8 @@
+ 
+ /**
+  * tick_program_event - program the CPU local timer device for the next event
++ * @expires: Absolute expiry time of the next event.
++ * @force: Force a minimum delay if the expiry time has passed.
+  */
+ int tick_program_event(ktime_t expires, int force)
+ {
+@@ -57,6 +59,9 @@
+ 
+ /**
+  * tick_setup_oneshot - setup the event device for oneshot mode (hres or nohz)
++ * @newdev: Clock event device to configure.
++ * @handler: Event handler to install.
++ * @next_event: Absolute expiry time of the next event.
+  */
+ void tick_setup_oneshot(struct clock_event_device *newdev,
+ 			void (*handler)(struct clock_event_device *),
+@@ -69,6 +74,7 @@
+ 
+ /**
+  * tick_switch_to_oneshot - switch to oneshot mode
++ * @handler: Event handler to install.
+  */
+ int tick_switch_to_oneshot(void (*handler)(struct clock_event_device *))
+ {
+--- a/arch/x86/kernel/apic/apic.c
++++ b/arch/x86/kernel/apic/apic.c
+@@ -2132,9 +2132,10 @@
+ }
+ 
+ /**
+- * spurious_interrupt - Catch all for interrupts raised on unused vectors
+- * @regs:	Pointer to pt_regs on stack
+- * @vector:	The vector number
++ * DOC: Catch all for interrupts raised on unused vectors
++ *
++ * The generated spurious_interrupt handler receives the saved register state
++ * and vector number from the IDT entry wrapper.
+  *
+  * This is invoked from ASM entry code to catch all interrupts which
+  * trigger on an entry which is routed to the common_spurious idtentry
+--- a/arch/x86/mm/pgtable.c
++++ b/arch/x86/mm/pgtable.c
+@@ -655,7 +655,7 @@
+ 
+ /**
+  * reserve_top_address - reserves a hole in the top of kernel address space
+- * @reserve - size of hole to reserve
++ * @reserve: Size of hole to reserve.
+  *
+  * Can be used to relocate the fixmap area and poke a hole in the top
+  * of kernel address space to make room for a hypervisor.
+@@ -706,6 +706,9 @@
+ #ifdef CONFIG_X86_5LEVEL
+ /**
+  * p4d_set_huge - setup kernel P4D mapping
++ * @p4d: Pointer to the P4D entry.
++ * @addr: Physical address to map.
++ * @prot: Page protection flags.
+  *
+  * No 512GB pages yet -- always return 0
+  */
+@@ -716,6 +719,7 @@
+ 
+ /**
+  * p4d_clear_huge - clear kernel P4D mapping when it is set
++ * @p4d: Pointer to the P4D entry.
+  *
+  * No 512GB pages yet -- always return 0
+  */
+@@ -726,6 +730,9 @@
+ 
+ /**
+  * pud_set_huge - setup kernel PUD mapping
++ * @pud: Pointer to the PUD entry.
++ * @addr: Physical address to map.
++ * @prot: Page protection flags.
+  *
+  * MTRRs can override PAT memory types with 4KiB granularity. Therefore, this
+  * function sets up a huge page only if the complete range has the same MTRR
+@@ -757,6 +764,9 @@
+ 
+ /**
+  * pmd_set_huge - setup kernel PMD mapping
++ * @pmd: Pointer to the PMD entry.
++ * @addr: Physical address to map.
++ * @prot: Page protection flags.
+  *
+  * See text over pud_set_huge() above.
+  *
+@@ -786,6 +796,7 @@
+ 
+ /**
+  * pud_clear_huge - clear kernel PUD mapping when it is set
++ * @pud: Pointer to the PUD entry.
+  *
+  * Returns 1 on success and 0 on failure (no PUD map is found).
+  */
+@@ -801,6 +812,7 @@
+ 
+ /**
+  * pmd_clear_huge - clear kernel PMD mapping when it is set
++ * @pmd: Pointer to the PMD entry.
+  *
+  * Returns 1 on success and 0 on failure (no PMD map is found).
+  */
+--- a/arch/x86/mm/pat/memtype.c
++++ b/arch/x86/mm/pat/memtype.c
+@@ -682,6 +682,7 @@
+ /**
+  * pat_pfn_immune_to_uc_mtrr - Check whether the PAT memory type
+  * of @pfn cannot be overridden by UC MTRR memory type.
++ * @pfn: Page frame number whose memory type is checked.
+  *
+  * Only to be called when PAT is enabled.
+  *
+--- a/arch/x86/lib/usercopy_64.c
++++ b/arch/x86/lib/usercopy_64.c
+@@ -18,7 +18,7 @@
+ #ifdef CONFIG_ARCH_HAS_UACCESS_FLUSHCACHE
+ /**
+  * clean_cache_range - write back a cache range with CLWB
+- * @vaddr:	virtual start address
++ * @addr:	virtual start address
+  * @size:	number of bytes to write back
+  *
+  * Write back a cache range using the CLWB (cache line write back)
+--- a/fs/eventpoll.c
++++ b/fs/eventpoll.c
+@@ -2335,6 +2335,8 @@
+ 
+ /**
+  * ep_get_upwards_depth_proc - determine depth of @ep when traversed upwards
++ * @ep: Eventpoll instance to traverse.
++ * @depth: Current nesting depth.
+  */
+ static int ep_get_upwards_depth_proc(struct eventpoll *ep, int depth)
+ {
+--- a/lib/hweight.c
++++ b/lib/hweight.c
+@@ -4,8 +4,8 @@
+ #include <asm/types.h>
+ 
+ /**
+- * hweightN - returns the hamming weight of a N-bit word
+- * @x: the word to weigh
++ * __sw_hweight32 - returns the hamming weight of a 32-bit word
++ * @w: The word to weigh.
+  *
+  * The Hamming Weight of a number is the total number of bits set in it.
+  */
+--- a/drivers/base/core.c
++++ b/drivers/base/core.c
+@@ -2034,14 +2034,14 @@
+ 
+ /**
+  * __fw_devlink_relax_cycles - Relax and mark dependency cycles.
+- * @con: Potential consumer device.
++ * @con_handle: Potential consumer's fwnode.
+  * @sup_handle: Potential supplier's fwnode.
+  *
+  * Needs to be called with fwnode_lock and device link lock held.
+  *
+  * Check if @sup_handle or any of its ancestors or suppliers direct/indirectly
+- * depend on @con. This function can detect multiple cyles between @sup_handle
+- * and @con. When such dependency cycles are found, convert all device links
++ * depend on @con_handle. This function can detect multiple cyles between @sup_handle
++ * and @con_handle. When such dependency cycles are found, convert all device links
+  * created solely by fw_devlink into SYNC_STATE_ONLY device links. Also, mark
+  * all fwnode links in the cycle with FWLINK_FLAG_CYCLE so that when they are
+  * converted into a device link in the future, they are created as

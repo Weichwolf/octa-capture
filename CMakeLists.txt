@@ -153,6 +153,8 @@ set_tests_properties(gui-steppers PROPERTIES TIMEOUT 10)
 add_test(NAME gui-install COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiInstall.py"
   "${CMAKE_COMMAND}" "${CMAKE_BINARY_DIR}")
 add_test(NAME dkms-build COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/DkmsBuild.py")
+add_test(NAME kernel-vm-build COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/KernelVmBuild.py")
+set_tests_properties(kernel-vm-build PROPERTIES TIMEOUT 10)
 add_test(NAME gui-meters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs")
 add_test(NAME gui-parameters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiParameters.mjs")
 add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
