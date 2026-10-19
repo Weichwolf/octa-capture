@@ -298,6 +298,19 @@ fixtures in standard tests. Visibility/painting and macOS notification schedulin
 are modeled. The browser additionally checks unequal stereo values, release
 timing and selection across views on all four buses with modeled responses.
 
+The master section's five OUTPUT JACK labels follow the current patchbay and
+selected mixer: green for assigned pairs, light gray for other routes and dark
+gray for outputs unavailable at 192 kHz. At that rate, only pairs 1/2 and 3/4
+are available and selection uses Mixer A, regardless of stored B–D metadata.
+Accessible labels name the stored route or unavailability independently of color.
+The multiple-mixer header uses the original blue active-lamp color family.
+`tools/verify-output-jacks.py WINDOWS-GUI --macos MAC-GUI` executes both original
+selectors over 720 fixed rate/mixer/pair/route combinations each. Standard tests
+use the resulting numeric fixture; painting, notifications and device transport
+are outside this comparison. Browser response models cover all four rates,
+bus selection, polling, all nine stored routes and displayed colors. The GTK
+checker compares labels against physical routing readback at the current rate.
+
 The read-only inspector checks the running original executable's SHA256 and can
 compare either visible view. Run it with Windows Python alongside the original
 English x64 panel, then switch views and repeat:

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import {PREAMP_MAX, VOLUME, volumeIndex,
-  volumeText, parameterText, panToWire, wireToPan, panText, sensitivityIndex, preDelayText, reverbTimeText} from './parameters.js';
+  volumeText, parameterText, panToWire, wireToPan, panText, outputJackStates, sensitivityIndex, preDelayText, reverbTimeText} from './parameters.js';
 import {MeterBallistics, METER_TICK_MS, meterDb, meterY} from './meters.js';
 import {PopupMenus, PanelMenuBar} from './menus.js';
 import {PanelWarnings} from './warnings.js';
@@ -458,7 +458,6 @@ function makeMixers() {
     });
     $('#mixer-tabs').append(tab);
   }
-  $('#mixer-tabs').append(el('span', 'routing-summary'));
   for (const source of ['input', 'playback']) {
     const group = el('section', 'mixer-group');
     const title = el('div', 'group-title'); title.dataset.source = source;
@@ -504,7 +503,14 @@ function makeMasters() {
   const master = el('section', 'master-panel');
   master.append(el('div', 'group-title', 'MASTER'));
   const top = el('div', 'master-top');
-  top.append(el('div', 'output-jacks', 'OUTPUT JACK\n1/2  3/4  5/6  7/8  9/10'));
+  const jacks = el('div', 'output-jacks');
+  jacks.append(el('div', 'output-jacks-title', 'OUTPUT JACK'));
+  for (let pair = 0; pair < 5; pair++) {
+    const jack = el('span', 'output-jack', `${pair * 2 + 1}/${pair * 2 + 2}`);
+    jack.setAttribute('role', 'img');
+    jacks.append(jack);
+  }
+  top.append(jacks);
   top.append(toggle('LINK', value => mixerControl('input', 0, 'io-link', value, 'master'),
     state => state.mixers[bus].input_output_link, 'master-io-link'));
   const reverb = el('button', 'toggle master-reverb-type');
@@ -595,13 +601,19 @@ function update(result) {
   const multiActive = activeView === 'mixer' && rateIndex !== 3 && multiple;
   const autoActive = activeView === 'preamp' && Boolean(result.auto_sense?.active);
   $('#header-action').classList.toggle('lit', multiActive || autoActive);
+  $('#header-action').classList.toggle('mixer-action', activeView === 'mixer');
   $('#header-action').setAttribute('aria-pressed', String(multiActive || autoActive));
   $('#header-action').disabled = (busy && !autoActive) || (activeView === 'mixer' && rateIndex === 3);
   $('#header-action').style.visibility = activeView === 'mixer' && rateIndex === 3 ? 'hidden' : 'visible';
   for (const title of all('.group-title[data-source]')) {
     title.textContent = `${title.dataset.source === 'input' ? 'INPUT' : 'WAVE OUT'} MIXER ${'ABCD'[bus]}`;
   }
-  $('#mixer-tabs .routing-summary').textContent = `OUTPUT: ${state.output_routes.flatMap((route, pair) => route === bus ? [`${pair * 2 + 1}/${pair * 2 + 2}`] : []).join(' ') || '--'}`;
+  const jackStates = outputJackStates(rateIndex, bus, state.output_routes);
+  for (const [pair, jack] of all('.output-jack').entries()) {
+    jack.dataset.state = jackStates[pair];
+    const route = jackStates[pair] === 'unavailable' ? 'unavailable at 192 kHz' : ROUTES[state.output_routes[pair]];
+    jack.setAttribute('aria-label', `Output ${jack.textContent}: ${route}`);
+  }
   const clock = result.status?.clock_source === 'external' ?
     (result.status.clock_active ? `EXTERNAL (${result.status.sample_rate_hz} Hz)` : 'EXTERNAL (Unlock)') :
     (result.status?.clock_source === 'internal' ? 'INTERNAL' : 'UNKNOWN');

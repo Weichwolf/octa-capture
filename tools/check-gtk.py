@@ -78,7 +78,8 @@ class Check(Desktop):
         source = (ROOT / 'test/GtkPanel.mjs').read_text().replace('export async function', 'async function')
         source += (ROOT / 'test/GuiControlGeometry.mjs').read_text().replace('export ', '')
         geometry = json.loads((ROOT / 'test/data/control-geometry.json').read_text())
-        source += f'\nconst result = await checkPanel({str(self.write).lower()});'
+        outputs = json.loads((ROOT / 'test/data/output-jacks.json').read_text())
+        source += f'\nconst result = await checkPanel({str(self.write).lower()}, {json.dumps(outputs)});'
         source += f'\nresult.geometry = await checkControlGeometry({json.dumps(geometry)});return result;'
 
         def finished(view, result, _data):

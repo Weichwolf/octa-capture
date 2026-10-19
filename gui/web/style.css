@@ -29,6 +29,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focu
 .header-action .lamp { width: 23px; height: 19px; }
 .lamp { display: inline-block; width: 21px; height: 20px; border: 1px solid #555; border-radius: 4px; background: radial-gradient(ellipse at 45% 20%, #888,#494949 75%); box-shadow: inset 0 0 2px #000, 0 1px 1px #eee6; }
 .lit .lamp { background: radial-gradient(ellipse at 45% 25%,#fff4af,#d0a01b 75%); box-shadow: 0 0 4px #d6aa3370, inset 0 0 2px #fff9; }
+.header-action.mixer-action.lit .lamp { background: radial-gradient(ellipse at 45% 25%,#8cd7ff,#5f9bc0 75%); box-shadow: inset 0 0 2px #333; }
 #view-switch { margin-right: 11px; color: #ddd; background: linear-gradient(#676767,#414141); box-shadow: inset 0 0 0 2px #4d4d4d; border: 1px solid #929292; border-radius: 2px; height: 19px; min-width: 117px; font-weight: bold; font-size: 11px; font-style: italic; }
 main { position: relative; border: 4px ridge #777; height: 358px; background: #252525; }
 .preamp-view { position: relative; left: -1px; width: 968px; height: 350px; display: grid; grid-template-columns: repeat(8, 121px); padding: 0; }
@@ -107,7 +108,6 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .mixer-tabs { display: flex; align-items: flex-end; height: 19px; gap: 0; padding-left: 18px; background: #292929; color: #ccc; }
 .mixer-tabs button { position: relative; top: -2px; height: 18px; width: 129px; flex-shrink: 0; border: 1px solid #999; border-bottom: 0; border-radius: 7px 7px 0 0; background: linear-gradient(#505050,#343434); color: #bbb; padding: 1px 7px; font-size: 12px; }
 .mixer-tabs button[aria-selected=true] { background: linear-gradient(#424242,#252525); color: #fff; font-weight: bold; }
-.mixer-tabs .routing-summary { margin-left: auto; margin-right: 6px; align-self: center; font-size: 10px; }
 .mixer-groups { display: grid; grid-template-columns: 420px 420px 100px; gap: 12px; margin-left: 7px; padding: 0; height: 328px; }
 .mixer-group { min-width: 0; }
 .group-title { display: block; background: #858891; text-align: center; height: 17px; font-size: 12px; font-weight: bold; }
@@ -139,7 +139,11 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .fader .level-fill { position: absolute; bottom: 0; width: 100%; height: var(--level,0%); background: #c1bb72; }
 .master-panel { position: relative; background: #252525; }
 .master-controls { position: absolute; left: 0; top: 163px; display: grid; grid-template-columns: 41px 41px; padding: 0; gap: 8px; }
-.output-jacks { margin: 4px 3px; padding: 2px; border: 1px solid #111; border-radius: 4px; text-align: center; background: #101010; font-size: 9px; white-space: pre-line; }
+.output-jacks { position: absolute; top: 4px; left: -4px; width: 96px; height: 25px; padding: 0 1px; border: 1px solid #333; border-radius: 4px; display: grid; grid-template-columns: repeat(5,1fr); text-align: center; background: #000; }
+.output-jacks-title { grid-column: 1 / -1; font: bold 10px/11px Arial,sans-serif; }
+.output-jack { font: italic bold 9px/10px 'Arial Narrow','Liberation Sans Narrow',Arial,sans-serif; color: #c6c6c6; }
+.output-jack[data-state=assigned] { color: #00e692; }
+.output-jack[data-state=unavailable] { color: #525352; }
 .master-top { height: 143px; position: relative; display: flow-root; }
 .master-io-link { position: absolute; top: 37px; left: 33px; height: 19px; flex-direction: row-reverse; gap: 4px; }
 .master-reverb-type { position: absolute; top: 72px; left: 6px; height: 19px; flex-direction: row; gap: 3px; text-align: left; white-space: pre-line; }

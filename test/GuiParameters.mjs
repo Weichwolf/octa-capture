@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {ATTACK, RELEASE, RATIO_TEXT, PRE_DELAY, VOLUME, volumeIndex, volumeText,
-  parameterText, panToWire, wireToPan, compressorOutput, sensitivityIndex, preDelayText, reverbTimeText} from '../gui/web/parameters.js';
+  parameterText, panToWire, wireToPan, compressorOutput, sensitivityIndex, preDelayText, reverbTimeText, outputJackStates} from '../gui/web/parameters.js';
 
 assert.equal(VOLUME.length, 1025);
 assert.equal(VOLUME[0], 0);
@@ -58,3 +59,22 @@ for (const text of ['', '.', '1..2', '1e1', '-1', '50.1', '100.0', 'NaN', ' 1', 
   assert.equal(sensitivityIndex(text), null);
 }
 console.log('PASS fixed fader/parameter tables, rounding, units and compressor curve');
+
+const jackStates = ['other', 'assigned', 'unavailable'];
+const jackReference = JSON.parse(readFileSync(new URL('data/output-jacks.json', import.meta.url), 'utf8'));
+let jackCases = 0;
+for (let rate = 0; rate < 4; rate++) {
+  for (let bus = 0; bus < 4; bus++) {
+    for (let pair = 0; pair < 5; pair++) {
+      for (let route = 0; route < 9; route++) {
+        const routes = Array.from({length: 5}, (_, index) => (index + route) % 9);
+        routes[pair] = route;
+        assert.equal(outputJackStates(rate, bus, routes)[pair], jackStates[jackReference.states[rate][bus][pair][route]],
+          'Output-jack state matches actual Windows/macOS selector execution');
+        jackCases++;
+      }
+    }
+  }
+}
+assert.equal(jackCases, 720);
+console.log('PASS 720 original output-jack selectors: all rates, mixers, pairs and routes');

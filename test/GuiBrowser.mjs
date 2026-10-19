@@ -23,6 +23,7 @@ import {checkDialogWindows} from './GuiDialogs.mjs';
 import {checkControlHits} from './GuiControlHits.mjs';
 import {checkControlGeometry} from './GuiControlGeometry.mjs';
 import {checkChannelFaders} from './GuiChannelFaders.mjs';
+import {checkOutputJacks} from './GuiOutputJacks.mjs';
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -86,6 +87,7 @@ try {
   const controlGeometry = await browser.evaluate(`(${checkControlGeometry.toString()})(${JSON.stringify(geometryReference)})`);
   console.log(`PASS original main-panel control bounds: ${controlGeometry.checked} matched, ${controlGeometry.hidden} hidden at this rate`);
   await checkChannelFaders(browser, api);
+  await checkOutputJacks(browser, api);
   const devices = (await api('/api/devices')).devices;
   assert.equal(devices.filter(device=>device.selected).length, 1, 'Selected card is discovered through sysfs');
   await browser.key('#device-status', 'ContextMenu');

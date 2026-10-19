@@ -36,7 +36,16 @@ async function checkModalShortcuts(id, check) {
   }
 }
 
-export async function checkPanel(write) {
+function checkOutputJacks(state, reference, check) {
+  const rate = parseInt(state.payload_hex.slice(4, 6), 16);
+  const bus = [...document.querySelectorAll('#mixer-tabs > button')].findIndex(node => node.getAttribute('aria-selected') === 'true');
+  const names = ['other', 'assigned', 'unavailable'];
+  const actual = [...document.querySelectorAll('.output-jack')].map(node => node.dataset.state);
+  const expected = state.output_routes.map((route, pair) => names[reference.states[rate][bus][pair][route]]);
+  check(actual.length === 5 && JSON.stringify(actual) === JSON.stringify(expected), 'GTK output-jack states match physical routing readback');
+}
+
+export async function checkPanel(write, outputReference) {
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   const until = async (predicate, name) => {
     const deadline = Date.now() + 12000;
@@ -99,6 +108,7 @@ export async function checkPanel(write) {
   document.querySelector('#view-switch').click();
   check(!document.querySelector('#mixer-view').hidden, 'Direct Mixer opened');
   check(document.querySelectorAll('.mixer-strip').length === 20, 'Twenty mixer strips');
+  checkOutputJacks(initial, outputReference, check);
   await until(() => document.querySelectorAll('.level-lane:not(.stale)').length === mixerChannels * 2,
     'all input/playback PCM meter lanes');
   document.querySelector('[data-menu="driver"]').click();

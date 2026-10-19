@@ -130,6 +130,12 @@ also verify unequal stereo values and thumb-release selection on all four buses.
 Host visibility/painting and macOS notification scheduling are modeled.
 Owner-painted artwork and native Windows fonts/DPI remain outside that comparison;
 this is not complete visual parity.
+The output-jack display now projects physical routing readback to five colored
+pair labels. Its assigned/other/unavailable decisions match 720 executed
+Windows/macOS selector cases each, including all rates and routes and the
+192 kHz Mixer-A override. Browser reply models check display/polling across all
+four rates and mixers; GTK checks actual routing readback at the current rate.
+This is display evidence, not physical output-signal validation.
 Native Debian at 44.1/48 kHz also matches 144 actual Playwright pointer events across
 the four knob families and all Shift/Ctrl combinations, with independent device
 readback and complete raw recovery. This checks control values, not analog response.

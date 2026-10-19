@@ -211,9 +211,9 @@ between input/playback groups. Dials measure 25x25, switch skins 23x19, faders
 value windows are included.
 The original mixer header reads VS PREAMP with an upward arrow.
 The private observations remain under build/wine-reference/.
-These measurements exclude native Windows font/DPI rendering, owner-painted
-captions/backgrounds. They do
-not establish physical audio response or Windows device communication.
+These measurements exclude native Windows font/DPI rendering and owner-painted
+captions/backgrounds. They do not establish physical audio response or Windows
+device communication.
 
 The shared master readout getter 0x140019900 reads a source-specific selected
 side from state offsets 0x144c/0x1450. Callback 0x14001f040 selects that side;
@@ -228,6 +228,18 @@ display matches. Visibility/painting and macOS notification scheduling are
 modeled; these checks do not exercise original device transport. Wine/X11
 observations with unequal in-memory model values additionally show the shared
 readout changing to the clicked thumb's unchanged value on release.
+
+Output-jack status selector 0x14001a860 and macOS CDispDMixOut::GetStat
+(0x10001bb4e) select three artwork states per output pair: assigned to the
+selected mixer, assigned elsewhere, or unavailable. At 192 kHz, pairs above
+3/4 are unavailable and the effective mixer is A even when cached selection
+contains B-D. tools/verify-output-jacks.py executes 720 fixed cases per original,
+covering four rates, four mixers, five pairs and all nine routes; HTML states
+match both. Painting/notifications/transport are not executed by this check.
+Wine's offline model additionally shows green assigned text, light-gray other
+routes and dark-gray unavailable pairs. The HTML panel uses its own CSS/text
+with these state colors and a blue multiple-mixer active lamp. Native font and
+bitmap rendering remain outside parity claims.
 
 Windows driver compatibility checks
 -----------------------------------

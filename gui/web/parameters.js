@@ -152,6 +152,12 @@ export function panText(position) {
   return position === 100 ? '0%' : `${Math.abs(position - 100)}%${position < 100 ? 'L' : 'R'}`;
 }
 
+export function outputJackStates(rateIndex, bus, routes) {
+  const selected = rateIndex === 3 ? 0 : bus;
+  return routes.map((route, pair) => rateIndex === 3 && pair >= 2 ? 'unavailable' :
+    route === selected ? 'assigned' : 'other');
+}
+
 // Both reference panels truncate twice the entered dB value to the wire index.
 // The Windows edit is four characters wide and commits on Enter/focus loss.
 export function sensitivityIndex(text) {
