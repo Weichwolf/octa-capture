@@ -24,6 +24,8 @@ class Peer:
         self.info = {'server_name': 'pulseaudio'}
         self.streams = {'sink': [], 'source': []}
         self.failure = None
+        self.profile = PROFILE
+        self.force_off = False
         self.calls = []
         self.load('module-alsa-card', {'rate': '44100', 'profile_set': '/own/profile', 'ignore_dB': 'no'})
         for kind, direction in (('sink', 'playback'), ('source', 'recording')):
@@ -55,17 +57,23 @@ class Peer:
             self.node('source', owner, arguments['sink_name'] + '.monitor')
         else:
             self.owner = owner
-            for kind, direction, count in (('sink', 'playback', 4 if self.rate == 192000 else 10),
-                                            ('source', 'recording', 4 if self.rate == 192000 else 12)):
-                for channel in range(0, count, 2):
-                    node = self.node(kind, owner, f'alsa_{kind}.unit.{direction}-{channel+1}-{channel+2}')
-                    if kind == 'sink':
-                        self.node('source', owner, node['name'] + '.monitor')
+            self.profile = 'off' if self.force_off else PROFILE
+            if self.profile == PROFILE:
+                self.endpoints(owner)
         return owner
+
+    def endpoints(self, owner):
+        for kind, direction, count in (('sink', 'playback', 4 if self.rate == 192000 else 10),
+                                      ('source', 'recording', 4 if self.rate == 192000 else 12)):
+            for channel in range(0, count, 2):
+                node = self.node(kind, owner, f'alsa_{kind}.unit.{direction}-{channel+1}-{channel+2}')
+                if kind == 'sink':
+                    self.node('source', owner, node['name'] + '.monitor')
 
     def document(self, category):
         if category == 'cards':
-            return [{'owner_module': self.owner, 'active_profile': PROFILE, 'properties': {'alsa.card': '0'}}]
+            return [{'owner_module': self.owner, 'name': 'alsa_card.unit', 'active_profile': self.profile,
+                     'properties': {'alsa.card': '0'}}]
         if category in ('sinks', 'sources'):
             return copy.deepcopy(self.nodes[category[:-1]])
         return copy.deepcopy(self.streams['sink' if category == 'sink-inputs' else 'source'])
@@ -86,6 +94,13 @@ class Peer:
                     if stream[kind] in removed and fallback:
                         stream[kind] = fallback['index']
             del self.loaded[owner]
+        elif operation == 'set-card-profile':
+            if self.failure == 'activate':
+                self.failure = None
+                raise ValueError('Injected profile activation failure')
+            self.profile = arguments[2]
+            if self.profile == PROFILE:
+                self.endpoints(self.owner)
         elif operation.startswith('set-default-'):
             self.info[f'default_{operation.removeprefix("set-default-")}_name'] = arguments[1]
         elif operation.startswith('move-'):
@@ -263,9 +278,11 @@ class Pairing(unittest.TestCase):
         self.assertEqual(original, before)
 
     def test_success_and_clock_or_card_failure_restore_streams_and_levels(self):
-        for failure in (None, 'prepare', 'load'):
-            with self.subTest(failure=failure):
+        for failure, force_off in ((None, False), ('prepare', False), ('load', False),
+                                   (None, True), ('load', True), ('activate', True)):
+            with self.subTest(failure=failure, force_off=force_off):
                 peer = Peer()
+                peer.force_off = force_off
                 before = peer.state()
                 controller = audio.Controller(Path('/unused'), Device('serial:unit', 'OCTACAPTURE', 0, 'unit'))
                 controller.files = Mock(profile=Path('/own/profile'))

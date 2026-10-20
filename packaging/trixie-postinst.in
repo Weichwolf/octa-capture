@@ -6,8 +6,10 @@ if [ "$1" = configure ]; then
     /usr/lib/dkms/common.postinst snd-octa-capture '@VERSION@' \
         /usr/share/doc/octa-capture '' "${2-}"
     if [ -z "${DPKG_ROOT:-}" ]; then
+        udev_active=false
         if command -v udevadm >/dev/null 2>&1 && udevadm control --ping >/dev/null 2>&1; then
             udevadm control --reload-rules
+            udev_active=true
         fi
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload
@@ -17,6 +19,10 @@ if [ "$1" = configure ]; then
                 device=${vendor%/idVendor}
                 if [ "$(cat "$vendor")" != 0582 ] || [ "$(cat "$device/idProduct")" != 0120 ]; then
                     continue
+                fi
+                if "$udev_active"; then
+                    udevadm trigger --action=change --settle --subsystem-match=sound \
+                        --parent-match="$device" --sysname-match='card[0-9]*'
                 fi
                 flock --exclusive --timeout 20 /run/octa-capture-activate.lock /usr/sbin/octa-capture-activate
                 break

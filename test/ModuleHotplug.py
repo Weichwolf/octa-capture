@@ -19,14 +19,15 @@ class Hotplug(unittest.TestCase):
             rules = root / 'rules'
             rules.mkdir()
             shutil.copyfile(ROOT / 'packaging/70-octa-capture.rules', rules / '70-octa-capture.rules')
+            shutil.copyfile(ROOT / 'packaging/89-octa-capture-audio.rules', rules / '89-octa-capture-audio.rules')
             device = '/devices/platform/usb-test/usb1/1-1'
             interface = device + '/1-1:1.0'
             card = interface + '/sound/card0'
-            syspath = '/sys' + card + '/' + node
+            syspath = '/sys' + (card + '/' + node if node else card)
             fixture = root / 'sound.umockdev'
             fixture.write_text(
-                f'P: {card}/{node}\nN: snd/{node}\nE: SUBSYSTEM=sound\n'
-                f'E: DEVNAME=/dev/snd/{node}\nE: MAJOR=116\nE: MINOR=5\n\n'
+                (f'P: {card}/{node}\nN: snd/{node}\nE: SUBSYSTEM=sound\n'
+                 f'E: DEVNAME=/dev/snd/{node}\nE: MAJOR=116\nE: MINOR=5\n\n' if node else '') +
                 f'P: {card}\nE: SUBSYSTEM=sound\n\n'
                 f'P: {interface}\nE: SUBSYSTEM=usb\nE: DEVTYPE=usb_interface\nE: DRIVER={driver}\n'
                 f'L: driver=../../../../../../bus/usb/drivers/{driver}\n\n'
@@ -45,6 +46,15 @@ class Hotplug(unittest.TestCase):
         properties = self.evaluate()
         self.assertEqual(properties.get('SYSTEMD_WANTS'), 'octa-capture-activate@controlC0.service')
         self.assertIn('systemd', properties.get('TAGS', ''))
+
+    def test_only_octa_cards_defer_pcm_opening_until_the_device_clock_is_read(self):
+        for driver in ('snd-usb-audio', 'snd-octa-capture'):
+            properties = self.evaluate(node=None, driver=driver)
+            self.assertEqual(properties.get('PULSE_PROFILE_SET'), 'octa-capture-pending.conf')
+            self.assertEqual(properties.get('PULSE_MODARGS'), 'use_ucm=no profile=off')
+        for parameters in ({'node': None, 'vendor': '1234'}, {'node': None, 'product': 'ffff'},
+                           {'node': None, 'action': 'remove'}, {'node': 'controlC0'}):
+            self.assertNotIn('PULSE_MODARGS', self.evaluate(**parameters))
 
     def test_dedicated_and_unrelated_devices_never_request_rebinding(self):
         for parameters in ({'driver': 'snd-octa-capture'}, {'driver': 'unrelated-driver'},

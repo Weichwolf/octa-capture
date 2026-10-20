@@ -296,6 +296,11 @@ same-rate request; a stable same-rate request only checks readiness. It polls
 for the requested rate and clear flags, then checks readiness before selecting
 audio alternate settings. It rejects status flag bit 1 rather than overriding
 that condition.
+Native physical power-cycle observation confirms that the device returns at
+the saved 48 kHz before the host sends 40/03/0008 with payload 40 44 ac 00,
+changing it to 44.1 kHz. Default PulseAudio profile probing can therefore
+overwrite the saved rate before the user service reads it. The combined Debian
+package defers that probing until device-rate-specific stereo setup is ready.
 The corrected native Debian 6.12 module passes quiet PCM/meter lifecycle checks
 at all four rates, with complete raw state and the original clock restored.
 Busy/error states are tested offline, not forced on hardware.

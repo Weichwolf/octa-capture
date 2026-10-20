@@ -50,6 +50,14 @@ def load_module(name, arguments):
     return pulse('load-module', name, *module_arguments(arguments))
 
 
+def activate_profile(owner, profile):
+    card = next((card for card in document('cards') if str(card['owner_module']) == str(owner)), None)
+    if card is None:
+        raise ValueError('The PulseAudio card disappeared during setup.')
+    if card['active_profile'] != profile:
+        pulse('set-card-profile', card['name'], profile)
+
+
 def pair_key(node, kind):
     name = node['name']
     found = re.search(r'(playback|recording)[-_](\d+)[-_](\d+)(?:\.monitor)?$', name)
@@ -249,6 +257,8 @@ class Controller:
             self.files.install(self.device.card_id, rate)
             self.prepare(rate)
             new_owner = load_module('module-alsa-card', arguments)
+            # Device-specific udev defaults keep each new card off until this point.
+            activate_profile(new_owner, PROFILE)
             actual = ([node for node in document('sinks') if str(node.get('owner_module')) == new_owner],
                       [node for node in document('sources') if str(node.get('owner_module')) == new_owner
                        and not node['name'].endswith('.monitor')])
@@ -262,7 +272,8 @@ class Controller:
             self.files.restore()
             if unloaded:
                 self.prepare(previous_rate)
-                load_module(*old_modules[0])
+                restored_owner = load_module(*old_modules[0])
+                activate_profile(restored_owner, card['active_profile'])
                 for name, arguments in old_modules[1:]:
                     load_module(name, arguments)
                 # Old remapped clients may belong to restored child modules.

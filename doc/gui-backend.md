@@ -16,6 +16,9 @@ Startup and reconnection read a fresh bulk state before showing device controls.
 The device owns preamp, mixer, routing and clock settings; the panel does not
 restore a previous device-state cache. Automatic desktop audio setup follows the
 current hardware sample rate. Only an explicit rate change requests a new clock.
+The combined Debian package defers PulseAudio's initial PCM probing with a
+device-specific inactive profile. The user service reads the hardware clock,
+loads the matching stereo configuration, then explicitly activates its profile.
 
 ## Private process protocol
 

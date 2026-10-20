@@ -27,6 +27,11 @@ def stage(archive, target):
             shutil.copytree(prepared / name, target / name, dirs_exist_ok=True)
         shutil.rmtree(target / 'usr/share/doc/octa-capture-dkms')
         shutil.copyfile(ROOT / 'kernel/README.md', target / 'usr/share/doc/octa-capture/README.driver.md')
+        shutil.copyfile(ROOT / 'packaging/89-octa-capture-audio.rules',
+                        target / 'usr/lib/udev/rules.d/89-octa-capture-audio.rules')
+        profiles = target / 'usr/share/pulseaudio/alsa-mixer/profile-sets'
+        profiles.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / 'packaging/octa-capture-pending.conf', profiles / 'octa-capture-pending.conf')
 
 
 def main():

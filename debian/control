@@ -45,7 +45,7 @@ Depends:
  gir1.2-gtk-4.0 (>= 4.10),
  gir1.2-webkit-6.0,
  fonts-liberation,
- pulseaudio,
+ pulseaudio (>= 17.0),
  pulseaudio-utils,
 Conflicts: octa-capture-dkms
 Replaces: octa-capture-dkms

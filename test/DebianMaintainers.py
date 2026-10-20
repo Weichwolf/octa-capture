@@ -46,9 +46,10 @@ class Maintainers(unittest.TestCase):
         result, calls = self.configure()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([line.split()[0] for line in calls],
-                         ['common.postinst', 'udevadm', 'udevadm', 'systemctl', 'octa-capture-activate',
+                         ['common.postinst', 'udevadm', 'udevadm', 'systemctl', 'udevadm', 'octa-capture-activate',
                           'deb-systemd-invoke', 'deb-systemd-invoke'])
         self.assertIn('snd-octa-capture 0.1.0', calls[0])
+        self.assertIn('--parent-match=/sys/bus/usb/devices/3-3 --sysname-match=card[0-9]*', calls[4])
 
     def test_absent_device_still_configures_without_binding_anything(self):
         result, calls = self.configure(device=False)
