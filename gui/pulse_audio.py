@@ -17,6 +17,7 @@ import subprocess
 import sys
 
 from .devices import discover
+from .package_migration import migrate_legacy_service
 from .pulse_config import Files, PROFILE, channel_counts
 
 
@@ -309,9 +310,15 @@ def change_rate(binary, port, rate):
     Controller(binary, device).ensure(rate)
 
 
-def reconcile(binary):
+def reconcile(binary, sound=Path('/sys/class/sound')):
     for device in discover():
-        Controller(binary, device).ensure()
+        try:
+            driver = (sound / f'card{device.card_index}' / 'device/driver').resolve(strict=True)
+        except OSError:
+            continue
+        # Hotplug activation replaces a generic card with a new dedicated card.
+        if driver.name == 'snd-octa-capture':
+            Controller(binary, device).ensure()
 
 
 def watch(binary):
@@ -353,6 +360,7 @@ def main(*, default_bin_dir=None):
     parser.add_argument('--bin-dir', type=Path, default=default_bin_dir or Path(__file__).resolve().parents[1] / 'build/release')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--watch', action='store_true')
+    mode.add_argument('--packaged-service', action='store_true', help='run the packaged user service and migrate its legacy unit')
     mode.add_argument('--install', action='store_true')
     mode.add_argument('--rate', type=int, help='coordinate a hardware sample-rate change')
     parser.add_argument('--device', default='hw:CARD=OCTACAPTURE')
@@ -361,7 +369,9 @@ def main(*, default_bin_dir=None):
     try:
         if args.install:
             install_service(args.bin_dir)
-        elif args.watch:
+        elif args.watch or args.packaged_service:
+            if args.packaged_service:
+                migrate_legacy_service()
             watch(args.bin_dir)
         elif args.rate is not None:
             change_rate(args.bin_dir, args.device, args.rate)

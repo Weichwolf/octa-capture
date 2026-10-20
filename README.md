@@ -50,6 +50,20 @@ ALSA card renumbering, with automatic same-unit reconnection.
 
 ## Build and install
 
+For Debian 13 amd64, the combined package installs the GUI, device tools,
+Linux 6.12 DKMS sources, hotplug activation and the regular-user stereo-pair
+service. It uses the same unprivileged `sbuild` workflow as the local btop
+package; see [the Debian build guide](debian/README.source).
+
+```bash
+python3 tools/build-debian.py --jobs 2
+sudo apt install ./build/debian-trixie/octa-capture_*_amd64.deb
+```
+
+The package configures the driver on installation and after reconnecting the
+device. GUI and audio services run as the desktop user. Existing settings and
+presets are retained. DKMS builds only the external module for matching headers.
+
 Userspace uses C++23, CMake/Ninja, LLVM 19, ALSA and libusb; kernel additions use
 C/Kbuild. Development packages include `clang-19`, `clang-tidy-19`,
 `clang-format-19`, `libclang-rt-19-dev`, `build-essential`, `cmake`, `ninja-build`,

@@ -1,0 +1,39 @@
+Local Debian 13 package
+======================
+
+This package follows the local btop packaging workflow: debhelper 13, Debian
+build flags, source packages and an unprivileged sbuild Trixie chroot. VERSION
+defines the upstream version; debian/changelog supplies the Debian revision.
+The package includes the GUI, native tools and private Linux 6.12 ALSA sources.
+It builds only the external module through DKMS, never the installed kernel.
+
+Install build tools:
+  sudo apt install sbuild mmdebstrap uidmap devscripts debhelper lintian
+
+Create the build environment as a regular user, or reuse the btop chroot:
+  mkdir -p ~/.cache/sbuild
+  mmdebstrap --mode=unshare --variant=buildd --include=ca-certificates \
+    --aptopt='APT::Update::Error-Mode "any"' --arch=amd64 --format=tar \
+    --skip=output/mknod trixie ~/.cache/sbuild/trixie-amd64.tar \
+    'deb https://deb.debian.org/debian trixie main' \
+    'deb https://deb.debian.org/debian trixie-updates main' \
+    'deb https://security.debian.org/debian-security trixie-security main'
+
+Build from the checkout, including intended uncommitted source changes:
+  python3 tools/build-debian.py --jobs 2
+The output directory must be new. Git-ignored files, manufacturer downloads,
+local analysis and previous build artifacts are excluded from the source.
+The source package records its exact inputs and can be rebuilt independently.
+
+Inspect and simulate installation before installing the amd64 package:
+  lintian build/debian-trixie/*.changes
+  sudo apt install --simulate ./build/debian-trixie/octa-capture_*_amd64.deb
+  sudo apt install ./build/debian-trixie/octa-capture_*_amd64.deb
+
+Installation configures DKMS, device-specific udev access, automatic dedicated
+driver activation and the Xfce launcher. The packaged stereo-pair service runs
+as each desktop user. Its first start retires only the exact legacy unit
+created by octa-pulse-pairs --install, retaining a backup; custom units remain.
+Personal device settings and presets are not removed with the package.
+The supported kernel series is 6.12; Secure Boot requires the DKMS signing key
+to be enrolled according to the administrator's Debian setup.

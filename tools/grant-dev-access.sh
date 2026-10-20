@@ -17,6 +17,7 @@ if [[ $(modinfo -F name "$module_file") != snd_octa_capture ]]; then
     exit 1
 fi
 tools_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(dirname -- "$tools_dir")
 
 rules_file=$(mktemp)
 trap 'rm -f -- "$rules_file"' EXIT
@@ -32,4 +33,11 @@ printf '%s\n' "$module_file" > /etc/octa-capture-dev-module
 chown root:root /etc/octa-capture-dev-module
 chmod 0644 /etc/octa-capture-dev-module
 install -o root -g root -m 0440 "$rules_file" /etc/sudoers.d/octa-capture-dev
+install -D -o root -g root -m 0755 "$tools_dir/activate-module.sh" /usr/sbin/octa-capture-activate
+install -D -o root -g root -m 0644 "$repo_dir/packaging/70-octa-capture.rules" /usr/lib/udev/rules.d/70-octa-capture.rules
+install -D -o root -g root -m 0644 "$repo_dir/packaging/octa-capture-activate@.service" /usr/lib/systemd/system/octa-capture-activate@.service
+if [[ -d /run/systemd/system ]]; then
+    systemctl daemon-reload
+fi
+udevadm control --reload-rules
 echo "Granted OCTA-CAPTURE development commands to $target_user."

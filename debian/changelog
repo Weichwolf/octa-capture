@@ -1,0 +1,6 @@
+octa-capture (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Package the native control panel and Linux 6.12 DKMS sources together.
+  * Configure dedicated-driver hotplug activation and user audio services.
+
+ -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Tue, 20 Oct 2026 16:30:00 +0200

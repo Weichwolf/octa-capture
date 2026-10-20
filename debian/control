@@ -1,0 +1,57 @@
+Source: octa-capture
+Section: sound
+Priority: optional
+Maintainer: Weichwolf <56591353+Weichwolf@users.noreply.github.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ clang-19,
+ clang-tidy-19,
+ clang-format-19,
+ cmake,
+ ninja-build,
+ pkgconf,
+ libasound2-dev,
+ libusb-1.0-0-dev,
+ linux-source-6.12,
+ python3,
+ nodejs,
+ node-undici,
+ node-chalk,
+ node-js-yaml,
+ node-strip-ansi,
+ node-text-table,
+ eslint,
+Standards-Version: 4.7.2
+Homepage: https://github.com/Weichwolf/octa-capture
+Vcs-Browser: https://github.com/Weichwolf/octa-capture
+Vcs-Git: https://github.com/Weichwolf/octa-capture.git
+Rules-Requires-Root: no
+
+Package: octa-capture
+Architecture: amd64
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ init-system-helpers (>= 1.66~),
+ dkms (>= 3.0),
+ kmod,
+ make,
+ gcc-14,
+ linux-headers-6.12.113+deb13-amd64 | linux-headers-amd64,
+ udev,
+ python3,
+ python3-gi,
+ python3-xlib,
+ gir1.2-gtk-4.0 (>= 4.10),
+ gir1.2-webkit-6.0,
+ fonts-liberation,
+ pulseaudio,
+ pulseaudio-utils,
+Conflicts: octa-capture-dkms
+Replaces: octa-capture-dkms
+Description: Roland OCTA-CAPTURE driver and graphical control panel
+ Standalone ALSA USB audio/MIDI driver and GTK4/HTML control panel for the
+ Roland OCTA-CAPTURE UA-1010. Includes a private ALSA source snapshot for
+ Linux 6.12; DKMS builds the external module without rebuilding the kernel.
+ Installs device-specific hotplug activation, desktop integration and a
+ regular-user PulseAudio stereo-pair service.

@@ -1,0 +1,3 @@
+debian/octa-capture.postinst
+debian/octa-capture.prerm
+debian/octa-capture.postrm

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-only
+[Unit]
+Description=OCTA-CAPTURE stereo playback and recording pairs
+After=pulseaudio.service
+Wants=pulseaudio.service
+StartLimitIntervalSec=0
+ConditionUser=!root
+
+[Service]
+ExecStart=/usr/bin/octa-pulse-pairs --packaged-service
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

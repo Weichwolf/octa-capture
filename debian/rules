@@ -1,0 +1,35 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: GPL-2.0-only
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+# Match the project's mandatory Fortify level while retaining Debian's other flags.
+export DEB_CPPFLAGS_MAINT_STRIP = -D_FORTIFY_SOURCE=2
+export DEB_CPPFLAGS_MAINT_APPEND = -D_FORTIFY_SOURCE=3
+# Trixie's dwz cannot optimize Clang's DWARF 5 .debug_addr sections.
+export DEB_CXXFLAGS_MAINT_APPEND = -gdwarf-4
+export CC = clang-19
+export CXX = clang++-19
+
+%:
+	dh $@ --buildsystem=cmake+ninja --builddirectory=build/debian
+
+override_dh_auto_configure:
+	test "$$(dpkg-parsechangelog -S Version | cut -d- -f1)" = "$$(cat VERSION)"
+	dh_auto_configure -- -DCMAKE_BUILD_TYPE=Release -DOCTA_SANITIZER=none -DOCTA_FUZZING=OFF -DCMAKE_INSTALL_LIBEXECDIR=libexec
+
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/octa-capture
+	python3 tools/stage-debian.py /usr/src/linux-source-6.12.tar.xz debian/octa-capture
+	install -D -m 0644 packaging/octa-capture-audio.service debian/octa-capture/usr/lib/systemd/user/octa-capture-audio.service
+	sed 's/@VERSION@/'"$$(cat VERSION)"'/g' packaging/trixie-postinst.in > debian/octa-capture.postinst
+	sed 's/@VERSION@/'"$$(cat VERSION)"'/g' packaging/trixie-prerm.in > debian/octa-capture.prerm
+	install -m 0755 packaging/trixie-postrm.in debian/octa-capture.postrm
+
+override_dh_auto_test:
+	ctest --test-dir build/debian --output-on-failure
+
+override_dh_installsystemd:
+	dh_installsystemd --no-start
+
+override_dh_fixperms:
+	dh_fixperms
+	find debian/octa-capture/usr/libexec/octa-capture/gui -type f -exec chmod 0644 {} +

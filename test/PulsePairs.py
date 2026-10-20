@@ -120,6 +120,77 @@ class Peer:
 
 
 class Pairing(unittest.TestCase):
+    def test_hotplug_waits_for_the_dedicated_card_without_opening_generic_audio(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            interface = root / 'card0/device'
+            interface.mkdir(parents=True)
+            for name in ('snd-usb-audio', 'snd-octa-capture'):
+                (root / name).mkdir()
+            link = interface / 'driver'
+            device = Device('serial:unit', 'OCTACAPTURE', 0, 'unit')
+            with patch.object(audio, 'discover', return_value=[device]), patch.object(audio, 'Controller') as controller:
+                link.symlink_to(root / 'snd-usb-audio')
+                audio.reconcile('/unused', root)
+                controller.assert_not_called()
+                link.unlink()
+                link.symlink_to(root / 'snd-octa-capture')
+                audio.reconcile('/unused', root)
+                controller.assert_called_once_with('/unused', device)
+                controller.return_value.ensure.assert_called_once_with()
+                controller.reset_mock()
+                link.unlink()
+                audio.reconcile('/unused', root)
+                controller.assert_not_called()
+
+    def test_packaged_service_retires_only_the_exact_legacy_unit_and_keeps_a_backup(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(audio.subprocess, 'run') as run:
+            home = Path(directory)
+            unit = home / '.config/systemd/user/octa-pulse-pairs.service'
+            unit.parent.mkdir(parents=True)
+            original = ('[Unit]\nDescription=OCTA-CAPTURE PulseAudio stereo pairs\n[Service]\n'
+                        f'ExecStart="{sys.executable}" "{home}/.local/bin/octa-pulse-pairs" --watch\n')
+            with patch.object(audio.Path, 'home', return_value=home):
+                unit.write_text(original.replace('--watch', '--rate 48000'))
+                audio.migrate_legacy_service()
+                run.assert_not_called()
+                unit.write_text(original)
+                audio.migrate_legacy_service()
+                self.assertFalse(unit.exists())
+                self.assertEqual(unit.with_suffix('.service.before-package').read_text(), original)
+                self.assertEqual([call.args[0] for call in run.call_args_list], [
+                    ['systemctl', '--user', 'stop', unit.name], ['systemctl', '--user', 'disable', unit.name],
+                    ['systemctl', '--user', 'daemon-reload']])
+                run.reset_mock()
+                audio.migrate_legacy_service()
+                run.assert_not_called()
+
+    def test_package_launcher_migration_preserves_custom_files_and_never_overwrites_backups(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home, system = Path(directory) / 'home', Path(directory) / 'system'
+            (home / '.local/bin').mkdir(parents=True)
+            (system / 'bin').mkdir(parents=True)
+            for name in ('octa-capture', 'octa-capture-http', 'octa-pulse-pairs'):
+                (home / '.local/bin' / name).write_text('generated launcher\n')
+                (system / 'bin' / name).write_text('generated launcher\n')
+            (home / '.local/bin/octa-capture-http').write_text('custom launcher\n')
+            backup = home / '.local/bin/octa-capture.before-package'
+            backup.write_text('older backup\n')
+            name = 'org.octa_capture.ControlPanel.desktop'
+            old, new = home / '.local/share/applications' / name, system / 'share/applications' / name
+            old.parent.mkdir(parents=True)
+            new.parent.mkdir(parents=True)
+            old.write_text(f'[Desktop Entry]\nExec="{home}/.local/bin/octa-capture"\n')
+            new.write_text(f'[Desktop Entry]\nExec="{system}/bin/octa-capture"\n')
+            with patch.object(audio.Path, 'home', return_value=home):
+                audio.migrate_legacy_service(system)
+                self.assertFalse((home / '.local/bin/octa-capture').exists())
+                self.assertEqual(backup.read_text(), 'older backup\n')
+                self.assertEqual(backup.with_name(backup.name + '.1').read_text(), 'generated launcher\n')
+                self.assertEqual((home / '.local/bin/octa-capture-http').read_text(), 'custom launcher\n')
+                self.assertFalse(old.exists())
+                self.assertTrue(old.with_name(old.name + '.before-package').is_file())
+
     def test_native_profiles_bind_each_pair_once_at_all_rates(self):
         for rate in (44100, 48000, 96000, 192000):
             alsa, profile = configuration('OCTACAPTURE', rate)
