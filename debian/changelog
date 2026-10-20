@@ -1,3 +1,9 @@
+octa-capture (0.1.0-1~trixie2) trixie; urgency=medium
+
+  * Follow the device clock on startup and reconnection instead of a saved rate.
+
+ -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Tue, 20 Oct 2026 17:50:00 +0200
+
 octa-capture (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Package the native control panel and Linux 6.12 DKMS sources together.

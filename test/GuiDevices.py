@@ -94,6 +94,20 @@ class Selection(unittest.TestCase):
         self.devices = (Device('1-1', 'OCTACAPTURE', 0, 'FIRST'),
                         Device('1-2', 'OCTACAPTURE_1', 2, 'SECOND'))
 
+    def test_startup_and_reconnection_read_device_state_without_restoring_old_settings(self):
+        self.application._clock_status = Mock(return_value=None)
+        first = {'gain': 17, 'stereo_link': True}
+        restored = {'gain': 42, 'stereo_link': False}
+        self.old.request.side_effect = [{'state': first}, DeviceError('Disconnected'), {'state': restored}]
+        self.assertEqual(self.application.snapshot()['state'], first)
+        self.application._updated = 0
+        with self.assertRaises(DeviceError):
+            self.application.snapshot()
+        self.assertIsNone(self.application._cached)
+        self.application._retry_after = 0
+        self.assertEqual(self.application.snapshot()['state'], restored)
+        self.assertEqual([call.args for call in self.old.request.call_args_list], [('state',)] * 3)
+
     def test_selection_closes_old_peer_and_queries_only_new_card(self):
         new = Mock()
         new.auto_sense_activity.return_value = None

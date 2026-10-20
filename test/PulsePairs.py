@@ -2,6 +2,7 @@
 """Native channel bindings and faulted PulseAudio clock transactions, offline."""
 
 import copy
+from contextlib import nullcontext
 from pathlib import Path
 import sys
 import tempfile
@@ -120,6 +121,25 @@ class Peer:
 
 
 class Pairing(unittest.TestCase):
+    def test_startup_uses_device_clock_instead_of_saved_desktop_rate(self):
+        peer = Peer()
+        controller = audio.Controller(Path('/unused'), Device('serial:unit', 'OCTACAPTURE', 0, 'unit'))
+        controller.files = Mock(profile=Path('/own/profile'))
+        controller.files.preference.read_text.return_value = '96000'
+        controller.status = lambda: peer.rate
+        controller.switch = Mock()
+        with patch.object(audio, 'device_lock', return_value=nullcontext()), \
+                patch.object(audio, 'pulse', peer.pulse), patch.object(audio, 'document', peer.document), \
+                patch.object(audio, 'modules', lambda: copy.deepcopy(peer.loaded)):
+            controller.ensure()
+            controller.switch.assert_not_called()
+            peer.loaded[peer.owner][1]['rate'] = '48000'
+            controller.ensure()
+            self.assertEqual(controller.switch.call_args.args[1:3], (44100, 44100))
+            controller.ensure(96000)
+            self.assertEqual(controller.switch.call_args.args[1:3], (96000, 44100))
+        controller.files.preference.read_text.assert_not_called()
+
     def test_hotplug_waits_for_the_dedicated_card_without_opening_generic_audio(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

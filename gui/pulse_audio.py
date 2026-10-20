@@ -132,7 +132,8 @@ class Controller:
         with device_lock(self.device.card_id):
             card = self.card()
             current = self.status()
-            rate = requested or (int(self.files.preference.read_text()) if self.files.preference.exists() else current)
+            # Reconnection follows the hardware; only an explicit request changes its clock.
+            rate = current if requested is None else requested
             channel_counts(rate)
             if card is None:
                 if requested is not None:

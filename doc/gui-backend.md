@@ -12,6 +12,11 @@ Concurrent callers cannot cross replies. A closed or invalid peer fails pending
 work and is reopened on the next request. Meter values are actual device data;
 absence/staleness is represented explicitly.
 
+Startup and reconnection read a fresh bulk state before showing device controls.
+The device owns preamp, mixer, routing and clock settings; the panel does not
+restore a previous device-state cache. Automatic desktop audio setup follows the
+current hardware sample rate. Only an explicit rate change requests a new clock.
+
 ## Private process protocol
 
 Input is ASCII decimal fields separated by spaces/tabs, one request per line,
