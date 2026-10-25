@@ -419,6 +419,31 @@ Full property bytes are compared, including unrelated data. UI, host handles,
 IOCTL completion, locks and the final WDM rebuild use memory-only stubs; these
 checks do not exercise USB, actual Windows endpoints or multiple devices.
 
+VS EXPAND readiness 0x14002AAF0 scans four Rdwm1110 base slots, then four
+Rdwm1110Ex expansion slots. It queries 22204C (nonzero version/type word),
+222324 (observed rate) and 22203C (reported controller-name length and bytes).
+It returns 0 for a qualifying compatible base/expansion pair, 1 when no such
+pair is found, 2 for differing rates, 3 for differing controller lengths/bytes
+and 4 for different upper 16 version bits. Lower version bits are ignored.
+Version/controller failures return immediately; rate mismatches are collected
+across qualifying expansion slots. Controller bytes compare case-insensitively.
+GUI 0x14002B090 maps results 2/3/4 to string resources 33131/33132/33133.
+
+Kernel 0x140012FF0 handles 22203C by sending internal request 0x220424 to the
+USB stack: IOCTL_INTERNAL_USB_GET_CONTROLLER_NAME, a host-controller identity
+query, not a USB/MIDI device command. API definition:
+https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/usbioctl/ni-usbioctl-ioctl_internal_usb_get_controller_name
+tools/verify-expand-readiness.py executes 280 original readiness cases with
+memory-only handle/IOCTL/formatting and ASCII comparison stubs. Cases cover
+slot positions, all rates, absent/query-failing nodes and mismatch precedence.
+The gate alone accepts coherent 192 kHz replies and does not enforce a two-unit
+maximum. Roland's owner manual pp. 65-66 separately requires at most two units,
+digital synchronization from the expansion unit via coaxial output to the base
+unit, DIGITAL AUTO, and no 192 kHz operation. Windows additionally requires the
+same USB controller. Native aggregation and actual two-unit timing/routing
+remain unimplemented/unverified. Reproduce the isolated gate check with:
+  python3 tools/verify-expand-readiness.py doc/local/windows-gui-analysis/RDDP1110.EXE
+
 The original callback 0x140004310, installed by 0x140001850/0x140026260,
 returns ASIO in Light for selector 0x1c only when VS EXPAND is off. The
 buffer getter 0x140001b50 reaches this through 0x140002590. At 44.1/48 kHz
