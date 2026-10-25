@@ -416,13 +416,12 @@ private:
   }
 };
 
-void read_status(const Scenario &test, int error_output = -1) {
+int status_control(snd_ctl_elem_info &info) {
   const int fd = checked(open("/dev/snd/controlC0", O_RDWR | O_CLOEXEC), "ALSA control");
   snd_ctl_card_info card{};
   checked(ioctl(fd, SNDRV_CTL_IOCTL_CARD_INFO, &card), "Card INFO");
   require(std::string_view(reinterpret_cast<const char *>(card.longname)).contains("dummy_hcd"),
           "Virtual card identity");
-  snd_ctl_elem_info info{};
   info.id.iface = SNDRV_CTL_ELEM_IFACE_CARD;
   constexpr std::string_view name = "OCTA-CAPTURE Status";
   std::memcpy(info.id.name, name.data(), name.size());
@@ -430,6 +429,12 @@ void read_status(const Scenario &test, int error_output = -1) {
   require(info.type == SNDRV_CTL_ELEM_TYPE_BYTES && info.count == 8, "Status metadata");
   require(info.access == (SNDRV_CTL_ELEM_ACCESS_READ | SNDRV_CTL_ELEM_ACCESS_VOLATILE),
           "Read-only volatile status");
+  return fd;
+}
+
+void read_status(const Scenario &test, int error_output = -1) {
+  snd_ctl_elem_info info{};
+  const int fd = status_control(info);
   constexpr int read_count = 20;
   const bool expect_error = test.error != 0 || error_output >= 0;
   for (int index = 0; index < (expect_error ? 1 : read_count); ++index) {
@@ -464,6 +469,57 @@ void read_status(const Scenario &test, int error_output = -1) {
   } else {
     std::puts("OCTA_VM_STATUS_READ_PASS");
   }
+}
+
+struct Setting {
+  const char *path;
+  std::string_view value;
+};
+
+void write_setting(const Setting &setting) {
+  const int fd = checked(open(setting.path, O_WRONLY | O_CLOEXEC), setting.path);
+  require(write(fd, setting.value.data(), setting.value.size()) ==
+              static_cast<ssize_t>(setting.value.size()),
+          "Write complete VM fault setting");
+  checked(close(fd), "Close VM fault setting");
+}
+
+void allocation_status() {
+  snd_ctl_elem_info info{};
+  const int control = status_control(info);
+  snd_ctl_elem_value value{};
+  value.id = info.id;
+  checked(ioctl(control, SNDRV_CTL_IOCTL_ELEM_READ, &value), "Warm status before allocation fault");
+  std::ranges::fill(value.value.bytes.data, sentinel);
+  const int task = checked(open("/proc/self/make-it-fail", O_WRONLY | O_CLOEXEC), "Task filter");
+  constexpr std::array settings = {
+      Setting{.path = "/sys/kernel/debug/failslab/task-filter", .value = "Y"},
+      Setting{.path = "/sys/kernel/debug/failslab/cache-filter", .value = "Y"},
+      Setting{.path = "/sys/kernel/debug/failslab/ignore-gfp-wait", .value = "N"},
+      Setting{.path = "/sys/kernel/debug/failslab/interval", .value = "1"},
+      Setting{.path = "/sys/kernel/debug/failslab/times", .value = "1"},
+      Setting{.path = "/sys/kernel/debug/failslab/space", .value = "0"},
+      Setting{.path = "/sys/kernel/debug/failslab/verbose", .value = "2"},
+      Setting{.path = "/sys/kernel/slab/kmalloc-8/failslab", .value = "1"}};
+  for (const auto &setting : settings) { write_setting(setting); }
+  write_setting({.path = "/sys/kernel/debug/failslab/probability", .value = "100"});
+  // No syscall or logging intervenes between task selection and the target ioctl.
+  require(write(task, "1", 1) == 1, "Select only the current reader task");
+  const int result = ioctl(control, SNDRV_CTL_IOCTL_ELEM_READ, &value);
+  const int actual_error = errno;
+  require(write(task, "0", 1) == 1, "Clear reader task selection");
+  write_setting({.path = "/sys/kernel/debug/failslab/probability", .value = "0"});
+  write_setting({.path = "/sys/kernel/slab/kmalloc-8/failslab", .value = "0"});
+  checked(close(task), "Close task filter");
+  require(result == -1 && actual_error == ENOMEM, "Status propagates allocation failure");
+  require(std::ranges::all_of(value.value.bytes.data, [](auto byte) { return byte == sentinel; }),
+          "Allocation failure preserves all caller bytes");
+  checked(ioctl(control, SNDRV_CTL_IOCTL_ELEM_READ, &value), "Same-handle status recovery");
+  constexpr std::array<std::uint8_t, 8> expected{1, 0, 0, 0x80, 0xbb, 0, 0, 0};
+  require(std::equal(expected.begin(), expected.end(), value.value.bytes.data),
+          "Status lock and PM guard released after allocation failure");
+  checked(close(control), "Close allocation-fault control");
+  std::puts("OCTA_VM_STATUS_ALLOCATION_PASS");
 }
 
 struct PcmSetting {
@@ -625,6 +681,11 @@ int main(int argc, char **argv) {
   if (std::string_view(argv[1]) == "reject-pcm") {
     require(argc == 2, "PCM check accepts no scenario");
     reject_pcm();
+    return 0;
+  }
+  if (std::string_view(argv[1]) == "allocation-status") {
+    require(argc == 2, "Allocation check accepts no scenario");
+    allocation_status();
     return 0;
   }
   const auto test = scenario(argc == 3 ? argv[2] : "normal");

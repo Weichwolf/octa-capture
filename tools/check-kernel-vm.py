@@ -17,6 +17,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 MARKER = 'OCTA_VM_MODULE_LIFECYCLE_PASS'
 REQUIRED = ('KASAN', 'KASAN_GENERIC', 'UBSAN', 'UBSAN_ALIGNMENT', 'FAULT_INJECTION',
+            'FAILSLAB', 'FAULT_INJECTION_DEBUG_FS', 'SLUB_DEBUG',
             'USB_DUMMY_HCD', 'USB_RAW_GADGET', 'USB_MON', 'IKCONFIG_PROC')
 REPORT = re.compile(r'BUG:|WARNING:|KASAN:|UBSAN:|Oops:|Kernel panic|general protection fault')
 STATUS_ERRORS = ('empty', 'short', 'phase', 'zero-rate', 'missing-zero', 'missing-one', 'timeout')
@@ -95,7 +96,8 @@ def usb_script():
               '  usb_start "$scenario"', '  /bin/usb-fixture read-status "$scenario"',
               '  usb_stop', 'done']
     lines += ['usb_start timeout', '/bin/usb-fixture disconnect-read "$gadget"', 'usb_finish',
-              'usb_start normal', '/bin/usb-fixture reject-pcm', '/bin/usb-fixture read-status', 'usb_stop',
+              'usb_start normal', '/bin/usb-fixture reject-pcm', '/bin/usb-fixture allocation-status',
+              '/bin/usb-fixture read-status', 'usb_stop',
               'echo OCTA_VM_STATUS_RECOVERY_PASS']
     return lines
 
@@ -158,6 +160,12 @@ def verify_output(result, text, usb):
         cycles = cycles and lines.count('OCTA_VM_PCM_ALT_STALL 1 2') == 2
         cycles = cycles and lines.count('OCTA_VM_PCM_ALT_STALL 0 2') == 2
         cycles = cycles and sum(line.startswith('OCTA_VM_PCM_ALT_STALL ') for line in lines) == 4
+        cycles = cycles and lines.count('OCTA_VM_STATUS_ALLOCATION_PASS') == 1
+        cycles = cycles and len(re.findall(r'FAULT_INJECTION: forcing a failure\.', text)) == 1
+        cycles = cycles and re.search(r'FAULT_INJECTION: forcing a failure\.(?:(?!OCTA_VM_STATUS_ALLOCATION_PASS).)*'
+                                      r'\n[ \t]+octa_status_get\+[^\n]*\[snd_octa_capture\]'
+                                      r'(?:(?!OCTA_VM_STATUS_ALLOCATION_PASS).)*OCTA_VM_STATUS_ALLOCATION_PASS',
+                                      text, re.DOTALL) is not None
     return not result and lines.count(MARKER) == 1 and cycles and not REPORT.search(text)
 
 
@@ -220,6 +228,7 @@ def main():
             print('PASS in-flight disconnect confirmed by status URB submission/completion and ALSA error readback.')
             print('PASS 20 valid status reads after the error/disconnect scenarios and a fresh module/device lifecycle.')
             print('PASS playback/capture PCM setup errors, repeated HW_FREE/reconfiguration and status recovery after four modeled alternate stalls.')
+            print('PASS one cache/task-filtered status allocation failure with ENOMEM, untouched caller bytes and same-handle recovery; kernel stack confirms octa_status_get.')
 
 
 if __name__ == '__main__':

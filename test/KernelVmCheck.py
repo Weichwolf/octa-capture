@@ -16,6 +16,8 @@ def console(usb=False):
         lines += [f'OCTA_VM_USB_CYCLE {index}' for index in (1, 2, 3)]
         lines += ['OCTA_VM_STATUS_READ_PASS'] * 8
         lines += ['OCTA_VM_USB_EXPANSION_PASS']
+        lines += ['FAULT_INJECTION: forcing a failure.', ' octa_status_get+0x10/0x20 [snd_octa_capture]',
+                  'OCTA_VM_STATUS_ALLOCATION_PASS']
         lines += [f'OCTA_VM_STATUS_ERROR_PASS {name}' for name in CHECK['STATUS_ERRORS']]
         lines += ['OCTA_VM_STATUS_ERROR_PASS disconnect', 'OCTA_VM_STATUS_UNPLUG_PASS',
                   'OCTA_VM_STATUS_RECOVERY_PASS', 'OCTA_VM_PCM_FAILURE_PASS']
@@ -35,7 +37,8 @@ class Evidence(unittest.TestCase):
                        'OCTA_VM_STATUS_READ_PASS', 'OCTA_VM_STATUS_ERROR_PASS disconnect',
                        'OCTA_VM_STATUS_UNPLUG_PASS', 'OCTA_VM_STATUS_RECOVERY_PASS',
                        'OCTA_VM_PCM_FAILURE_PASS', 'OCTA_VM_PCM_ALT_STALL 1 2',
-                       'OCTA_VM_PCM_ALT_STALL 0 2', 'OCTA_VM_USB_EXPANSION_PASS', CHECK['MARKER']):
+                       'OCTA_VM_PCM_ALT_STALL 0 2', 'OCTA_VM_USB_EXPANSION_PASS',
+                       'OCTA_VM_STATUS_ALLOCATION_PASS', CHECK['MARKER']):
             self.assertFalse(CHECK['verify_output'](0, text.replace(marker, '', 1), True), marker)
         self.assertFalse(CHECK['verify_output'](0, text + '\nOCTA_VM_STATUS_READ_PASS', True))
         self.assertFalse(CHECK['verify_output'](0, text + '\nOCTA_VM_PCM_ALT_STALL 1 2', True))
@@ -52,6 +55,20 @@ class Evidence(unittest.TestCase):
                        'OCTA_VM_STATUS_UNPLUG_PASS', 'OCTA_VM_USB_EXPANSION_PASS', CHECK['MARKER']):
             self.assertFalse(CHECK['verify_output'](0, text.replace(marker, marker + '0'), True))
             self.assertFalse(CHECK['verify_output'](0, text + '\n' + marker, True))
+
+    def test_allocation_evidence_requires_one_fault_in_the_status_callback(self):
+        text = console(True)
+        for fragment in ('FAULT_INJECTION: forcing a failure.',
+                         ' octa_status_get+0x10/0x20 [snd_octa_capture]'):
+            self.assertFalse(CHECK['verify_output'](0, text.replace(fragment, '', 1), True), fragment)
+        self.assertFalse(CHECK['verify_output'](0, text + '\nFAULT_INJECTION: forcing a failure.', True))
+        self.assertFalse(CHECK['verify_output'](0, text + '\nOCTA_VM_STATUS_ALLOCATION_PASS', True))
+        self.assertFalse(CHECK['verify_output'](0, text.replace('octa_status_get+', 'unrelated_alloc+'), True))
+        self.assertFalse(CHECK['verify_output'](0, text.replace(' octa_status_get+', ' ? octa_status_get+'), True))
+        self.assertFalse(CHECK['verify_output'](0, text.replace('[snd_octa_capture]', '[snd_usb_audio]'), True))
+        self.assertFalse(CHECK['verify_output'](0, text.replace(
+            'OCTA_VM_STATUS_ALLOCATION_PASS', '').replace('FAULT_INJECTION:',
+            'OCTA_VM_STATUS_ALLOCATION_PASS\nFAULT_INJECTION:'), True))
 
     def test_reports_and_failure_exit_override_completion_markers(self):
         text = console(True)

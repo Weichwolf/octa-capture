@@ -306,6 +306,13 @@ Dummy HCD can complete a removed endpoint with `EPROTO`; the test compares the
 actual USB and ALSA errors instead of assuming `ESHUTDOWN`. A timeout cannot
 substitute for this disconnect result.
 
+One deterministic `failslab` case restricts failure to the current reader and
+the `kmalloc-8` cache. Its kernel trace must contain an actual
+`octa_status_get` frame; exactly one forced failure is required. The ALSA read
+must return `ENOMEM` without changing any caller bytes, then recover on the same
+open handle after injection is disabled. This covers the status DMA-buffer
+allocation, not arbitrary allocation sites or runtime-PM recovery.
+
 At 48 kHz, the fixture also accepts legal S24_3LE hardware parameters with
 256/1024-frame period/buffer sizes, then stalls audio alternate activation.
 Playback and capture each repeat prepare, `HW_FREE` and reconfiguration twice
@@ -327,7 +334,7 @@ generic/standalone module load/unload cycles and the synthetic USB/status
 cycles without kernel warnings or KASAN/UBSAN reports.
 Clock, status, monitor and PCM meter objects contain
 KASAN and UBSAN alignment instrumentation. Streaming, other transport failures,
-physical-controller unplug, allocation fault injection and power management
+physical-controller unplug, broader allocation fault injection and power management
 still need separate sanitizer checks.
 
 ## Passive USB timing observation
