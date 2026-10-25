@@ -43,22 +43,26 @@ class Hotplug(unittest.TestCase):
             return dict(line.strip().split('=', 1) for line in result.stdout.splitlines() if '=' in line)
 
     def test_generic_octa_requests_a_serialized_activation_service(self):
-        properties = self.evaluate()
-        self.assertEqual(properties.get('SYSTEMD_WANTS'), 'octa-capture-activate@controlC0.service')
-        self.assertIn('systemd', properties.get('TAGS', ''))
+        for product in ('0120', '0121'):
+            properties = self.evaluate(product=product)
+            self.assertEqual(properties.get('SYSTEMD_WANTS'), 'octa-capture-activate@controlC0.service')
+            self.assertIn('systemd', properties.get('TAGS', ''))
+            self.assertIn('uaccess', properties.get('TAGS', ''))
 
     def test_only_octa_cards_defer_pcm_opening_until_the_device_clock_is_read(self):
-        for driver in ('snd-usb-audio', 'snd-octa-capture'):
-            properties = self.evaluate(node=None, driver=driver)
-            self.assertEqual(properties.get('PULSE_PROFILE_SET'), 'octa-capture-pending.conf')
-            self.assertEqual(properties.get('PULSE_MODARGS'), 'use_ucm=no profile=off')
+        for product in ('0120', '0121'):
+            for driver in ('snd-usb-audio', 'snd-octa-capture'):
+                properties = self.evaluate(node=None, driver=driver, product=product)
+                self.assertEqual(properties.get('PULSE_PROFILE_SET'), 'octa-capture-pending.conf')
+                self.assertEqual(properties.get('PULSE_MODARGS'), 'use_ucm=no profile=off')
         for parameters in ({'node': None, 'vendor': '1234'}, {'node': None, 'product': 'ffff'},
+                           {'node': None, 'product': '0122'},
                            {'node': None, 'action': 'remove'}, {'node': 'controlC0'}):
             self.assertNotIn('PULSE_MODARGS', self.evaluate(**parameters))
 
     def test_dedicated_and_unrelated_devices_never_request_rebinding(self):
         for parameters in ({'driver': 'snd-octa-capture'}, {'driver': 'unrelated-driver'},
-                           {'vendor': '1234'}, {'product': 'ffff'},
+                           {'vendor': '1234'}, {'product': 'ffff'}, {'product': '0122'},
                            {'node': 'pcmC0D0c'}, {'action': 'remove'}):
             with self.subTest(parameters=parameters):
                 self.assertNotIn('SYSTEMD_WANTS', self.evaluate(**parameters))

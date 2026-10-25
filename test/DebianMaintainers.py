@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Maintainers(unittest.TestCase):
-    def configure(self, *, device=True, dkms_failure=False, activation_failure=False, action='configure'):
+    def configure(self, *, device=True, vendor='0582', product='0120', dkms_failure=False,
+                  activation_failure=False, action='configure'):
         with tempfile.TemporaryDirectory(prefix='octa package configure ') as directory:
             root = Path(directory)
             log = root / 'calls'
@@ -21,8 +22,8 @@ class Maintainers(unittest.TestCase):
             if device:
                 usb = sysfs / 'bus/usb/devices/3-3'
                 usb.mkdir(parents=True)
-                (usb / 'idVendor').write_text('0582\n')
-                (usb / 'idProduct').write_text('0120\n')
+                (usb / 'idVendor').write_text(vendor + '\n')
+                (usb / 'idProduct').write_text(product + '\n')
             for name, status in (('common.postinst', int(dkms_failure)), ('udevadm', 0),
                                  ('systemctl', 0), ('deb-systemd-invoke', 0),
                                  ('octa-capture-activate', int(activation_failure))):
@@ -54,7 +55,17 @@ class Maintainers(unittest.TestCase):
     def test_absent_device_still_configures_without_binding_anything(self):
         result, calls = self.configure(device=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn('octa-capture-activate', calls)
+        self.assertNotIn('octa-capture-activate', [line.split()[0] for line in calls])
+
+    def test_expansion_configuration_and_unrelated_product_isolation(self):
+        result, calls = self.configure(product='0121')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('octa-capture-activate', [line.split()[0] for line in calls])
+        for identity in ({'product': '0122'}, {'vendor': '1234'}):
+            result, calls = self.configure(**identity)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn('octa-capture-activate', [line.split()[0] for line in calls])
+            self.assertFalse(any('--parent-match=' in line for line in calls))
 
     def test_driver_build_failure_stops_before_any_system_or_usb_change(self):
         result, calls = self.configure(dkms_failure=True)

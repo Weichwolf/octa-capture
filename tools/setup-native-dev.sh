@@ -48,8 +48,8 @@ usermod -a -G audio "$target_user"
 install -d -m 0755 /etc/udev/rules.d
 cat > /etc/udev/rules.d/70-octa-capture-dev.rules <<'RULES'
 # OCTA-CAPTURE development access; other USB devices are unchanged.
-SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0582", ATTR{idProduct}=="0120", GROUP="audio", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="sound", ATTRS{idVendor}=="0582", ATTRS{idProduct}=="0120", GROUP="audio", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0582", ATTR{idProduct}=="012[01]", GROUP="audio", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="sound", ATTRS{idVendor}=="0582", ATTRS{idProduct}=="012[01]", GROUP="audio", MODE="0660", TAG+="uaccess"
 RULES
 udevadm control --reload-rules
 "$repo_dir/tools/grant-dev-access.sh" "$target_user" "$module_file"
@@ -65,7 +65,7 @@ udevadm settle --timeout=10
 found=false
 for device in /sys/bus/usb/devices/*; do
     [[ -r $device/idVendor && -r $device/idProduct ]] || continue
-    [[ $(< "$device/idVendor") == 0582 && $(< "$device/idProduct") == 0120 ]] || continue
+    [[ $(< "$device/idVendor") == 0582 && $(< "$device/idProduct") == 012[01] ]] || continue
     found=true
     bus_number=$(< "$device/busnum")
     device_number=$(< "$device/devnum")

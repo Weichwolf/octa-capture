@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-only
-# Bind only 0582:0120 to an already installed standalone module.
+# Bind only OCTA-CAPTURE base/EXP USB devices to an already installed standalone module.
 set -euo pipefail
 shopt -s nullglob
 
@@ -23,7 +23,7 @@ found=false
 ready=true
 for device in /sys/bus/usb/devices/*; do
     [[ -r $device/idVendor && -r $device/idProduct ]] || continue
-    [[ $(< "$device/idVendor") == 0582 && $(< "$device/idProduct") == 0120 ]] || continue
+    [[ $(< "$device/idVendor") == 0582 && $(< "$device/idProduct") == 012[01] ]] || continue
     found=true
     interfaces=("$device":*)
     if (( ${#interfaces[@]} == 0 )); then

@@ -91,7 +91,7 @@ Original Linux/ALSA copyright and license notices remain in each source file.
 DKMS rebuilds this external module when matching-series kernel headers change.
 Builds use the kernel compiler, W=1 and -Werror. Other kernel series are skipped.
 Close audio/control applications, then run sudo octa-capture-activate.
-This loads the module and binds only 0582:0120; other USB audio devices remain bound.
+This loads the module and binds only 0582:0120/0121; other USB audio devices remain bound.
 octa-capture-activate --check is read-only and works without root.
 On systemd systems, a device-specific udev rule activates the standalone driver
 after hotplug if the generic USB audio driver claims OCTA-CAPTURE first.

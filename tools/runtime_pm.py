@@ -41,7 +41,7 @@ def find_device(root=Path('/sys/bus/usb/devices')):
     for device in root.iterdir():
         if not re.fullmatch(r'[0-9]+-[0-9]+(?:\.[0-9]+)*', device.name):
             continue
-        if read(device, 'idVendor') == '0582' and read(device, 'idProduct') == '0120':
+        if read(device, 'idVendor') == '0582' and read(device, 'idProduct') in ('0120', '0121'):
             devices.append(device)
     if len(devices) != 1:
         raise RuntimeError(f'Expected exactly one OCTA-CAPTURE, found {len(devices)}.')

@@ -34,7 +34,7 @@ modprobe snd-octa-capture
 
 for device in /sys/bus/usb/devices/*; do
     [[ -r $device/idVendor && -r $device/idProduct ]] || continue
-    [[ $(< "$device/idVendor") == 0582 && $(< "$device/idProduct") == 0120 ]] || continue
+    [[ $(< "$device/idVendor") == 0582 && $(< "$device/idProduct") == 012[01] ]] || continue
     interfaces=("$device":*)
     (( ${#interfaces[@]} > 0 )) || continue
     for interface in "${interfaces[@]}"; do

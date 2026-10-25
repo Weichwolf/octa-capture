@@ -17,9 +17,13 @@ if [ "$1" = configure ]; then
             for vendor in /sys/bus/usb/devices/*/idVendor; do
                 [ -r "$vendor" ] || continue
                 device=${vendor%/idVendor}
-                if [ "$(cat "$vendor")" != 0582 ] || [ "$(cat "$device/idProduct")" != 0120 ]; then
+                if [ "$(cat "$vendor")" != 0582 ]; then
                     continue
                 fi
+                case "$(cat "$device/idProduct")" in
+                    0120|0121) ;;
+                    *) continue ;;
+                esac
                 if "$udev_active"; then
                     udevadm trigger --action=change --settle --subsystem-match=sound \
                         --parent-match="$device" --sysname-match='card[0-9]*'

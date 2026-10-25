@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-only
-SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0582", ATTR{idProduct}=="0120", GROUP="audio", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="sound", ATTRS{idVendor}=="0582", ATTRS{idProduct}=="0120", GROUP="audio", MODE="0660", TAG+="uaccess", ENV{.OCTA_CAPTURE}="1"
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0582", ATTR{idProduct}=="012[01]", GROUP="audio", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="sound", ATTRS{idVendor}=="0582", ATTRS{idProduct}=="012[01]", GROUP="audio", MODE="0660", TAG+="uaccess", ENV{.OCTA_CAPTURE}="1"
 # Match the USB device and its interface driver in separate rules: they are different ancestors.
 ACTION=="add", SUBSYSTEM=="sound", KERNEL=="controlC[0-9]*", ENV{.OCTA_CAPTURE}=="1", DRIVERS=="snd-usb-audio", TAG+="systemd", ENV{SYSTEMD_WANTS}+="octa-capture-activate@%k.service"

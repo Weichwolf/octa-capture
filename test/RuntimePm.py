@@ -57,16 +57,22 @@ class Policy(unittest.TestCase):
             MODULE['find_device'](self.root)
 
     def test_foreign_and_ambiguous_devices_rejected(self):
-        (self.device / 'idProduct').write_text('0121')
+        (self.device / 'idProduct').write_text('0122')
         with self.assertRaisesRegex(RuntimeError, 'found 0'):
             MODULE['find_device'](self.root)
         (self.device / 'idProduct').write_text('0120')
         second = self.root / '3-4'
         second.mkdir()
         (second / 'idVendor').write_text('0582')
-        (second / 'idProduct').write_text('0120')
-        with self.assertRaisesRegex(RuntimeError, 'found 2'):
-            MODULE['find_device'](self.root)
+        for product in ('0120', '0121'):
+            (second / 'idProduct').write_text(product)
+            with self.assertRaisesRegex(RuntimeError, 'found 2'):
+                MODULE['find_device'](self.root)
+        self.assert_restored()
+
+    def test_one_expansion_personality_uses_the_same_bounded_policy_guard(self):
+        (self.device / 'idProduct').write_text('0121')
+        self.assertEqual(MODULE['find_device'](self.root), self.device)
         self.assert_restored()
 
     def test_policy_restored_on_success_error_and_signal(self):

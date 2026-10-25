@@ -4,8 +4,9 @@ The driver is built as **`snd-octa-capture.ko`**, using isolated copies of ALSA'
 
 EXP matching, status registration and GUI discovery follow the shared reference
 paths. Physical EXP descriptors/audio/CTRL/clock behavior and multi-unit
-aggregation remain unverified. Native hardware results below cover `0120` only;
-activation/permission tooling currently still targets the base personality.
+aggregation remain unverified. Native hardware results below cover `0120` only.
+Activation, udev permissions and deferred desktop-audio probing match both IDs;
+isolated namespace checks also reject neighboring products and other vendors.
 
 The embedded-MIDI module builds against Debian 6.12 with `W=1` and `-Werror`; its MIDI source passes Sparse. The private MIDI source passes the offline reference comparison. The module exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. Native Debian 6.12 passes clock/status reads and PCM meter/lifecycle checks at 44.1/48/96/192 kHz. Mixer A digital-return PRBS streams pass on all ten playback sources at 44.1/48/96 kHz, using ten-second streams, 1024-frame periods and an 8192-frame buffer. The 192 kHz mode has four capture/playback channels and no return 11/12; its PCM checks do not establish signal integrity.
 
@@ -95,7 +96,7 @@ only the external module when matching-series headers change. Each source packag
 is restricted to its prepared kernel series; `SOURCE-KERNEL` records its ALSA
 baseline and `BUILD-SERIES` defines the supported headers. Other series are skipped.
 `octa-capture-activate --check` reports binding without root or device writes.
-Activation loads the installed module and rebinds only `0582:0120` if generic
+Activation loads the installed module and rebinds only `0582:0120/0121` if generic
 `snd-usb-audio` already owns it. Other USB audio devices stay attached. The loading
 priority handles subsequent boots; installing a modprobe soft dependency alone
 does not replace an already bound generic driver.
@@ -207,7 +208,7 @@ python3 tools/check-runtime-pm.py --rates
 
 This updates the helper/sudoers rule without reloading the module. Only the
 root-owned isolated Python policy helper runs as root; it accepts no path/device
-arguments and requires exactly one `0582:0120` using `snd-octa-capture`. It leases
+arguments and requires exactly one `0582:0120/0121` using `snd-octa-capture`. It leases
 `power/control=auto` and a zero autosuspend delay for up to 120 seconds. EOF,
 client pipe closure, handled signals or the deadline restore/read back the
 original policy. A root-owned lock excludes concurrent leases; device identity

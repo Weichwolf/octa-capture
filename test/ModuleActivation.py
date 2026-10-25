@@ -70,6 +70,24 @@ class Activation(unittest.TestCase):
         self.assertEqual((self.drivers / 'snd-usb-audio/unbind').read_text(), '1-1:1.3')
         self.assertEqual((self.drivers / 'unexpected/unbind').read_text(), '')
 
+    def test_expansion_personality_is_rebound_but_neighboring_product_is_ignored(self):
+        self.device(product='0121')
+        self.device('2-9', product='0122', owner='unexpected')
+        result = self.invoke()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.drivers / 'snd-octa-capture/bind').read_text(), '1-1:1.0')
+        self.assertEqual((self.drivers / 'snd-usb-audio/unbind').read_text(), '1-1:1.3')
+        self.assertEqual((self.drivers / 'unexpected/unbind').read_text(), '')
+
+    def test_base_and_expansion_are_both_activated(self):
+        self.device()
+        self.device('2-9', product='0121')
+        result = self.invoke()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for device in ('1-1', '2-9'):
+            self.assertIn(f'OCTA-CAPTURE {device}: snd-octa-capture active.', result.stdout)
+        self.assertEqual((self.drivers / 'snd-octa-capture/bind').read_text(), '2-9:1.0')
+
     def test_check_is_read_only_for_both_owners(self):
         interfaces = self.device()
         self.assertEqual(self.invoke('--check').returncode, 1)
