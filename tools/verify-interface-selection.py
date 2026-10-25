@@ -16,6 +16,7 @@ CONTEXT, PROPS, DATA = (HELPERS[name] for name in ('CONTEXT', 'PROPS', 'DATA'))
 RATES = (44100, 48000, 96000, 192000)
 PACKETS = {'capture': (256, 256, 468, 312), 'playback': (212, 212, 392, 312)}
 ARM64_SHA256 = '25cd6302448df0456ea8d22357feb6a24e752aced4739cfc957830df10c05012'
+MIDI_SHA256 = '4dc99de17c8228fcde71dd954a954df9c722b42633a073d29bceec06d6b98927'
 
 
 def require(condition, message):
@@ -36,13 +37,17 @@ def returned(cpu, value):
 
 
 class MacReference:
-    def __init__(self, path, architecture):
+    def __init__(self, path, architecture, *, midi=False):
         self.arm = architecture == 'arm64'
+        require(not (midi and self.arm), 'The MIDI reference currently targets its x86_64 slice.')
+        self.midi = midi
         self.shift = 4 if self.arm else 0
         self.interface_array = 0x250 if self.arm else 0x248
         self.descriptor, self.selector, self.open, self.interface = (
             (0x15878, 0x1a134, 0x1a214, 0x19314) if self.arm else
             (0x12598, 0x169a0, 0x16a5e, 0x15c5c))
+        if midi:
+            self.descriptor, self.selector, self.open, self.interface = (0x7dee, 0x4864, 0x4922, 0x31d4)
         if self.arm:
             self.cpu = Uc(UC_ARCH_ARM64, UC_MODE_ARM)
             image = HELPERS['read_image'](path, ARM64_SHA256)
@@ -53,7 +58,7 @@ class MacReference:
                 self.cpu.mem_map(address, size)
             self.cpu.reg_write(arm_registers.UC_ARM64_REG_CPACR_EL1, 3 << 20)
         else:
-            self.cpu = HELPERS['cpu_image'](path, HELPERS['MAC_SHA256'])
+            self.cpu = HELPERS['cpu_image'](path, MIDI_SHA256 if midi else HELPERS['MAC_SHA256'])
         self.argument = arm_registers.UC_ARM64_REG_X0 if self.arm else registers.UC_X86_REG_RDI
         self.result = arm_registers.UC_ARM64_REG_X0 if self.arm else registers.UC_X86_REG_RAX
 
@@ -171,9 +176,12 @@ def mac_selection(mac, native_flags):
             cpu.mem_write(PROPS + 0x18 + 0x1d4 + mac.shift, bytes([playback]))
             for interface in range(8):
                 HELPERS['write'](cpu, PROPS + mac.interface_array + interface * 8, DATA + (interface + 1) * 0x100, 'Q')
-            mac.execute(mac.open, (CONTEXT, PROPS, 4, 0))
-            expected = [1, 0, 3] if capture and playback else [0]
-            require(opened == expected, f'Original macOS audio open sequence differs: {opened}')
+            mac.execute(mac.open, (CONTEXT, PROPS, 2 if mac.midi else 4, 0))
+            if mac.midi:
+                expected = [2] if capture and playback else [1]
+            else:
+                expected = [1, 0, 3] if capture and playback else [0]
+            require(opened == expected, f'Original macOS port open sequence differs: {opened}')
             require(cpu.reg_read(mac.result) & 0xffffffff == 1, 'Original macOS port opening failed')
     finally:
         cpu.hook_del(hook)

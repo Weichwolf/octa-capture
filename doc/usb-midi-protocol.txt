@@ -60,9 +60,19 @@ pipe wrappers 0x14001E860..0x14001E8D0. The corresponding ARM64 functions are
 GetAllIFInfo (0x15878), GetConfPort (0x1a134) and CuUsbPorts::Open (0x1a214).
 ARM64 uses different descriptor field/interface-array offsets; the checker
 executes that binary's actual parser and selectors rather than reusing x86 code.
+The separate macOS x86_64 MIDI plugin also executes 25 selector cases and five
+MIDI-open sequences in tools/verify-midi-interfaces.py. Its GetConfPort (0x4864)
+and CuUsbPorts::Open (0x4922) select interface 2 when both audio-alternate flags
+are present, otherwise interface 1. Only the final OpenIf call is stubbed;
+flags and interface objects are modeled, without descriptor parsing or USB I/O.
+The traced CuUsbDevMidi::Open caller (0xd34e) passes port kind 2.
+No interface-4 selection occurs in these MIDI cases. Analyzed audio-plugin
+references route all three direct OpenIf calls through CuUsbPorts::Open;
+unresolved indirect calls and the hardware purpose of interface 4 remain open.
 Reproduce offline with:
   python3 tools/verify-interface-selection.py audio-x86_64 RDWM1110.SYS descriptors.bin
   python3 tools/verify-interface-selection.py audio-arm64 RDWM1110.SYS descriptors.bin --mac-architecture arm64
+  python3 tools/verify-midi-interfaces.py midi-x86_64
 The checker uses hash-pinned binaries and cached descriptors (a sysfs
 descriptors file is also accepted). Each architecture checks 35 selector cases
 and five macOS open sequences; host interface opening is stubbed, with no USB transfers.

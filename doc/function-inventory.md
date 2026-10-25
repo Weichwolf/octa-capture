@@ -31,7 +31,11 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   complete IOCTL validation or a complete legacy-driver audit.
 - macOS x86_64: control-panel transmitters, state decoders, preset operations,
   audio USB/clock/stream paths and MIDI routing have selected decompilation and
-  offline reference execution. The separate Driver Setup parameter get/set/default
+  offline reference execution. The separate MIDI plugin's own port selector and
+  open routines also pass 25 fixed cases and five opening sequences with modeled
+  flags/interface objects and a final OpenIf stub. This does not verify USB
+  transfers or establish the purpose of interface 4.
+  The separate Driver Setup parameter get/set/default
   paths are traced: buffer level, recording margin and timing use CoreAudio host
   properties. Remaining platform/property paths still require analysis.
 - Both macOS audio architectures execute 108 fixed USB-control cases each through
