@@ -27,10 +27,10 @@ layout has been read at 480 Mbit/s through direct native USB.
 Interface 3 is the reference driver's status polling interface: CuDevPoll::Open
 selects alternate 1 and reads its interrupt pipe. Eight-byte packets are
 hardware-verified, with the rate in little-endian bytes 3..5 and alternating
-packet byte 0 (00/01). CuDevPoll::send (0xa7ea) maps packet byte 2 to a
-boolean, bytes 3..5 to the 24-bit rate, byte 6 to a raw setting byte and
-byte 7 to another boolean. GetAllStat (0xa6c2) seeks phase 0 followed by
-phase 1 with a nonzero rate. Bytes 1 and 2 remain unmapped. Byte 6 bit 0 selects the reference clock
+packet byte 0 (00/01). CuDevPoll::send (0xa7ea) copies bytes 0..2 and 6..7
+raw and assembles the 24-bit rate from bytes 3..5. GetAllStat (0xa6c2) seeks
+phase 0 followed by phase 1 with a nonzero rate, then normalizes bytes 2
+and 7 using nonzero comparisons. Bytes 1 and 2 remain unmapped. Byte 6 bit 0 selects the reference clock
 source (0 INTERNAL, 1 EXTERNAL); byte 7 being nonzero activates its display.
 Higher bits of byte 6 are not interpreted.
 The private module exposes phase-1 packets through the read-only, volatile
@@ -86,6 +86,52 @@ the pure decoder is also included in the offline protocol fuzzer.
 Clock-source/activation edge cases are synthetic reference-based tests;
 physical external-clock transitions remain open.
 
+Windows status polling and host queries
+--------------------------------------
+Windows 0x140005220/0x140005460 decode the same eight-byte status packets,
+but extract byte 2 bit 0 instead of macOS's byte-2 nonzero comparison. This
+disagrees for values such as 02; the bit's meaning remains unknown and Linux
+preserves the complete raw byte. Windows retains bytes 6/7 unchanged.
+Both original polling paths seek phase 0 then 1 in at most four reads; an
+unexpected initial phase can also enter their phase-zero search. Windows
+uses a 100-ms event wait. A timeout marks its polling context; the next
+query runs 0x1400271f0's drain/port/reset sequence and clears that error only
+when the port is connected and pipe reset succeeds. Actual host calls are
+not exercised by the offline checker.
+
+Cache update 0x140005320 falls back to 44100 Hz and zero flags after failed
+polling or a rate absent from its descriptor-derived support mask. This is
+an OEM software fallback, not a device measurement. Linux reports failed
+status explicitly, rejects zero rates/invalid phases and retains its bounded
+phase resynchronization; it does not invent a 44100-Hz status on failure.
+
+Windows dispatcher 0x1400292b0 exposes these buffer offsets (hexadecimal):
+  IOCTL          Result
+  222050/222324  +04 cached observed rate
+  222320      +04 configured host rate
+  222340      +04 observed rate, +08 configured rate, +0C/+0D raw bytes 6/7,
+              +10 combined busy flag
+  222344      +00 secondary stream state != 0
+  222348      +00 WDM usage count > 0
+  22232C      +04 requested rate; +08 availability result
+Combined busy uses the WDM count at manager->+10->+371CC or the secondary
+state at manager->+18->+08. If busy or cached byte 6 is nonzero, availability
+accepts only the configured host rate; otherwise it uses the support mask.
+These are Windows host gates, not new USB commands or ALSA buffer rules.
+
+tools/verify-status-poll.py executes 320 fixed decoded-payload cases per
+original, Windows cache updates, 11 phase sequences per original, stopped
+pollers, four timeout-recovery decisions, eight unsupported cache rates,
+12288 status/availability IOCTL requests and five unrelated request codes.
+It checks whole caller buffers and balanced locks; USB queue/read, queue
+drain, port/reset, waits and events are memory-only stubs. No hardware,
+physical clock changes or complete USB cancellation lifecycle is verified.
+Reproduce with the hash-pinned local references:
+  python3 tools/verify-status-poll.py doc/local/windows-kernel-analysis/RDWM1110.SYS \
+    --macos doc/local/macos-analysis/audio-x86_64
+
+Audio formats and alternate settings
+-----------------------------------
 Audio alternate settings 1,2,3,4 advertise 44100,48000,96000,192000 Hz.
 Descriptors advertise 10 output/12 input channels at the first three rates
 and four channels in each direction at 192000 Hz. This matches the record/
