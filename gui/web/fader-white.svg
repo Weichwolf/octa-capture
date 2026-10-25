@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: GPL-2.0-only -->
 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="32" viewBox="0 0 18 32" shape-rendering="crispEdges">
- <defs><linearGradient id="face" x2="0" y2="1"><stop stop-color="#eeeeee"/><stop offset=".19" stop-color="#bdbdbd"/><stop offset=".48" stop-color="#777777"/><stop offset="1" stop-color="#555555"/></linearGradient></defs>
- <path fill="#181818" d="M1 0h16l1 2v29l-1 1H1l-1-1V2z"/>
- <path fill="url(#face)" d="M1 2h16v28H1z"/>
- <path fill="#fafafa" d="M2 1h14l1 3H1z"/>
- <path stroke="#353535" d="M2 8.5h14M2 11.5h14M1 15.5h16M2 19.5h14M2 22.5h14M2 25.5h14M2 28.5h14"/>
- <path stroke="#b9b9b9" d="M2 9.5h14M2 12.5h14M2 20.5h14M2 23.5h14M2 26.5h14M2 29.5h14"/>
- <path stroke="#dddddd" d="M.5 4v25"/>
- <path stroke="#333333" d="M17.5 4v27M1 30.5h16"/>
+ <defs><linearGradient id="face" x2="0" y2="1"><stop stop-color="#e8e4e3"/><stop offset=".13" stop-color="#aaa4a0"/><stop offset=".4" stop-color="#504f4f"/><stop offset=".47" stop-color="#434141"/><stop offset=".53" stop-color="#93908f"/><stop offset="1" stop-color="#858281"/></linearGradient></defs>
+ <path fill="#252323" d="M1 0h16l1 1v30l-1 1H1l-1-1V1z"/>
+ <path fill="url(#face)" d="M1 0h16v30H1z"/>
+ <path stroke="#343333" d="M2 14.5h14"/>
+ <path stroke="#9c9a99" d="M2 16.5h14M2 18.5h14M2 20.5h14M2 22.5h14M2 24.5h14M2 26.5h14M2 28.5h14"/>
+ <path stroke="#555352" d="M2 17.5h14M2 19.5h14M2 21.5h14M2 23.5h14M2 25.5h14M2 27.5h14M2 29.5h14"/>
+ <path stroke="#bcb8b5" d="M.5 2v27"/>
+ <path stroke="#393838" d="M17.5 2v29M1 30.5h16"/>
 </svg>

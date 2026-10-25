@@ -207,6 +207,8 @@ try {
   await maskedPreamps();
   await maskedMixers();
   await browser.page.locator('.panel').screenshot({path: path.join(directory, 'preamp.png')});
+  await browser.click('#view-switch');
+  await browser.page.locator('.panel').screenshot({path: path.join(directory, 'mixer.png')});
   for (const errors of [unexpected, browser.exceptions, browser.securityErrors, browser.networkErrors,
     browser.httpErrors, browser.consoleEvents]) assert.deepEqual(errors, []);
   console.log('PASS Playwright: base/EXP footer identity, 302 original control rectangles, 101 sensitivity readouts/rotary positions, dB accessibility, commit/Escape, all-rate fixed channel presentation and interrupted knob/fader/edit recovery. All replies synthetic.');
