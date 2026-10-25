@@ -8,7 +8,7 @@ import {PanelWarnings} from './warnings.js';
 import {drawCompressor} from './graphs.js';
 import {ReferenceStepper} from './steppers.js';
 import {faderPreview, MasterFaderDisplay, ReferenceFader} from './faders.js';
-import {knobDrag, knobKey, wheelDelta, wheelValue, controlPointerHit, controlContextHit, controlContext, controlButton} from './knobs.js';
+import {knobAngle, knobDrag, knobKey, wheelDelta, wheelValue, controlPointerHit, controlContextHit, controlContext, controlButton} from './knobs.js';
 import {DialogWindow} from './dialogs.js';
 
 const $ = selector => document.querySelector(selector);
@@ -211,8 +211,8 @@ class Knob {
   }
   display(caption) {
     const text = caption || this.format(this.value);
-    this.dial.style.setProperty('--angle', `${-135 + 270 * this.value / this.maximum}deg`);
-    if (this.output instanceof HTMLInputElement) this.output.value = text;
+    this.dial.style.setProperty('--angle', `${knobAngle(this.value, this.maximum)}deg`);
+    if (this.output instanceof HTMLInputElement) this.output.value = text.replace(/ dB$/, '');
     else this.output.textContent = text;
     this.node.title = text;
     this.node.setAttribute('aria-valuenow', String(this.value));

@@ -2,10 +2,15 @@
 // Fixed numeric traces executed by verify-knob-drag.py against the original GUI.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {knobDrag, knobKey, controlPointerHit, controlContextHit, controlContext, controlButton, switchFrame} from '../gui/web/knobs.js';
+import {knobAngle, knobFrame, knobDrag, knobKey, controlPointerHit, controlContextHit, controlContext, controlButton, switchFrame} from '../gui/web/knobs.js';
 import {VOLUME, panToWire} from '../gui/web/parameters.js';
 
 const cases = JSON.parse(readFileSync(new URL('data/knob-drag.json', import.meta.url), 'utf8'));
+const displays = JSON.parse(readFileSync(new URL('data/knob-display.json', import.meta.url), 'utf8'));
+for (const {value, maximum, frame} of displays.cases) {
+  assert.equal(knobFrame(value, maximum), frame, `Original knob frame: ${value}/${maximum}`);
+  assert.equal(knobAngle(value, maximum), -135 + frame * 270 / 64, `Knob needle: ${value}/${maximum}`);
+}
 let count = 0, keys = 0;
 for (const test of cases) {
   let state = {x: 0, y: 0, anchor: test.initial, value: test.initial};

@@ -507,6 +507,11 @@ message/virtual-handler cases, including signed-short bounds, all modifier
 combinations and exact wire values. Focus, painting and notifications are stubbed.
 `--save-vectors PATH` saves compared numeric cases; `gui-wheel` CTest runs these
 offline without manufacturer code or hardware. No fuzzing is involved.
+Rotary needles use 65 positions matching the original Windows/macOS mapping
+across all legal indices. Sensitivity fields show bare numbers; accessibility
+text retains dB. `node test/GuiKnobDisplayBrowser.mjs` checks all 101 readouts
+across eight inputs, reference needle positions and trusted editing/cancellation
+with synthetic API replies and no hardware binaries.
 Another 540 fixed wheel/drag events verify that wheel input changes the current
 value while retaining the pointer anchor; the next drag compares against the
 updated value. `--save-interleaved PATH` saves these numeric traces for the same

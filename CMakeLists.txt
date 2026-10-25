@@ -183,6 +183,7 @@ add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   "${CMAKE_SOURCE_DIR}/gui/web/dialogs.js"
   "${CMAKE_SOURCE_DIR}/gui/web/knobs.js"
   "${CMAKE_SOURCE_DIR}/test/GuiKnobs.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiKnobDisplayBrowser.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiKnobDrag.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiFaderDrag.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiWheel.mjs"

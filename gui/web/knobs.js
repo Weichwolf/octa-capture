@@ -3,6 +3,14 @@ import {VOLUME, volumeIndex} from './parameters.js';
 
 const VOLUME_STOPS = [8388607, 4184368, 2097152, 1051065, 526780, 264015, 132321, 66317, 33237, 0];
 
+export function knobFrame(value, maximum) {
+  return Math.max(0, Math.min(64, Math.trunc((value * 64 + Math.trunc(maximum / 2)) / maximum)));
+}
+
+export function knobAngle(value, maximum) {
+  return -135 + 270 * knobFrame(value, maximum) / 64;
+}
+
 export function controlPointerHit(event, target) {
   if (event.type === 'click' && event.detail === 0) return true;
   if (event.type === 'contextmenu' && event.button !== 2) return true;

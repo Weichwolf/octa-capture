@@ -1,3 +1,10 @@
+octa-capture (0.1.0-1~trixie5) trixie; urgency=medium
+
+  * Match the original rotary display positions and numeric sensitivity fields.
+  * Add deterministic sanitizer VM status-error and in-flight unplug checks.
+
+ -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Sun, 25 Oct 2026 19:42:00 +0100
+
 octa-capture (0.1.0-1~trixie4) trixie; urgency=medium
 
   * Filter sample-rate choices by device clock settings and recheck fresh

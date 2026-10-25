@@ -110,6 +110,10 @@ selection, Shift/Ctrl behavior, anchor rebasing, truncation and exact wire value
 Arrow keys use single indices (1-% pan); Home/End do not change a knob. This
 comparison uses host-window/notification stubs and does not establish complete
 mouse/keyboard behavior for every control or dialog.
+The rotary display mapping additionally matches 1,566 executed Windows/macOS
+cases: every legal index and clamped boundaries select one of 65 positions.
+The sensitivity field shows the original bare number while its accessibility
+text retains dB. Bitmap/font painting remains outside these arithmetic checks.
 The original knob/button right-release handlers also match 192 fixed hit/flag
 cases and 96 unavailable-button cases with window/popup stubs. Wine child
 bounds distinguish the actual skin from its painted label. HTML pointer actions

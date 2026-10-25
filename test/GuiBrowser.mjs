@@ -134,6 +134,8 @@ try {
     await hardware(state => state.preamps[0].sensitivity_index === original + (original < 100 ? 1 : -1), 'sensitivity hardware readback');
     await api('/api/control', {kind: 'preamp', channel: 0, parameter: 'sensitivity', value: original});
     const editor = '[aria-label="Input 1 sensitivity value"]';
+    await until(() => browser.evaluate(`document.querySelector(${JSON.stringify(editor)}).value === ${JSON.stringify((original / 2).toFixed(1))}`),
+      'sensitivity field displays the original numeric text without a unit suffix');
     await browser.click(editor, 2);
     await until(() => browser.evaluate(`!document.querySelector(${JSON.stringify(editor)}).readOnly`), 'double-click sensitivity edit');
     await browser.call('Input.insertText', {text: '8.25'});

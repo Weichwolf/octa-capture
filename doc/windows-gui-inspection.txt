@@ -215,6 +215,18 @@ These measurements exclude native Windows font/DPI rendering and owner-painted
 captions/backgrounds. They do not establish physical audio response or Windows
 device communication.
 
+Rotary display mapping 0x14001f0e0 / CCtrlWnd::Out2Pos (0x10000777e) rounds to
+65 resource positions, rather than rotating continuously between indices.
+Both resource constructors specify 65 frames. tools/verify-knob-display.py
+executes 1,566 cases per original across every legal sensitivity, compressor,
+pan and level index plus clamped boundaries; HTML uses the matching positions.
+Resource endpoint getters are modeled; original bitmap painting is not executed.
+
+The connected Wine reference's sensitivity edit field shows bare numeric text.
+macOS CValPreSens::UpdateText (0x100014b48) reads the 101 strings at
+CSensTbl::m_str (0x10005d7e0), from 0.0 through 50.0. The HTML edit field now
+omits the dB suffix; its slider accessibility text and tooltip retain the unit.
+
 The shared master readout getter 0x140019900 reads a source-specific selected
 side from state offsets 0x144c/0x1450. Callback 0x14001f040 selects that side;
 0x140017f10 invokes it on changed or forced master refreshes. Left release
