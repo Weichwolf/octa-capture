@@ -212,7 +212,7 @@ class Knob {
   display(caption) {
     const text = caption || this.format(this.value);
     this.dial.style.setProperty('--angle', `${knobAngle(this.value, this.maximum)}deg`);
-    if (this.output instanceof HTMLInputElement) this.output.value = text.replace(/ dB$/, '');
+    if (this.output instanceof HTMLInputElement) this.output.value = text.replace(/ dB$/, '').padStart(4);
     else this.output.textContent = text;
     this.node.title = text;
     this.node.setAttribute('aria-valuenow', String(this.value));

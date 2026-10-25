@@ -19,6 +19,7 @@ let serverOutput = '', serverErrors = '', browser;
 server.stdout.on('data', data => { serverOutput += data; });
 server.stderr.on('data', data => { serverErrors += data; });
 const actions = [], unexpected = [];
+const sensitivity = JSON.parse(await fs.readFile(path.join(root, 'test/data/sensitivity-display.json'), 'utf8'));
 
 function fixture() {
   const group = () => ({channels: Array.from({length: 10}, () => ({mute: false, solo: false, pan: 0, volume: 0})),
@@ -70,7 +71,7 @@ async function displayCases() {
     indices.forEach((index, channel) => { model.state.preamps[channel].sensitivity_index = index; });
     await until(async () => {
       const shown = await browser.page.locator('.sensitivity input.knob-value').evaluateAll(nodes => nodes.map(node => node.value));
-      return JSON.stringify(shown) === JSON.stringify(indices.map(value => (value / 2).toFixed(1)));
+      return JSON.stringify(shown) === JSON.stringify(indices.map(value => sensitivity.texts[value]));
     }, 'all eight sensitivity fields match reference numeric text');
     for (let channel = 0; channel < 8; channel++) {
       const knob = browser.page.locator('.sensitivity').nth(channel);
@@ -84,10 +85,10 @@ async function displayCases() {
 async function editing() {
   const editor = browser.page.locator('.sensitivity input.knob-value').first();
   await editor.dblclick(); await editor.fill('8.25'); await editor.press('Enter');
-  await until(async () => actions.length === 1 && await editor.inputValue() === '8.0', 'numeric field after committed write');
+  await until(async () => actions.length === 1 && await editor.inputValue() === sensitivity.texts[16], 'numeric field after committed write');
   assert.deepEqual(actions, [{kind: 'preamp', channel: 0, parameter: 'sensitivity', value: 16}]);
   await editor.dblclick(); await editor.fill('49.5'); await editor.press('Escape');
-  assert.equal(await editor.inputValue(), '8.0');
+  assert.equal(await editor.inputValue(), sensitivity.texts[16]);
   assert.equal(actions.length, 1, 'Escape sends no control request');
 }
 
