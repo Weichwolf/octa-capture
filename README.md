@@ -35,6 +35,8 @@ Use an account with ALSA device access. The server binds only to `127.0.0.1`;
 open its private launch link. Token authentication, Host/Origin checks and a
 local-only content policy protect device operations. Audio stays in the kernel
 and continues when the panel closes.
+External synchronization permits only the current rate; unavailable clock
+status disables rate selection.
 
 For the desktop window on Debian 13 (GTK 4.10 or later):
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import {PREAMP_MAX, VOLUME, volumeIndex,
-  volumeText, parameterText, panToWire, wireToPan, panText, outputJackStates, sensitivityIndex, preDelayText, reverbTimeText} from './parameters.js';
+  volumeText, parameterText, panToWire, wireToPan, panText, outputJackStates, sensitivityIndex, preDelayText, reverbTimeText,
+  availableSampleRates} from './parameters.js';
 import {MeterBallistics, METER_TICK_MS, meterDb, meterY} from './meters.js';
 import {PopupMenus, PanelMenuBar} from './menus.js';
 import {PanelWarnings} from './warnings.js';
@@ -12,6 +13,7 @@ import {DialogWindow} from './dialogs.js';
 
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
+const rateOptions = new WeakMap();
 const el = (tag, className = '', text = '') => {
   const node = document.createElement(tag);
   node.className = className;
@@ -624,7 +626,7 @@ function update(result) {
   $('#settings-channels').textContent = rateIndex === 3 ? '4 in / 4 out' : '12 in / 10 out';
   $('#settings-capture-note').textContent = rateIndex === 3 ? 'At 192 kHz, inputs and outputs 1–4 are available.' :
     'Capture channels 11/12 carry the stereo return from Mixer A.';
-  for (const select of all('[data-rate-select]')) { select.value = rate; select.disabled = busy || writing; }
+  syncSampleRates();
   $('#settings-device').disabled = !canSelectDevice() || inFlight.has('settings-devices') || !$('#settings-device').value;
   syncDialogs(state, rateIndex);
   panelWarnings.update(rate, result.preferences);
@@ -713,11 +715,27 @@ function confirmation(message) {
 
 function canOperate() { return connected && !busy && !writing; }
 function canSelectDevice() { return !(connected && busy) && !localBusy && !writing && pending.size === 0; }
+function syncSampleRates() {
+  const allowed = availableSampleRates(documentState?.status);
+  const rate = [44100, 48000, 96000, 192000][parseInt(documentState?.state.payload_hex.slice(4, 6), 16)];
+  for (const select of all('[data-rate-select]')) {
+    if (!rateOptions.has(select)) rateOptions.set(select, [...select.options].map(option => option.cloneNode(true)));
+    const offered = [...select.options].map(option => Number(option.value));
+    if (offered.join(',') !== allowed.join(',')) {
+      select.replaceChildren(...rateOptions.get(select).filter(option => allowed.includes(Number(option.value)))
+        .map(option => option.cloneNode(true)));
+    }
+    select.value = allowed.includes(rate) ? rate : (allowed[0] ?? '');
+    select.disabled = !connected || busy || writing || allowed.length === 0;
+    select.title = allowed.length === 0 ? 'Clock status is unavailable.' :
+      allowed.length === 1 ? 'Sample rate follows the current device clock setting.' : '';
+  }
+}
 function setOperationBusy(value) {
   localBusy = value;
   busy = value || Boolean(documentState?.busy);
   $('#busy-message').hidden = !busy;
-  for (const select of all('[data-rate-select]')) select.disabled = !connected || busy || writing;
+  syncSampleRates();
   $('#settings-device').disabled = !canSelectDevice() || inFlight.has('settings-devices') || !$('#settings-device').value;
   if (busy) {
     reverbDelay.sync(reverbDelay.value, false, true);
@@ -965,12 +983,11 @@ function setupDialogs() {
     select.addEventListener('change', async () => {
       const rate = Number(select.value);
       const current = [44100, 48000, 96000, 192000][parseInt(documentState?.state.payload_hex.slice(4, 6), 16)];
-      if (!canOperate()) { select.value = current; return; }
-      if (rate !== current) await operation({action: 'sample-rate', rate});
-      if (documentState) {
-        const actual = [44100, 48000, 96000, 192000][parseInt(documentState.state.payload_hex.slice(4, 6), 16)];
-        for (const control of all('[data-rate-select]')) control.value = actual;
+      if (!canOperate() || !availableSampleRates(documentState?.status).includes(rate)) {
+        syncSampleRates(); return;
       }
+      if (rate !== current) await operation({action: 'sample-rate', rate});
+      if (documentState) syncSampleRates();
     });
   }
   $('#settings-device').addEventListener('change', event => {

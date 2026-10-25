@@ -19,6 +19,25 @@ from .preferences import Preferences
 from .pulse_audio import change_rate
 
 
+def available_sample_rates(status):
+    rates = (44100, 48000, 96000, 192000)
+    if type(status) is not dict or type(status.get('raw_status_hex')) is not str:
+        return ()
+    if len(status['raw_status_hex']) != 16:
+        return ()
+    try:
+        packet = bytes.fromhex(status['raw_status_hex'])
+    except ValueError:
+        return ()
+    if len(packet) != 8 or packet[0] != 1:
+        return ()
+    rate = int.from_bytes(packet[3:6], 'little')
+    if rate not in rates or type(status.get('sample_rate_hz')) is not int or status['sample_rate_hz'] != rate:
+        return ()
+    # Both references restrict availability when the entire setting byte is nonzero.
+    return (rate,) if packet[6] else rates
+
+
 class Application:
     def __init__(self, bin_dir, data_dir, port='hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1'):
         self.bin_dir = Path(bin_dir).resolve()
@@ -47,8 +66,8 @@ class Application:
         if self._closed:
             raise DeviceError('The control panel is closing.')
 
-    def _clock_status(self):
-        if time.monotonic() - self._status_updated < 1:
+    def _clock_status(self, *, refresh=False):
+        if not refresh and time.monotonic() - self._status_updated < 1:
             return self._status
         self._status_updated = time.monotonic()
         try:
@@ -291,6 +310,13 @@ class Application:
             self._require_no_auto_sense()
             self._sync_selected_device()
             arguments = self._action_arguments(body)
+            if body['action'] == 'sample-rate':
+                status = self._clock_status(refresh=True)
+                allowed = available_sample_rates(status)
+                if body['rate'] not in allowed:
+                    message = f'The device clock currently permits only {allowed[0]} Hz.' if allowed else \
+                              'Cannot change sample rate: clock status is unavailable.'
+                    raise DeviceError(message)
             directory = self._directory()
             arguments = [str(value).replace('{recovery}', str(directory / 'recovery.syx'))
                          for value in arguments]

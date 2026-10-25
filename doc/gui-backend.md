@@ -16,6 +16,14 @@ Startup and reconnection read a fresh bulk state before showing device controls.
 The device owns preamp, mixer, routing and clock settings; the panel does not
 restore a previous device-state cache. Automatic desktop audio setup follows the
 current hardware sample rate. Only an explicit rate change requests a new clock.
+Both rate selectors filter their choices using the raw clock-setting byte:
+zero permits all four rates; nonzero permits only the observed current rate.
+Unavailable options are removed so native WebKit popups contain only valid entries.
+Missing or inconsistent status disables rate selection. Before a rate action,
+the backend bypasses its display cache and reads status again, rejecting an
+unavailable rate before closing CTRL, creating recovery files or changing audio.
+The original Windows/macOS availability paths agree on this setting-byte rule;
+Windows host usage counters are separate from Linux desktop audio coordination.
 The combined Debian package defers PulseAudio's initial PCM probing with a
 device-specific inactive profile. The user service reads the hardware clock,
 loads the matching stereo configuration, then explicitly activates its profile.
@@ -395,6 +403,11 @@ tools/check-gui.sh --playwright --write --rates --matrix
 readback, multiple-mixer routing, panel commands, ten-channel context actions and
 Auto-Sens finish/cancel, and restores fresh raw snapshots, then checks release of CTRL. The
 checker saves private screenshots and recovery files under `build/gui/`.
+`node test/GuiClockBrowser.mjs` separately checks 64 reference clock choices in
+both selectors, missing/restored status, real Playwright keys, forged selection
+and pending-error recovery. It serves the actual local HTML with synthetic API
+replies and unusable device binaries. No device I/O or physical synchronization
+is tested by that check.
 `--playwright` first runs `test/GuiShortcuts.mjs`: real Save/Open/Patch Bay keys,
 menu eligibility, file-choice confirmation cancellation and repeated-key guards.
 Busy, pending-write and missing-device cases use explicit response simulation;

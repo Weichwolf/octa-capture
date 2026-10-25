@@ -204,6 +204,8 @@ class Selection(unittest.TestCase):
                 patch('gui.application.Bridge'), \
                 patch.object(self.application, '_directory', return_value=Path('/unused')), \
                 patch.object(self.application, 'snapshot', return_value={'restored': True}), \
+                patch.object(self.application, '_clock_status', return_value={
+                    'raw_status_hex': '01000080bb000001', 'sample_rate_hz': 48000}), \
                 patch('gui.application.change_rate') as rate_change:
             self.assertEqual(self.application.action({'action': 'sample-rate', 'rate': 48000}), {'restored': True})
         rate_change.assert_called_once_with(Path('/missing/bin'), 'hw:CARD=OCTACAPTURE_2', 48000)

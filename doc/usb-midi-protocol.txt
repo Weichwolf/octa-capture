@@ -119,6 +119,19 @@ state at manager->+18->+08. If busy or cached byte 6 is nonzero, availability
 accepts only the configured host rate; otherwise it uses the support mask.
 These are Windows host gates, not new USB commands or ALSA buffer rules.
 
+Windows GUI refresh 0x14002DF10 rebuilds the rate combo from nonzero 22232C
+results. macOS CuFscMgrBase::GetPropsFsc (0xD64A) returns availability per
+supported rate: setting byte 6 zero permits all, nonzero permits only the
+observed current rate. This does not depend on display activation (byte 7).
+tools/verify-rate-availability.py executes 64 coherent steady-state cases
+through both original paths and compares the Linux backend/web policy. The
+macOS capability callback models the four supported rates; no USB is used.
+Numeric fixtures are in test/data/rate-availability.json. Reproduce with:
+  python3 tools/verify-rate-availability.py doc/local/windows-kernel-analysis/RDWM1110.SYS \
+    --macos doc/local/macos-analysis/audio-x86_64
+Physical external clock transitions, lock loss and transitional host/device
+rate disagreement remain hardware-unverified.
+
 tools/verify-status-poll.py executes 320 fixed decoded-payload cases per
 original, Windows cache updates, 11 phase sequences per original, stopped
 pollers, four timeout-recovery decisions, eight unsupported cache rates,

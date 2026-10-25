@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Functional fader coefficients, identical in both reference control panels.
 // These are parameter mappings, not manufacturer artwork or executable code.
+export function availableSampleRates(status) {
+  const rates = [44100, 48000, 96000, 192000];
+  if (typeof status?.raw_status_hex !== 'string' || !/^[0-9a-f]{16}$/i.test(status.raw_status_hex)) return [];
+  const packet = status.raw_status_hex.match(/../g).map(byte => parseInt(byte, 16));
+  const rate = packet[3] | (packet[4] << 8) | (packet[5] << 16);
+  if (packet[0] !== 1 || !rates.includes(rate) || status.sample_rate_hz !== rate) return [];
+  return packet[6] ? [rate] : rates;
+}
+
 export const VOLUME = Object.freeze([
   0, 23, 64, 188, 377, 567, 758, 950, 1143, 1337, 1533, 1729,
   1926, 2125, 2324, 2525, 2726, 2929, 3133, 3338, 3544, 3751, 3959, 4169,

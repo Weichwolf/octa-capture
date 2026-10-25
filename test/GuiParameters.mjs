@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {ATTACK, RELEASE, RATIO_TEXT, PRE_DELAY, VOLUME, volumeIndex, volumeText,
-  parameterText, panToWire, wireToPan, compressorOutput, sensitivityIndex, preDelayText, reverbTimeText, outputJackStates} from '../gui/web/parameters.js';
+  parameterText, panToWire, wireToPan, compressorOutput, sensitivityIndex, preDelayText, reverbTimeText, outputJackStates,
+  availableSampleRates} from '../gui/web/parameters.js';
 
 assert.equal(VOLUME.length, 1025);
 assert.equal(VOLUME[0], 0);
@@ -78,3 +79,13 @@ for (let rate = 0; rate < 4; rate++) {
 }
 assert.equal(jackCases, 720);
 console.log('PASS 720 original output-jack selectors: all rates, mixers, pairs and routes');
+
+const clocks = JSON.parse(readFileSync(new URL('data/rate-availability.json', import.meta.url), 'utf8'));
+assert.equal(clocks.cases.length, 64);
+for (const {status, allowed} of clocks.cases) assert.deepEqual(availableSampleRates(status), allowed);
+for (const status of [null, false, [], {}, {raw_status_hex: []}, {raw_status_hex: 'xx'.repeat(8)},
+  {sample_rate_hz: 48000, raw_status_hex: '00000080bb000001'},
+  {sample_rate_hz: 96000, raw_status_hex: '01000080bb000001'},
+  {sample_rate_hz: 48000, raw_status_hex: '01000080bb000001 '},
+  {sample_rate_hz: 0, raw_status_hex: '0100000000000001'}]) assert.deepEqual(availableSampleRates(status), []);
+console.log('PASS 64 original clock-availability vectors and unavailable/malformed-status guards');
