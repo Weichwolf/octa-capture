@@ -522,6 +522,15 @@ These checks do not establish physical 192 kHz signal routing or bitmap parity.
 Pass `--prefix PATH` to run the same browser check against the launcher and web
 assets in an extracted Debian package or staged CMake install, with device APIs
 still intercepted and hardware binaries unavailable.
+The corresponding GTK/WebKit rendering check uses the same synthetic model:
+
+```bash
+GSK_RENDERER=cairo GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- /usr/bin/python3 tools/check-gtk-rates.py
+```
+
+Add `--installed-prefix PATH/TO/usr` for an extracted Debian package. This checks
+all-rate channel/readout/reverb presentation and cached-value restoration in the
+real WebKit renderer; replies are synthetic and no hardware operation is sent.
 Another 540 fixed wheel/drag events verify that wheel input changes the current
 value while retaining the pointer anchor; the next drag compares against the
 updated value. `--save-interleaved PATH` saves these numeric traces for the same
