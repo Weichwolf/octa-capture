@@ -611,8 +611,9 @@ Reverb pre-delay/time use read-only text and clamped arrow controls, matching
 Windows edit style `0x50800882` and both original 0..12/0..49 index ranges.
 Patch Bay's top preset row and compact output selectors, and Reverb's compact
 controls follow Windows dialog resources 178/188 and the offline Wine captures.
-Patch Bay, Reverb, idle Auto-Sens and About now match 44 original Win32 child bounds
-and client sizes (227×189, 195×135, 294×146 and 483×105) at 96 DPI. The numeric fixture
+Patch Bay, Reverb, idle Auto-Sens, About and the port warning match 48 original
+Win32 child bounds and client sizes (227×189, 195×135, 294×146, 483×105 and 447×141)
+at 96 DPI. The numeric fixture
 is `test/data/dialog-geometry.json`; the read-only inspector accepts, for example,
 `py tools/inspect-windows-layout.py --dialog "PATCH BAY" --compare test/data/dialog-geometry.json`.
 It checks the original process hash and dialog ownership. Chromium and native
@@ -623,6 +624,11 @@ About uses the project icon, project version and GPL-2.0-only attribution instea
 of manufacturer/ASIO claims. The HTTP server substitutes only a bounded ASCII
 numeric version from `VERSION`; missing or invalid data displays `unknown`.
 The installed runtime includes that file, without adding a new API endpoint.
+About and the port warning stage their warning checkbox until OK/Close accepts
+it; Escape and caption Close discard the draft, as observed in the original
+Windows profile handlers. Polls preserve an open draft. Pending saves block
+duplicate confirmation/cancellation; failed saves retain the draft for retry.
+The app rejects state replies started before or during preference commits.
 Secondary dialogs have draggable captions and a caption Close button. Reopening
 returns to centered placement; viewport/content changes keep moved dialogs
 reachable. The inactive panel retains its colors, matching reference captures.
