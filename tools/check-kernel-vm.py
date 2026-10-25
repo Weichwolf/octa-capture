@@ -16,7 +16,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 MARKER = 'OCTA_VM_MODULE_LIFECYCLE_PASS'
-REQUIRED = ('KASAN', 'UBSAN', 'FAULT_INJECTION', 'USB_DUMMY_HCD', 'USB_RAW_GADGET', 'IKCONFIG_PROC')
+REQUIRED = ('KASAN', 'KASAN_GENERIC', 'UBSAN', 'UBSAN_ALIGNMENT', 'FAULT_INJECTION',
+            'USB_DUMMY_HCD', 'USB_RAW_GADGET', 'IKCONFIG_PROC')
 REPORT = re.compile(r'BUG:|WARNING:|KASAN:|UBSAN:|Oops:|Kernel panic|general protection fault')
 
 

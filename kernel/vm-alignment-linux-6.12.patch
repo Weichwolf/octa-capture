@@ -1,0 +1,421 @@
+SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] Use defined unaligned accesses in the private sanitizer VM
+
+Keep alignment checking enabled. These changes are only for the private
+test kernel, never for the host or the standalone module package.
+
+Use unaligned access helpers for firmware data, instruction operands,
+string destinations and inflate copies. Select ACPICA's portable byte
+accesses. Traverse ordinary and RCU list sentinels through their actual
+node alignment, and use the underlying SMP structure alignment for queues
+shared with IRQ and wakeup nodes; retain the aligned CSD allocation typedef.
+
+---
+--- a/include/linux/list.h
++++ b/include/linux/list.h
+@@ -643,13 +643,17 @@
+ 	pos__ != head__ ? list_entry(pos__, type, member) : NULL; \
+ })
+ 
++#define __list_entry_node(pos, member) \
++	((const struct list_head *)((uintptr_t)(pos) + \
++		offsetof(typeof(*(pos)), member)))
++
+ /**
+  * list_next_entry - get the next element in list
+  * @pos:	the type * to cursor
+  * @member:	the name of the list_head within the struct.
+  */
+ #define list_next_entry(pos, member) \
+-	list_entry((pos)->member.next, typeof(*(pos)), member)
++	list_entry(__list_entry_node(pos, member)->next, typeof(*(pos)), member)
+ 
+ /**
+  * list_next_entry_circular - get the next element in list
+@@ -670,7 +674,7 @@
+  * @member:	the name of the list_head within the struct.
+  */
+ #define list_prev_entry(pos, member) \
+-	list_entry((pos)->member.prev, typeof(*(pos)), member)
++	list_entry(__list_entry_node(pos, member)->prev, typeof(*(pos)), member)
+ 
+ /**
+  * list_prev_entry_circular - get the prev element in list
+@@ -773,7 +777,7 @@
+  * @member:	the name of the list_head within the struct.
+  */
+ #define list_entry_is_head(pos, head, member)				\
+-	list_is_head(&pos->member, (head))
++	list_is_head(__list_entry_node(pos, member), (head))
+ 
+ /**
+  * list_for_each_entry	-	iterate over list of given type
+--- a/include/linux/llist.h
++++ b/include/linux/llist.h
+@@ -126,6 +126,10 @@
+ #define member_address_is_nonnull(ptr, member)	\
+ 	((uintptr_t)(ptr) + offsetof(typeof(*(ptr)), member) != 0)
+ 
++#define __llist_entry_node(pos, member) \
++	((const struct llist_node *)((uintptr_t)(pos) + \
++		offsetof(typeof(*(pos)), member)))
++
+ /**
+  * llist_for_each - iterate over some deleted entries of a lock-less list
+  * @pos:	the &struct llist_node to use as a loop cursor
+@@ -180,7 +184,8 @@
+ #define llist_for_each_entry(pos, node, member)				\
+ 	for ((pos) = llist_entry((node), typeof(*(pos)), member);	\
+ 	     member_address_is_nonnull(pos, member);			\
+-	     (pos) = llist_entry((pos)->member.next, typeof(*(pos)), member))
++	     (pos) = llist_entry(__llist_entry_node(pos, member)->next, \
++				 typeof(*(pos)), member))
+ 
+ /**
+  * llist_for_each_entry_safe - iterate over some deleted entries of lock-less list of given type
+@@ -202,7 +207,8 @@
+ #define llist_for_each_entry_safe(pos, n, node, member)			       \
+ 	for (pos = llist_entry((node), typeof(*pos), member);		       \
+ 	     member_address_is_nonnull(pos, member) &&			       \
+-	        (n = llist_entry(pos->member.next, typeof(*n), member), true); \
++		(n = llist_entry(__llist_entry_node(pos, member)->next, \
++				 typeof(*n), member), true); \
+ 	     pos = n)
+ 
+ /**
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -128,7 +128,7 @@
+ }
+ 
+ static __always_inline void
+-csd_do_func(smp_call_func_t func, void *info, call_single_data_t *csd)
++csd_do_func(smp_call_func_t func, void *info, struct __call_single_data *csd)
+ {
+ 	trace_csd_function_entry(func, csd);
+ 	func(info);
+@@ -177,7 +177,7 @@
+ static atomic_t csd_bug_count = ATOMIC_INIT(0);
+ 
+ /* Record current CSD work for current CPU, NULL to erase. */
+-static void __csd_lock_record(call_single_data_t *csd)
++static void __csd_lock_record(struct __call_single_data *csd)
+ {
+ 	if (!csd) {
+ 		smp_mb(); /* NULL cur_csd after unlock. */
+@@ -192,13 +192,13 @@
+ 		  /* Or before unlock, as the case may be. */
+ }
+ 
+-static __always_inline void csd_lock_record(call_single_data_t *csd)
++static __always_inline void csd_lock_record(struct __call_single_data *csd)
+ {
+ 	if (static_branch_unlikely(&csdlock_debug_enabled))
+ 		__csd_lock_record(csd);
+ }
+ 
+-static int csd_lock_wait_getcpu(call_single_data_t *csd)
++static int csd_lock_wait_getcpu(struct __call_single_data *csd)
+ {
+ 	unsigned int csd_type;
+ 
+@@ -226,7 +226,8 @@
+  * the CSD_TYPE_SYNC/ASYNC types provide the destination CPU,
+  * so waiting on other types gets much less information.
+  */
+-static bool csd_lock_wait_toolong(call_single_data_t *csd, u64 ts0, u64 *ts1, int *bug_id, unsigned long *nmessages)
++static bool csd_lock_wait_toolong(struct __call_single_data *csd, u64 ts0,
++				u64 *ts1, int *bug_id, unsigned long *nmessages)
+ {
+ 	int cpu = -1;
+ 	int cpux;
+@@ -315,7 +316,7 @@
+  * previous function call. For multi-cpu calls its even more interesting
+  * as we'll have to ensure no other cpu is observing our csd.
+  */
+-static void __csd_lock_wait(call_single_data_t *csd)
++static void __csd_lock_wait(struct __call_single_data *csd)
+ {
+ 	unsigned long nmessages = 0;
+ 	int bug_id = 0;
+@@ -330,7 +331,7 @@
+ 	smp_acquire__after_ctrl_dep();
+ }
+ 
+-static __always_inline void csd_lock_wait(call_single_data_t *csd)
++static __always_inline void csd_lock_wait(struct __call_single_data *csd)
+ {
+ 	if (static_branch_unlikely(&csdlock_debug_enabled)) {
+ 		__csd_lock_wait(csd);
+@@ -340,17 +341,17 @@
+ 	smp_cond_load_acquire(&csd->node.u_flags, !(VAL & CSD_FLAG_LOCK));
+ }
+ #else
+-static void csd_lock_record(call_single_data_t *csd)
+-{
+-}
+-
+-static __always_inline void csd_lock_wait(call_single_data_t *csd)
++static void csd_lock_record(struct __call_single_data *csd)
++{
++}
++
++static __always_inline void csd_lock_wait(struct __call_single_data *csd)
+ {
+ 	smp_cond_load_acquire(&csd->node.u_flags, !(VAL & CSD_FLAG_LOCK));
+ }
+ #endif
+ 
+-static __always_inline void csd_lock(call_single_data_t *csd)
++static __always_inline void csd_lock(struct __call_single_data *csd)
+ {
+ 	csd_lock_wait(csd);
+ 	csd->node.u_flags |= CSD_FLAG_LOCK;
+@@ -363,7 +364,7 @@
+ 	smp_wmb();
+ }
+ 
+-static __always_inline void csd_unlock(call_single_data_t *csd)
++static __always_inline void csd_unlock(struct __call_single_data *csd)
+ {
+ 	WARN_ON(!(csd->node.u_flags & CSD_FLAG_LOCK));
+ 
+@@ -385,7 +386,7 @@
+ 	 * executes migration_cpu_stop() on the remote CPU).
+ 	 */
+ 	if (trace_csd_queue_cpu_enabled()) {
+-		call_single_data_t *csd;
++		struct __call_single_data *csd;
+ 		smp_call_func_t func;
+ 
+ 		csd = container_of(node, call_single_data_t, node.llist);
+@@ -473,7 +474,7 @@
+  */
+ static void __flush_smp_call_function_queue(bool warn_cpu_offline)
+ {
+-	call_single_data_t *csd, *csd_next;
++	struct __call_single_data *csd, *csd_next;
+ 	struct llist_node *entry, *prev;
+ 	struct llist_head *head;
+ 	static bool warned;
+--- a/include/trace/events/csd.h
++++ b/include/trace/events/csd.h
+@@ -12,7 +12,7 @@
+ 	TP_PROTO(const unsigned int cpu,
+ 		unsigned long callsite,
+ 		smp_call_func_t func,
+-		call_single_data_t *csd),
++		struct __call_single_data *csd),
+ 
+ 	TP_ARGS(cpu, callsite, func, csd),
+ 
+@@ -39,7 +39,7 @@
+  */
+ DECLARE_EVENT_CLASS(csd_function,
+ 
+-	TP_PROTO(smp_call_func_t func, call_single_data_t *csd),
++	TP_PROTO(smp_call_func_t func, struct __call_single_data *csd),
+ 
+ 	TP_ARGS(func, csd),
+ 
+@@ -57,12 +57,12 @@
+ );
+ 
+ DEFINE_EVENT(csd_function, csd_function_entry,
+-	TP_PROTO(smp_call_func_t func, call_single_data_t *csd),
++	TP_PROTO(smp_call_func_t func, struct __call_single_data *csd),
+ 	TP_ARGS(func, csd)
+ );
+ 
+ DEFINE_EVENT(csd_function, csd_function_exit,
+-	TP_PROTO(smp_call_func_t func, call_single_data_t *csd),
++	TP_PROTO(smp_call_func_t func, struct __call_single_data *csd),
+ 	TP_ARGS(func, csd)
+ );
+ 
+--- a/arch/x86/kernel/ebda.c
++++ b/arch/x86/kernel/ebda.c
+@@ -2,6 +2,7 @@
+ #include <linux/kernel.h>
+ #include <linux/init.h>
+ #include <linux/memblock.h>
++#include <linux/unaligned.h>
+ 
+ #include <asm/setup.h>
+ #include <asm/bios_ebda.h>
+@@ -71,7 +72,7 @@
+ 	 * to bytes to get a first guess at where the BIOS
+ 	 * firmware area starts:
+ 	 */
+-	bios_start = *(unsigned short *)__va(BIOS_RAM_SIZE_KB_PTR);
++	bios_start = get_unaligned((unsigned short *)__va(BIOS_RAM_SIZE_KB_PTR));
+ 	bios_start <<= 10;
+ 
+ 	/*
+--- a/arch/x86/include/asm/runtime-const.h
++++ b/arch/x86/include/asm/runtime-const.h
+@@ -57,7 +57,7 @@
+  */
+ static inline void __runtime_fixup_ptr(void *where, unsigned long val)
+ {
+-	*(unsigned long *)where = val;
++	__builtin_memcpy(where, &val, sizeof(val));
+ }
+ 
+ static inline void __runtime_fixup_shift(void *where, unsigned long val)
+--- a/arch/x86/kernel/alternative.c
++++ b/arch/x86/kernel/alternative.c
+@@ -19,6 +19,7 @@
+ #include <linux/bsearch.h>
+ #include <linux/sync_core.h>
+ #include <linux/execmem.h>
++#include <linux/unaligned.h>
+ #include <asm/text-patching.h>
+ #include <asm/alternative.h>
+ #include <asm/sections.h>
+@@ -419,10 +420,10 @@
+ 
+ #define apply_reloc_n(n_, p_, d_)				\
+ 	do {							\
+-		s32 v = *(s##n_ *)(p_);				\
++		s32 v = get_unaligned((s##n_ *)(p_));				\
+ 		v += (d_);					\
+ 		BUG_ON((v >> 31) != (v >> (n_-1)));		\
+-		*(s##n_ *)(p_) = (s##n_)v;			\
++		put_unaligned((s##n_)v, (s##n_ *)(p_));			\
+ 	} while (0)
+ 
+ 
+--- a/arch/x86/realmode/init.c
++++ b/arch/x86/realmode/init.c
+@@ -4,6 +4,7 @@
+ #include <linux/memblock.h>
+ #include <linux/cc_platform.h>
+ #include <linux/pgtable.h>
++#include <linux/unaligned.h>
+ 
+ #include <asm/set_memory.h>
+ #include <asm/realmode.h>
+@@ -122,14 +123,14 @@
+ 	count = *rel++;
+ 	while (count--) {
+ 		u16 *seg = (u16 *) (base + *rel++);
+-		*seg = real_mode_seg;
++		put_unaligned(real_mode_seg, seg);
+ 	}
+ 
+ 	/* 32-bit linear relocations. */
+ 	count = *rel++;
+ 	while (count--) {
+ 		u32 *ptr = (u32 *) (base + *rel++);
+-		*ptr += phys_base;
++		put_unaligned(get_unaligned(ptr) + phys_base, ptr);
+ 	}
+ 
+ 	/* Must be performed *after* relocation. */
+--- a/lib/string.c
++++ b/lib/string.c
+@@ -24,6 +24,7 @@
+ #include <linux/stddef.h>
+ #include <linux/string.h>
+ #include <linux/types.h>
++#include <linux/unaligned.h>
+ 
+ #include <asm/page.h>
+ #include <asm/rwonce.h>
+@@ -151,10 +152,10 @@
+ 		if (has_zero(c, &data, &constants)) {
+ 			data = prep_zero_mask(c, data, &constants);
+ 			data = create_zero_mask(data);
+-			*(unsigned long *)(dest+res) = c & zero_bytemask(data);
++			put_unaligned(c & zero_bytemask(data), (unsigned long *)(dest + res));
+ 			return res + find_zero(data);
+ 		}
+-		*(unsigned long *)(dest+res) = c;
++		put_unaligned(c, (unsigned long *)(dest + res));
+ 		res += sizeof(unsigned long);
+ 		count -= sizeof(unsigned long);
+ 		max -= sizeof(unsigned long);
+--- a/lib/zlib_inflate/inffast.c
++++ b/lib/zlib_inflate/inffast.c
+@@ -4,6 +4,7 @@
+  */
+ 
+ #include <linux/zutil.h>
++#include <linux/unaligned.h>
+ #include "inftrees.h"
+ #include "inflate.h"
+ #include "inffast.h"
+@@ -254,10 +255,7 @@
+ 			sfrom = (unsigned short *)(from);
+ 			loops = len >> 1;
+ 			do {
+-			    if (IS_ENABLED(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS))
+-				*sout++ = *sfrom++;
+-			    else
+-				*sout++ = get_unaligned16(sfrom++);
++				put_unaligned(get_unaligned16(sfrom++), sout++);
+ 			} while (--loops);
+ 			out = (unsigned char *)sout;
+ 			from = (unsigned char *)sfrom;
+--- a/include/acpi/platform/aclinux.h
++++ b/include/acpi/platform/aclinux.h
+@@ -30,6 +30,11 @@
+ 
+ #define ACPI_USE_SYSTEM_INTTYPES
+ #define ACPI_USE_GPE_POLLING
++
++/* Use ACPICA byte accesses instead of unaligned typed loads/stores. */
++#ifdef CONFIG_UBSAN_ALIGNMENT
++#define ACPI_MISALIGNMENT_NOT_SUPPORTED
++#endif
+ 
+ /* Kernel specific ACPICA configuration */
+ 
+--- a/include/linux/rculist.h
++++ b/include/linux/rculist.h
+@@ -421,7 +421,7 @@
+ #define list_for_each_entry_rcu(pos, head, member, cond...)		\
+ 	for (__list_check_rcu(dummy, ## cond, 0),			\
+ 	     pos = list_entry_rcu((head)->next, typeof(*pos), member);	\
+-		&pos->member != (head);					\
++		!list_entry_is_head(pos, head, member);					\
+ 		pos = list_entry_rcu(pos->member.next, typeof(*pos), member))
+ 
+ /**
+@@ -440,7 +440,7 @@
+ #define list_for_each_entry_srcu(pos, head, member, cond)		\
+ 	for (__list_check_srcu(cond),					\
+ 	     pos = list_entry_rcu((head)->next, typeof(*pos), member);	\
+-		&pos->member != (head);					\
++		!list_entry_is_head(pos, head, member);					\
+ 		pos = list_entry_rcu(pos->member.next, typeof(*pos), member))
+ 
+ /**
+@@ -474,7 +474,7 @@
+  */
+ #define list_for_each_entry_lockless(pos, head, member) \
+ 	for (pos = list_entry_lockless((head)->next, typeof(*pos), member); \
+-	     &pos->member != (head); \
++	     !list_entry_is_head(pos, head, member); \
+ 	     pos = list_entry_lockless(pos->member.next, typeof(*pos), member))
+ 
+ /**
+@@ -497,7 +497,7 @@
+  */
+ #define list_for_each_entry_continue_rcu(pos, head, member) 		\
+ 	for (pos = list_entry_rcu(pos->member.next, typeof(*pos), member); \
+-	     &pos->member != (head);	\
++	     !list_entry_is_head(pos, head, member);	\
+ 	     pos = list_entry_rcu(pos->member.next, typeof(*pos), member))
+ 
+ /**
+@@ -518,7 +518,7 @@
+  * after the given position.
+  */
+ #define list_for_each_entry_from_rcu(pos, head, member)			\
+-	for (; &(pos)->member != (head);					\
++	for (; !list_entry_is_head(pos, head, member);					\
+ 		pos = list_entry_rcu(pos->member.next, typeof(*(pos)), member))
+ 
+ /**

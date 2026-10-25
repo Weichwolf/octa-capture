@@ -227,7 +227,11 @@ and build-lock behavior; it never compiles or boots a kernel.
 
 Use a private, extracted Linux source tree; do not use the source or build tree
 of a running host build. The fixture applies documentation fixes from
-`vm-linux-6.12.patch` to that private source, retaining `W=1` and `-Werror`.
+`vm-linux-6.12.patch` and defined-access fixes from
+`vm-alignment-linux-6.12.patch` to that private source, retaining `W=1`,
+`-Werror` and alignment checking. The latter uses unaligned-access helpers,
+ACPICA's portable byte accesses and actual list/RCU/SMP node alignment. Neither
+patch changes the host kernel or the shipped standalone module sources.
 LLVM 19 and the usual kernel build dependencies are required.
 
 ```bash
@@ -261,13 +265,12 @@ times. Kernel warnings, sanitizer reports, missing completion markers and a
 the guest. This checks module initialization/exit, not device-specific USB,
 audio streaming, fault injection or suspend/resume. It does not run fuzzing.
 
-The Linux 6.12.113 fixture builds successfully, including instrumented clock,
-status and PCM meter objects. Its strict VM boot currently fails on UBSAN
-alignment reports in the base kernel before loading our module (BIOS reads,
-page-table list traversal, ACPI and runtime-constant text patching). Alignment
-checking stays enabled and the checker rejects these reports. A clean kernel
-sanitizer lifecycle result is not established; the base-kernel findings need
-resolution before device-specific sanitizer coverage can be claimed.
+The patched Linux 6.12.113 fixture passes strict VM startup and three paired
+generic/standalone module load/unload cycles without kernel warnings or
+KASAN/UBSAN reports. Clock, status, monitor and PCM meter objects contain
+KASAN and UBSAN alignment instrumentation. This establishes module lifecycle
+coverage only; device-specific USB paths, streaming, fault injection and power
+management still need separate sanitizer checks.
 
 ## Passive USB timing observation
 

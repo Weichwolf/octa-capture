@@ -10,7 +10,8 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
-REQUIRED = ('CONFIG_KASAN=y', 'CONFIG_KASAN_GENERIC=y', 'CONFIG_UBSAN=y', 'CONFIG_KCOV=y',
+REQUIRED = ('CONFIG_KASAN=y', 'CONFIG_KASAN_GENERIC=y', 'CONFIG_UBSAN=y', 'CONFIG_UBSAN_ALIGNMENT=y',
+            'CONFIG_KCOV=y',
             'CONFIG_FAULT_INJECTION=y', 'CONFIG_FAILSLAB=y', 'CONFIG_FAIL_PAGE_ALLOC=y',
             'CONFIG_USB_DUMMY_HCD=y', 'CONFIG_USB_RAW_GADGET=y', 'CONFIG_SND_USB_AUDIO=m',
             'CONFIG_MODULES=y', 'CONFIG_IKCONFIG_PROC=y', 'CONFIG_X86_5LEVEL=y', 'CONFIG_WERROR=y')
@@ -52,6 +53,7 @@ def main():
             return subprocess.run(list(map(str, command)), pass_fds=(lock.fileno(),), **kwargs)
 
         prepare_source(source, ROOT / 'kernel/vm-linux-6.12.patch', run)
+        prepare_source(source, ROOT / 'kernel/vm-alignment-linux-6.12.patch', run)
         make = ['make', '-C', source, 'O=' + str(kernel), 'LLVM=-19', 'ARCH=x86_64']
         environment = os.environ | {'KCONFIG_ALLCONFIG': str(ROOT / 'kernel/vm.config')}
         run([*make, 'allnoconfig'], env=environment)
