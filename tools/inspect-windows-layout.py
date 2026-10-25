@@ -88,7 +88,8 @@ def capture(dialog=None):
 
     @callback
     def find(window, _data):
-        if user.IsWindowVisible(window) and text(window) == 'OCTA-CAPTURE Control Panel':
+        if user.IsWindowVisible(window) and text(window) == 'OCTA-CAPTURE Control Panel' and \
+                text(window, 'GetClassNameW') != '#32770':
             windows.append(window)
         return True
     if not user.EnumWindows(find, 0) or len(windows) != 1:

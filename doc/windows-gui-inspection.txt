@@ -56,7 +56,7 @@ have not been compared.
 The Driver menu contains Always on top, Show README (disabled in this test),
 About Driver & Control Panel..., and Exit (Alt+F4).
 
-The About dialog measures 483x114 pixels. It shows the product name,
+The current 96-DPI Win32 About client measures 483x105 pixels. It shows the product name,
 Roland copyright, an OK button, an audio-port warning checkbox, and an
 ASIO attribution.
 
@@ -109,11 +109,15 @@ reverb-offline-model.png. Only our own HTML/CSS/vector artwork is shipped.
 Native Windows font rendering and full visual parity remain unverified.
 
 The read-only layout inspector also captures dialogs owned by the hash-verified
-original process. test/data/dialog-geometry.json records 14 Patch Bay, 10 Reverb
-and 13 idle Auto-Sens control bounds at 96 DPI, including the runtime-adjusted
-edit/up-down rectangles. All three client sizes and these 37 rectangles match
+original process. test/data/dialog-geometry.json records 14 Patch Bay, 10 Reverb,
+13 idle Auto-Sens and seven About control bounds at 96 DPI, including the runtime-adjusted
+edit/up-down rectangles. All four client sizes and these 44 rectangles match
 Chromium and native GTK/WebKit. The inspector only observes the visible dialog;
 the Wine device-interface model does not establish physical device behavior.
+The About dialog and main frame share their title. The inspector distinguishes
+the MFC main frame from #32770 dialogs before checking the process hash/ownership.
+Linux retains the About geometry with its own icon, project version and license
+text, without manufacturer copyright or Windows ASIO attribution.
 
 In the connected offline model, Ctrl+S/Ctrl+O/Ctrl+P open Save/Open/Patch Bay
 from the main panel. Auto-Sens and Patch Bay modal dialogs suppress these file

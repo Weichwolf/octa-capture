@@ -114,8 +114,17 @@
   </dialog>
   <dialog id="about" aria-labelledby="about-title" data-footer-first>
     <h2 id="about-title">About Driver &amp; Control Panel</h2>
-    <div class="dialog-content"><strong>OCTA-CAPTURE Linux Control Panel</strong><p>Independent Linux implementation · GPL-2.0-only</p><p>Roland OCTA-CAPTURE / UA-1010</p><label><input id="show-port-warning" type="checkbox" checked disabled> Show a warning about audio ports that cannot be used.</label></div>
-    <footer><button data-close data-default autofocus>OK</button></footer>
+    <div class="reference-dialog-client">
+      <div class="dialog-content about-content">
+        <img class="about-icon" src="/favicon.svg" width="32" height="32" alt="">
+        <span class="about-product">OCTA-CAPTURE Linux Driver &amp; Control Panel</span>
+        <span class="about-version">Version @OCTA_VERSION@</span>
+        <label class="about-warning"><input id="show-port-warning" type="checkbox" checked disabled> Show a warning about the audio ports that cannot be used.</label>
+        <hr class="about-divider">
+        <span class="about-license">Independent Linux implementation · GPL-2.0-only</span>
+      </div>
+      <footer><button data-close data-default autofocus>OK</button></footer>
+    </div>
   </dialog>
   <dialog id="port-warning" aria-labelledby="port-warning-title" data-footer-first>
     <h2 id="port-warning-title">OCTA-CAPTURE — Audio Ports</h2>

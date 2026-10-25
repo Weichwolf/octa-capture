@@ -89,7 +89,9 @@ async function geometry() {
   const dialogs = JSON.parse(await fs.readFile(path.join(root, 'test/data/dialog-geometry.json'), 'utf8'));
   const dialogSource = (await fs.readFile(path.join(root, 'test/GuiDialogGeometry.mjs'), 'utf8')).replace('export ', '');
   const dialogResult = await browser.evaluate(`(async () => {${dialogSource}\nreturn await checkDialogGeometry(${JSON.stringify(dialogs)});})()`);
-  assert.deepEqual(dialogResult, {dialogs: 3, checked: 37}, 'Original dialog client/control rectangles');
+  assert.deepEqual(dialogResult, {dialogs: 4, checked: 44}, 'Original dialog client/control rectangles');
+  assert.equal(await browser.page.locator('.about-version').textContent(),
+    `Version ${(await fs.readFile(path.join(root, 'VERSION'), 'utf8')).trim()}`);
 }
 
 async function deviceIdentity() {
@@ -208,7 +210,7 @@ try {
   await displayCases();
   await editing();
   await geometry();
-  for (const id of ['patchbay', 'reverb', 'auto-sens']) {
+  for (const id of ['patchbay', 'reverb', 'auto-sens', 'about']) {
     await browser.evaluate(`document.getElementById(${JSON.stringify(id)}).showModal()`);
     await browser.page.locator(`#${id}`).screenshot({path: path.join(directory, `${id}.png`)});
     await browser.page.locator(`#${id} .dialog-close`).click();
@@ -222,7 +224,7 @@ try {
   await browser.page.locator('.panel').screenshot({path: path.join(directory, 'mixer.png')});
   for (const errors of [unexpected, browser.exceptions, browser.securityErrors, browser.networkErrors,
     browser.httpErrors, browser.consoleEvents]) assert.deepEqual(errors, []);
-  console.log('PASS Playwright: base/EXP footer identity, 302 main and 37 dialog control rectangles, 101 sensitivity readouts/rotary positions, dB accessibility, commit/Escape, all-rate fixed channel presentation and interrupted knob/fader/edit recovery. All replies synthetic.');
+  console.log('PASS Playwright: base/EXP footer identity, 302 main and 44 dialog control rectangles, 101 sensitivity readouts/rotary positions, dB accessibility, commit/Escape, all-rate fixed channel presentation and interrupted knob/fader/edit recovery. All replies synthetic.');
 } finally {
   if (browser) await browser.close();
   if (server.exitCode === null) { server.kill('SIGTERM'); await once(server, 'exit'); }

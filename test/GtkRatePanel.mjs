@@ -28,7 +28,8 @@ export async function checkRates(model, reference, checkGeometry, dialogReferenc
   const geometry = await checkGeometry(reference);
   check(geometry.checked === 302 && geometry.hidden === 0, 'Original control rectangles in both views');
   const dialogs = await checkDialogs(dialogReference);
-  check(dialogs.dialogs === 3 && dialogs.checked === 37, 'Original dialog client/control rectangles');
+  check(dialogs.dialogs === 4 && dialogs.checked === 44, 'Original dialog client/control rectangles');
+  check(/^Version [0-9]+\.[0-9]+\.[0-9]+$/.test(document.querySelector('.about-version').textContent), 'Actual project version in About');
   const originalDevice = model.device;
   for (const device of [
     {id: 'serial:EXP', name: 'OCTA-CAPTURE EXP (EXP)', model: 'OCTA-CAPTURE EXP', product_id: '0121'},

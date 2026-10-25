@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import re
 import signal
 import socket
 import subprocess
@@ -60,6 +61,17 @@ def invalid_constant(_value):
     raise ValueError('Non-finite JSON number.')
 
 
+def project_version(path=Path(__file__).resolve().parent.parent / 'VERSION'):
+    try:
+        with path.open('r', encoding='ascii') as source:
+            value = source.read(65)
+        if len(value) <= 64 and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', value.strip()):
+            return value.strip()
+    except (OSError, UnicodeError):
+        pass
+    return 'unknown'
+
+
 class RequestInput(io.RawIOBase):
     """Bound cumulative input and elapsed receive time, including slow senders."""
 
@@ -99,6 +111,7 @@ class LocalServer(ThreadingHTTPServer):
         self.application = application
         self.token = token or secrets.token_urlsafe(32)
         self.asset_dir = Path(asset_dir or Path(__file__).with_name('web')).resolve()
+        self.version = project_version()
         self._slots = threading.BoundedSemaphore(16)
         super().__init__(('127.0.0.1', port), Handler)
         self.host = f'127.0.0.1:{self.server_port}'
@@ -209,7 +222,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ASSETS:
                 filename, content_type = ASSETS[path]
-                self.reply(200, (self.server.asset_dir / filename).read_bytes(), content_type, head=head)
+                content = (self.server.asset_dir / filename).read_bytes()
+                if filename == 'index.html':
+                    content = content.replace(b'@OCTA_VERSION@', self.server.version.encode('ascii'))
+                self.reply(200, content, content_type, head=head)
                 return
             if head:
                 self.failure(405, 'This API requires GET.')

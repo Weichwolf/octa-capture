@@ -227,6 +227,16 @@ dialog select, dialog input[type=number] { min-width: 100px; padding: 2px 4px; f
 .reference-stepper button:last-child { border-top: 0; }
 #reverb footer button { left: 101px; top: 105px; width: 75px; }
 #reverb footer [data-action] { left: 20px; }
+#about { width: 487px; min-width: 0; font-size: 11px; background: #f4f4f4; }
+#about .reference-dialog-client { height: 105px; }
+#about .about-icon { position: absolute; left: 11px; top: 11px; }
+#about .about-product, #about .about-version { position: absolute; left: 54px; top: 9px; width: 342px; height: 15px; white-space: nowrap; }
+#about .about-version { top: 27px; text-align: right; }
+#about .about-warning { position: absolute; left: 54px; top: 45px; width: 414px; height: 32px; margin: 0; justify-content: flex-start; gap: 4px; }
+#about .about-warning input { flex-shrink: 0; width: 13px; height: 13px; margin: 0; }
+#about .about-divider { position: absolute; left: 9px; top: 77px; width: 461px; height: 2px; margin: 0; border: 0; border-top: 1px solid #aaa; border-bottom: 1px solid white; }
+#about .about-license { position: absolute; left: 9px; top: 86px; width: 450px; height: 12px; text-align: center; }
+#about footer button { left: 405px; top: 9px; width: 63px; }
 .settings-fields { width: 340px; }
 .settings-fields .settings-device { margin: 0; }
 .settings-device select { width: 100%; }

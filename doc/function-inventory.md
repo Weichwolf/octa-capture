@@ -142,8 +142,8 @@ code match 32 fixed master readout traces per reference. Browser response models
 also verify unequal stereo values and thumb-release selection on all four buses.
 Host visibility/painting and macOS notification scheduling are modeled.
 Owner-painted artwork and native Windows fonts/DPI remain outside that comparison;
-this is not complete visual parity. Patch Bay, Reverb and idle Auto-Sens also
-match 37 original child rectangles and their client sizes at 96 DPI. The
+this is not complete visual parity. Patch Bay, Reverb, idle Auto-Sens and About also
+match 44 original child rectangles and their client sizes at 96 DPI. The
 read-only inspector checks the original process identity and dialog ownership;
 Chromium/native WebKit verify the same numeric fixture and readable multiline
 Auto-Sens failures. Original window decorations and font/bitmap rendering are

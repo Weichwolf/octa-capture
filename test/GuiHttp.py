@@ -17,7 +17,20 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gui.application import Application
 from gui.backend import DeviceError, InvalidControl, validate_control
-from gui.server import LocalServer
+from gui.server import LocalServer, project_version
+
+
+class Version(unittest.TestCase):
+    def test_missing_invalid_or_markup_version_is_never_rendered_as_html(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'VERSION'
+            self.assertEqual(project_version(path), 'unknown')
+            for value in (b'', b'<script>alert(1)</script>', b'1.2.3\" onclick=\"x', b'1.2.3\nextra',
+                          b'1.2.3' + b' ' * 65, b'\xff'):
+                path.write_bytes(value)
+                self.assertEqual(project_version(path), 'unknown')
+            path.write_bytes(b'1.2.3\n')
+            self.assertEqual(project_version(path), '1.2.3')
 
 
 class TestApplication:

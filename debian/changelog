@@ -4,6 +4,8 @@ octa-capture (0.1.0-1~trixie11) UNRELEASED; urgency=medium
   * Advertise exact base/EXP USB IDs with validated driver metadata.
   * Normalize standalone DKMS package modes and provide Debian-format copyright,
     maintainer details and a deterministic package changelog.
+  * Match the original About layout while displaying the actual Linux project
+    version and attribution.
 
  -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Sun, 25 Oct 2026 23:58:17 +0100
 

@@ -29,6 +29,8 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/gui"
   DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/octa-capture" COMPONENT Runtime
   FILES_MATCHING PATTERN "*.py" PATTERN "*.js" PATTERN "*.html" PATTERN "*.css" PATTERN "*.svg"
   PATTERN "__pycache__" EXCLUDE)
+install(FILES "${CMAKE_SOURCE_DIR}/VERSION"
+  DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/octa-capture" COMPONENT Runtime)
 configure_file("${CMAKE_SOURCE_DIR}/cmake/InstallDesktop.cmake.in"
   "${CMAKE_BINARY_DIR}/InstallDesktop.cmake" @ONLY)
 install(SCRIPT "${CMAKE_BINARY_DIR}/InstallDesktop.cmake" COMPONENT Runtime)
