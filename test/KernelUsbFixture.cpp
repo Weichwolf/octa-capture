@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <initializer_list>
 #include <iostream>
+#include <limits>
 #include <linux/prctl.h>
 #include <linux/usb/ch9.h>
 #include <linux/usb/raw_gadget.h>
@@ -53,6 +54,7 @@ constexpr std::uint8_t implicit_feedback =
     USB_ENDPOINT_SYNC_ASYNC | USB_ENDPOINT_USAGE_IMPLICIT_FB | USB_ENDPOINT_XFER_ISOC;
 constexpr std::uint8_t async_playback = USB_ENDPOINT_SYNC_ASYNC | USB_ENDPOINT_XFER_ISOC;
 constexpr std::uint8_t sentinel = 0xa5;
+constexpr unsigned int pcm_rate_hz = 48000;
 
 enum class StatusMode : std::uint8_t {
   normal,
@@ -338,6 +340,10 @@ private:
     const bool status_interface = request.wIndex == 3 && request.wValue <= 1;
     const bool auxiliary = request.wIndex == 4 && request.wValue == 0;
     if (!(idle_audio || midi || status_interface || auxiliary)) {
+      if (request.wIndex < 2 && request.wValue >= 1 && request.wValue <= 4) {
+        std::cout << "OCTA_VM_PCM_ALT_STALL " << request.wIndex << ' ' << request.wValue << '\n'
+                  << std::flush;
+      }
       checked(ioctl(fd_, USB_RAW_IOCTL_EP0_STALL, 0UL), "Unsupported alternate");
       return;
     }
@@ -441,6 +447,64 @@ void read_status(const Scenario &test, int error_output = -1) {
   }
 }
 
+struct PcmSetting {
+  unsigned int parameter;
+  unsigned int value;
+};
+
+void pcm_mask(snd_pcm_hw_params &parameters, PcmSetting setting) {
+  auto &mask = parameters.masks[setting.parameter - SNDRV_PCM_HW_PARAM_FIRST_MASK];
+  std::ranges::fill(mask.bits, 0U);
+  mask.bits[setting.value / 32U] = 1U << (setting.value % 32U);
+}
+
+void pcm_interval(snd_pcm_hw_params &parameters, PcmSetting setting) {
+  auto &interval = parameters.intervals[setting.parameter - SNDRV_PCM_HW_PARAM_FIRST_INTERVAL];
+  interval.min = setting.value;
+  interval.max = setting.value;
+  interval.integer = 1;
+}
+
+snd_pcm_hw_params pcm_parameters(unsigned int channels) {
+  snd_pcm_hw_params parameters{};
+  constexpr auto maximum = std::numeric_limits<unsigned int>::max();
+  for (auto &mask : parameters.masks) { std::ranges::fill(mask.bits, maximum); }
+  for (auto &interval : parameters.intervals) { interval.max = maximum; }
+  parameters.rmask = maximum;
+  pcm_mask(parameters,
+           {.parameter = SNDRV_PCM_HW_PARAM_ACCESS, .value = SNDRV_PCM_ACCESS_RW_INTERLEAVED});
+  pcm_mask(parameters, {.parameter = SNDRV_PCM_HW_PARAM_FORMAT, .value = SNDRV_PCM_FORMAT_S24_3LE});
+  pcm_mask(parameters,
+           {.parameter = SNDRV_PCM_HW_PARAM_SUBFORMAT, .value = SNDRV_PCM_SUBFORMAT_STD});
+  pcm_interval(parameters, {.parameter = SNDRV_PCM_HW_PARAM_CHANNELS, .value = channels});
+  pcm_interval(parameters, {.parameter = SNDRV_PCM_HW_PARAM_RATE, .value = pcm_rate_hz});
+  pcm_interval(parameters, {.parameter = SNDRV_PCM_HW_PARAM_PERIOD_SIZE, .value = 256});
+  pcm_interval(parameters, {.parameter = SNDRV_PCM_HW_PARAM_PERIODS, .value = 4});
+  pcm_interval(parameters, {.parameter = SNDRV_PCM_HW_PARAM_BUFFER_SIZE, .value = 1024});
+  return parameters;
+}
+
+void reject_pcm() {
+  for (const bool capture : {false, true}) {
+    const char *const path = capture ? "/dev/snd/pcmC0D0c" : "/dev/snd/pcmC0D0p";
+    const int fd = checked(open(path, O_RDWR | O_NONBLOCK | O_CLOEXEC), "Open modeled PCM");
+    for (unsigned int iteration = 0; iteration < 2; ++iteration) {
+      auto parameters = pcm_parameters(capture ? 12U : 10U);
+      checked(ioctl(fd, SNDRV_PCM_IOCTL_HW_REFINE, &parameters), "Refine legal PCM parameters");
+      checked(ioctl(fd, SNDRV_PCM_IOCTL_HW_PARAMS, &parameters), "Configure modeled PCM");
+      const int result = ioctl(fd, SNDRV_PCM_IOCTL_PREPARE, nullptr);
+      const int error = errno;
+      std::cout << "PCM_PREPARE " << capture << ' ' << iteration << " result=" << result
+                << " errno=" << error << '\n'
+                << std::flush;
+      require(result == -1 && error == EPIPE, "PCM prepare propagates USB alternate stall");
+      checked(ioctl(fd, SNDRV_PCM_IOCTL_HW_FREE, nullptr), "Free failed PCM setup");
+    }
+    checked(close(fd), "Close failed PCM");
+  }
+  std::puts("OCTA_VM_PCM_FAILURE_PASS");
+}
+
 struct MonEvent {
   std::string id;
   std::string endpoint;
@@ -537,6 +601,11 @@ int main(int argc, char **argv) {
   if (std::string_view(argv[1]) == "disconnect-read") {
     require(argc == 3, "Gadget process ID required");
     disconnect_read(process_id(argv[2]));
+    return 0;
+  }
+  if (std::string_view(argv[1]) == "reject-pcm") {
+    require(argc == 2, "PCM check accepts no scenario");
+    reject_pcm();
     return 0;
   }
   const auto test = scenario(argc == 3 ? argv[2] : "normal");

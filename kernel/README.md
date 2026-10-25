@@ -296,6 +296,15 @@ Dummy HCD can complete a removed endpoint with `EPROTO`; the test compares the
 actual USB and ALSA errors instead of assuming `ESHUTDOWN`. A timeout cannot
 substitute for this disconnect result.
 
+At 48 kHz, the fixture also accepts legal S24_3LE hardware parameters with
+256/1024-frame period/buffer sizes, then stalls audio alternate activation.
+Playback and capture each repeat prepare, `HW_FREE` and reconfiguration twice
+on the same open PCM handle. All four prepare calls must report `EPIPE`; the
+gadget must observe exactly two alternate-2 rejections on each audio interface.
+Another 20 valid status reads and device/module teardown must then succeed.
+This covers setup failure and cleanup before audio transfer, not isochronous
+data, running-stream faults or physical-device streaming.
+
 This is a legal descriptor/status model, not a recording of the device's full
 descriptors or a firmware emulator. MIDI packet sizes and strings are fixture
 values. The model rejects audio streaming alternates and does not service MIDI,

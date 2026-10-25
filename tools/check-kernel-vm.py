@@ -91,7 +91,7 @@ def usb_script():
               '  usb_start "$scenario"', '  /bin/usb-fixture read-status "$scenario"',
               '  usb_stop', 'done']
     lines += ['usb_start timeout', '/bin/usb-fixture disconnect-read "$gadget"', 'usb_finish',
-              'usb_start normal', '/bin/usb-fixture read-status', 'usb_stop',
+              'usb_start normal', '/bin/usb-fixture reject-pcm', '/bin/usb-fixture read-status', 'usb_stop',
               'echo OCTA_VM_STATUS_RECOVERY_PASS']
     return lines
 
@@ -149,6 +149,10 @@ def verify_output(result, text, usb):
         cycles = cycles and lines.count('OCTA_VM_STATUS_ERROR_PASS disconnect') == 1
         cycles = cycles and lines.count('OCTA_VM_STATUS_UNPLUG_PASS') == 1
         cycles = cycles and lines.count('OCTA_VM_STATUS_RECOVERY_PASS') == 1
+        cycles = cycles and lines.count('OCTA_VM_PCM_FAILURE_PASS') == 1
+        cycles = cycles and lines.count('OCTA_VM_PCM_ALT_STALL 1 2') == 2
+        cycles = cycles and lines.count('OCTA_VM_PCM_ALT_STALL 0 2') == 2
+        cycles = cycles and sum(line.startswith('OCTA_VM_PCM_ALT_STALL ') for line in lines) == 4
     return not result and lines.count(MARKER) == 1 and cycles and not REPORT.search(text)
 
 
@@ -209,6 +213,7 @@ def main():
             print('PASS seven deterministic status errors with exact ALSA errno and untouched caller buffers. No fuzzing was run.')
             print('PASS in-flight disconnect confirmed by status URB submission/completion and ALSA error readback.')
             print('PASS 20 valid status reads after the error/disconnect scenarios and a fresh module/device lifecycle.')
+            print('PASS playback/capture PCM setup errors, repeated HW_FREE/reconfiguration and status recovery after four modeled alternate stalls.')
 
 
 if __name__ == '__main__':

@@ -17,7 +17,8 @@ def console(usb=False):
         lines += ['OCTA_VM_STATUS_READ_PASS'] * 7
         lines += [f'OCTA_VM_STATUS_ERROR_PASS {name}' for name in CHECK['STATUS_ERRORS']]
         lines += ['OCTA_VM_STATUS_ERROR_PASS disconnect', 'OCTA_VM_STATUS_UNPLUG_PASS',
-                  'OCTA_VM_STATUS_RECOVERY_PASS']
+                  'OCTA_VM_STATUS_RECOVERY_PASS', 'OCTA_VM_PCM_FAILURE_PASS']
+        lines += ['OCTA_VM_PCM_ALT_STALL 1 2', 'OCTA_VM_PCM_ALT_STALL 0 2'] * 2
     return '\n'.join([*lines, CHECK['MARKER']])
 
 
@@ -31,9 +32,14 @@ class Evidence(unittest.TestCase):
         text = console(True)
         for marker in ('OCTA_VM_MODULE_CYCLE 2', 'OCTA_VM_USB_CYCLE 2',
                        'OCTA_VM_STATUS_READ_PASS', 'OCTA_VM_STATUS_ERROR_PASS disconnect',
-                       'OCTA_VM_STATUS_UNPLUG_PASS', 'OCTA_VM_STATUS_RECOVERY_PASS', CHECK['MARKER']):
+                       'OCTA_VM_STATUS_UNPLUG_PASS', 'OCTA_VM_STATUS_RECOVERY_PASS',
+                       'OCTA_VM_PCM_FAILURE_PASS', 'OCTA_VM_PCM_ALT_STALL 1 2',
+                       'OCTA_VM_PCM_ALT_STALL 0 2', CHECK['MARKER']):
             self.assertFalse(CHECK['verify_output'](0, text.replace(marker, '', 1), True), marker)
         self.assertFalse(CHECK['verify_output'](0, text + '\nOCTA_VM_STATUS_READ_PASS', True))
+        self.assertFalse(CHECK['verify_output'](0, text + '\nOCTA_VM_PCM_ALT_STALL 1 2', True))
+        self.assertFalse(CHECK['verify_output'](0, text.replace('OCTA_VM_PCM_ALT_STALL 1 2',
+                                                              'OCTA_VM_PCM_ALT_STALL 1 3'), True))
         for name in CHECK['STATUS_ERRORS']:
             marker = f'OCTA_VM_STATUS_ERROR_PASS {name}'
             self.assertFalse(CHECK['verify_output'](0, text.replace(marker, '', 1), True), name)
