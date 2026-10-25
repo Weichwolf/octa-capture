@@ -12,7 +12,11 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   The control-panel RTTI/vtables and MFC message maps identify dialog handlers.
   The kernel binary has been imported and its functions/call sites inventoried;
   selected PortCls power callbacks, status polling/cache and status/availability
-  IOCTL paths now execute offline. Complete IOCTL/property,
+  IOCTL paths now execute offline. Its scalar dispatcher also matches 2,948
+  preamp/compressor and 4,012 DSP encoding cases against C++ dry runs, with
+  112 transport-gate combinations. Original state helpers and MIDI/checksum
+  builders execute; only the final sender is stubbed. These valid-input checks
+  do not verify complete cache/coupling or outer IOCTL validation. Complete IOCTL/property,
   USB and power-management behavior is not yet traced.
 - Windows x86: the package's legacy branch is version 1.5.2 according to its INF
   and English README, whereas x64 is 1.5.3. The x86 kernel inventory contains

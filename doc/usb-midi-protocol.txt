@@ -583,6 +583,24 @@ checks that it is below eight for per-channel controls.
   0B         ratio                    0x100016570
   0C         compressor gain          0x100016c1a
 
+Windows x64 RDWM1110.SYS scalar dispatcher 0x140006550 accepts a request
+selector at offset 0x10, followed by 32-bit arguments. Preamp selectors,
+in the wire parameter order above, are:
+  1C 1F 1D 1E 20 14 15 16 17 18 19 1A 1B
+Arguments are channel and value; selector 14 uses the stereo-pair index.
+Routing/reverb use 10..13; mixer link/mono/mute/solo/send/pan/volume use
+21..27; master I/O link, stereo link, return and volume use 28/2A/2B/2C.
+These are Windows host request selectors, not USB/MIDI parameter bytes.
+
+tools/verify-windows-controls.py RDWM1110.SYS executes that dispatcher,
+its state helpers and original MIDI/checksum builders with the final sender
+stubbed. It matches 2,948 legal preamp/compressor index cases and 4,012 DSP
+cases against C++ dry runs, plus 112 fixed transport-gate combinations.
+DSP coefficients use fixed boundary/mixed-nibble samples; booleans, reverb
+indices and routing selections are exhaustive over the declared API domain.
+The check is offline and does not establish outer IOCTL validation, complete
+cache/coupling semantics, physical effects or complete driver parity.
+
 For example, sensitivity channel 0, encoded value 0x14:
   F0 41 10 00 00 4D 12 00 05 00 04 14 63 F7
 This is an encoding example, not a hardware-verified gain change.
