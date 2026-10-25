@@ -83,6 +83,17 @@ cmake --install build/release --prefix "$HOME/.local"
 # HTTP-only launcher: ~/.local/bin/octa-capture-http --open
 ```
 
+For an isolated development installation alongside the Debian package, use a
+commit-specific prefix and launch it explicitly:
+
+```bash
+octa_dev_prefix="$HOME/.local/opt/octa-capture-dev/$(git rev-parse --short HEAD)"
+cmake --install build/release --prefix "$octa_dev_prefix"
+"$octa_dev_prefix/bin/octa-capture"
+```
+
+The package's Xfce Applications → Settings entry starts the packaged installation.
+
 [Kernel and Debian/DKMS instructions](kernel/README.md) cover matching headers,
 module activation and packages. `VERSION` controls CMake/CPack versions. The
 runtime package includes both GUI launchers, device tools and an OCTA-CAPTURE
