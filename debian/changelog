@@ -1,3 +1,13 @@
+octa-capture (0.1.0-1~trixie10) trixie; urgency=medium
+
+  * Add opt-in experimental 24-in/20-out ALSA configuration preparation for
+    a base/EXP pair with identity and clock checks. Physical pair timing,
+    streaming and coordinated rate changes remain unverified/incomplete.
+  * Refine authored switch/fader artwork and match measured original
+    Patch Bay, Reverb and idle Auto-Sens client/control geometry.
+
+ -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Sun, 25 Oct 2026 23:23:20 +0100
+
 octa-capture (0.1.0-1~trixie9) trixie; urgency=medium
 
   * Recognize the EXP USB personality in the standalone module, activation,
