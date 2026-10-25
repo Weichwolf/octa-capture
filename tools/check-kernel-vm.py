@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-only
-"""Boot the isolated sanitizer kernel and check module load/unload without USB passthrough."""
+"""Check isolated sanitizer module/optional synthetic USB lifecycles without USB passthrough."""
 
 import argparse
 import fcntl
@@ -29,16 +29,16 @@ def entry(name, data=b'', mode=stat.S_IFREG | 0o644, major=0, minor=0):
     return prefix + bytes(-len(prefix) % 4) + data + bytes(-len(data) % 4)
 
 
-def static_busybox(path):
+def static_executable(path):
     image = path.read_bytes()
     if len(image) < 64 or image[:6] != b'\x7fELF\x02\x01' or struct.unpack_from('<H', image, 18)[0] != 62:
-        raise ValueError('An x86_64 Linux BusyBox ELF executable is required.')
+        raise ValueError('An x86_64 Linux ELF executable is required.')
     offset = struct.unpack_from('<Q', image, 32)[0]
     size, count = struct.unpack_from('<HH', image, 54)
     if size < 56 or not count or offset + size * count > len(image):
-        raise ValueError('Invalid BusyBox ELF program headers.')
+        raise ValueError('Invalid ELF program headers.')
     if any(struct.unpack_from('<I', image, offset + index * size)[0] == 3 for index in range(count)):
-        raise ValueError('BusyBox must be statically linked; its interpreter cannot run in this initramfs.')
+        raise ValueError('VM executables must be statically linked; no interpreter is included.')
     return image
 
 
@@ -70,7 +70,23 @@ def module_order(kernel, standalone, release):
     return ordered
 
 
-def init_script(modules, release):
+def usb_script():
+    return ['for iteration in 1 2 3; do', '  insmod /modules/snd_octa_capture.ko',
+            '  /bin/usb-fixture gadget &', '  gadget=$!',
+            '  for _ in $(seq 1 20); do',
+            '    test ! -c /dev/snd/controlC0 || break', '    sleep 1', '  done',
+            '  test -c /dev/snd/controlC0',
+            '  /bin/usb-fixture read-status &', '  reader_one=$!',
+            '  /bin/usb-fixture read-status &', '  reader_two=$!',
+            '  wait "$reader_one"', '  wait "$reader_two"',
+            '  kill "$gadget"', '  wait "$gadget" || test "$?" -eq 143',
+            '  for _ in $(seq 1 10); do',
+            '    test -d /sys/class/sound/card0 || break', '    sleep 1', '  done',
+            '  test ! -d /sys/class/sound/card0', '  rmmod snd_octa_capture',
+            '  echo "OCTA_VM_USB_CYCLE $iteration"', 'done']
+
+
+def init_script(modules, release, usb=False):
     dependencies = [name for name in modules if name not in ('snd_usb_audio', 'snd_octa_capture')]
     lines = ['#!/bin/busybox sh', 'set -eu', 'export PATH=/bin', '/bin/busybox --install -s /bin',
              'mount -t proc proc /proc', 'mount -t sysfs sysfs /sys',
@@ -86,18 +102,22 @@ def init_script(modules, release):
               '  test -d /sys/module/snd_octa_capture', '  rmmod snd_octa_capture',
               '  rmmod snd_usb_audio', '  test ! -d /sys/module/snd_octa_capture',
               '  test ! -d /sys/module/snd_usb_audio', '  echo "OCTA_VM_MODULE_CYCLE $iteration"', 'done']
+    if usb:
+        lines += usb_script()
     lines += [f'rmmod {name}' for name in reversed(dependencies)]
     lines += ['trap - EXIT', f'echo {MARKER}', 'poweroff -f', 'sleep 5', 'exit 1']
     return ('\n'.join(lines) + '\n').encode()
 
 
-def initramfs(path, busybox, modules, release):
+def initramfs(path, busybox, modules, release, usb_fixture=None):
     content = bytearray()
     for name in ('bin', 'dev', 'proc', 'sys', 'tmp', 'modules'):
         content += entry(name, mode=stat.S_IFDIR | 0o755)
     content += entry('dev/console', mode=stat.S_IFCHR | 0o600, major=5, minor=1)
-    content += entry('bin/busybox', static_busybox(busybox), stat.S_IFREG | 0o755)
-    content += entry('init', init_script(modules, release), stat.S_IFREG | 0o755)
+    content += entry('bin/busybox', static_executable(busybox), stat.S_IFREG | 0o755)
+    if usb_fixture:
+        content += entry('bin/usb-fixture', static_executable(usb_fixture), stat.S_IFREG | 0o755)
+    content += entry('init', init_script(modules, release, usb_fixture is not None), stat.S_IFREG | 0o755)
     for name, module in modules.items():
         content += entry('modules/' + name + '.ko', module.read_bytes())
     content += entry('TRAILER!!!')
@@ -109,11 +129,21 @@ def interrupted(_number, _frame):
     raise KeyboardInterrupt
 
 
+def verify_output(result, text, usb):
+    lines = text.splitlines()
+    cycles = all(lines.count(f'OCTA_VM_MODULE_CYCLE {number}') == 1 for number in (1, 2, 3))
+    if usb:
+        cycles = cycles and all(lines.count(f'OCTA_VM_USB_CYCLE {number}') == 1 for number in (1, 2, 3))
+        cycles = cycles and lines.count('OCTA_VM_STATUS_READ_PASS') == 6
+    return not result and lines.count(MARKER) == 1 and cycles and not REPORT.search(text)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path, help='completed tools/build-kernel-vm.py output directory')
     parser.add_argument('--qemu', type=Path, default=shutil.which('qemu-system-x86_64'))
     parser.add_argument('--busybox', type=Path, required=True, help='statically linked x86_64 BusyBox')
+    parser.add_argument('--usb-fixture', type=Path, help='optional static kernel_usb_fixture for synthetic status/disconnect checks')
     parser.add_argument('--bios', type=Path, help='optional explicit SeaBIOS image')
     parser.add_argument('--firmware-dir', type=Path, help='optional QEMU firmware/ROM search directory')
     parser.add_argument('--accel', choices=('kvm', 'tcg'), default='kvm')
@@ -135,7 +165,8 @@ def main():
         modules = module_order(kernel, standalone, release)
         run = Path(tempfile.mkdtemp(prefix='check-', dir=directory))
         archive = run / 'initramfs.cpio.gz'
-        initramfs(archive, args.busybox.resolve(strict=True), modules, release)
+        fixture = args.usb_fixture.resolve(strict=True) if args.usb_fixture else None
+        initramfs(archive, args.busybox.resolve(strict=True), modules, release, fixture)
         command = [str(args.qemu.resolve(strict=True)), '-nodefaults', '-display', 'none',
                    '-serial', 'stdio', '-monitor', 'none', '-nic', 'none', '-no-reboot',
                    '-machine', 'pc,accel=' + args.accel, '-cpu', 'host' if args.accel == 'kvm' else 'max',
@@ -156,10 +187,11 @@ def main():
         finally:
             signal.signal(signal.SIGTERM, previous)
         text = log.read_text(errors='replace')
-        cycles = all(f'OCTA_VM_MODULE_CYCLE {number}' in text for number in (1, 2, 3))
-        if result.returncode or MARKER not in text or not cycles or REPORT.search(text):
+        if not verify_output(result.returncode, text, fixture is not None):
             raise RuntimeError(f'VM module lifecycle/sanitizer check failed; inspect {log}')
         print('PASS sanitizer VM boot and three generic/standalone module load/unload cycles. No device streaming was tested.')
+        if fixture:
+            print('PASS three synthetic USB probe/concurrent-status/disconnect cycles (120 status reads). No physical device was tested.')
 
 
 if __name__ == '__main__':

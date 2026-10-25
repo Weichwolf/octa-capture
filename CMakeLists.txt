@@ -16,6 +16,8 @@ find_program(OCTA_CLANG_FORMAT NAMES clang-format-19 clang-format
   PATHS "$ENV{HOME}/.local/opt/octa-llvm19/usr/lib/llvm-19/bin" REQUIRED)
 set(CMAKE_CXX_CLANG_TIDY "${OCTA_CLANG_TIDY};--warnings-as-errors=*")
 
+add_subdirectory(cmake/KernelUsbFixture)
+
 add_library(octa_protocol STATIC src/Protocol.cpp src/Preamp.cpp src/Control.cpp src/Dsp.cpp src/DspUpdate.cpp src/DspControl.cpp src/Meters.cpp src/AutoSense.cpp src/Preset.cpp src/PresetState.cpp src/PresetImport.cpp src/DeviceStatus.cpp src/DirectOut.cpp src/Initialization.cpp src/Bridge.cpp src/PcmMeters.cpp src/PanelCommand.cpp src/InputMonitor.cpp)
 target_include_directories(octa_protocol PUBLIC include)
 target_link_libraries(octa_protocol PUBLIC octa_quality)
@@ -165,6 +167,8 @@ set_tests_properties(pulse-pairs PROPERTIES TIMEOUT 10)
 add_test(NAME dkms-build COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/DkmsBuild.py")
 add_test(NAME kernel-vm-build COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/KernelVmBuild.py")
 set_tests_properties(kernel-vm-build PROPERTIES TIMEOUT 10)
+add_test(NAME kernel-vm-check COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/KernelVmCheck.py")
+set_tests_properties(kernel-vm-check PROPERTIES TIMEOUT 10)
 add_test(NAME gui-meters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiMeters.mjs")
 add_test(NAME gui-parameters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiParameters.mjs")
 add_test(NAME gui-clock COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiClock.py")
@@ -296,6 +300,7 @@ set(octa_bridge_sources
 
 add_custom_target(format-check
   COMMAND "${OCTA_CLANG_FORMAT}" --dry-run --Werror
+    "${CMAKE_SOURCE_DIR}/test/KernelUsbFixture.cpp"
     "${CMAKE_SOURCE_DIR}/tools/reference-midi-host.c"
     ${octa_clock_sources} ${octa_clock_shims}
     ${octa_kernel_status_sources} ${octa_status_shims}
@@ -369,6 +374,7 @@ add_custom_target(format-check
 
 add_custom_target(format
   COMMAND "${OCTA_CLANG_FORMAT}" -i
+    "${CMAKE_SOURCE_DIR}/test/KernelUsbFixture.cpp"
     "${CMAKE_SOURCE_DIR}/tools/reference-midi-host.c"
     ${octa_clock_sources} ${octa_clock_shims}
     ${octa_kernel_status_sources} ${octa_status_shims}
@@ -442,6 +448,7 @@ add_custom_target(format
 
 add_custom_target(lint
   COMMAND "${OCTA_CLANG_TIDY}" -p "${CMAKE_BINARY_DIR}" --warnings-as-errors=*
+    "${CMAKE_SOURCE_DIR}/test/KernelUsbFixture.cpp"
     ${octa_clock_sources}
     ${octa_kernel_status_sources}
     ${octa_bridge_sources}

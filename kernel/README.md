@@ -230,7 +230,8 @@ of a running host build. The fixture applies documentation fixes from
 `vm-linux-6.12.patch` and defined-access fixes from
 `vm-alignment-linux-6.12.patch` to that private source, retaining `W=1`,
 `-Werror` and alignment checking. The latter uses unaligned-access helpers,
-ACPICA's portable byte accesses and actual list/RCU/SMP node alignment. Neither
+ACPICA's portable byte accesses, aligned no-fault copy operands and actual
+list/RCU/SMP node alignment. Neither
 patch changes the host kernel or the shipped standalone module sources.
 LLVM 19 and the usual kernel build dependencies are required.
 
@@ -262,15 +263,39 @@ times. Kernel warnings, sanitizer reports, missing completion markers and a
 `build/kernel-vm/check-*/console.log`. `--accel tcg` supports hosts without KVM;
 `--timeout` can increase the bound to at most 600 seconds. `--qemu`, `--bios` and
 `--firmware-dir` accept local tool/firmware paths. No host USB device or network is passed to
-the guest. This checks module initialization/exit, not device-specific USB,
-audio streaming, fault injection or suspend/resume. It does not run fuzzing.
+the guest. This invocation checks module initialization/exit. It does not run fuzzing.
 
-The patched Linux 6.12.113 fixture passes strict VM startup and three paired
-generic/standalone module load/unload cycles without kernel warnings or
-KASAN/UBSAN reports. Clock, status, monitor and PCM meter objects contain
-KASAN and UBSAN alignment instrumentation. This establishes module lifecycle
-coverage only; device-specific USB paths, streaming, fault injection and power
-management still need separate sanitizer checks.
+For additional deterministic USB coverage, build the static, optional guest helper
+and pass it to the same checker:
+
+```bash
+cmake --preset release
+cmake --build --preset release --target kernel_usb_fixture
+python3 tools/check-kernel-vm.py build/kernel-vm --busybox /bin/busybox \
+  --usb-fixture build/release/kernel_usb_fixture
+```
+
+The helper refuses to operate outside the private VM kernel and binds only
+`dummy_udc.0`. Its synthetic descriptors select the real standalone driver's
+composite quirk and expose a modeled phase-0/phase-1 status pipe at 48 kHz.
+Three enumeration/disconnect cycles each run two simultaneous ALSA status
+readers, checking 120 complete raw replies and read-only control metadata.
+The generic ALSA module is unloaded before each simulated device appears.
+Helper workers terminate with their gadget parent, so disconnect closes all
+raw-gadget handles. Missing USB/read markers also fail the check.
+
+This is a legal descriptor/status model, not a recording of the device's full
+descriptors or a firmware emulator. MIDI packet sizes and strings are fixture
+values. The model rejects audio streaming alternates and does not service MIDI,
+physical audio, DSP controls or external clocks. No malformed traffic is generated.
+
+The patched Linux 6.12.113 fixture passes strict VM startup, three paired
+generic/standalone module load/unload cycles and the synthetic USB/status
+cycles without kernel warnings or KASAN/UBSAN reports.
+Clock, status, monitor and PCM meter objects contain
+KASAN and UBSAN alignment instrumentation. Streaming, transport failures,
+in-flight unplug, fault injection and power management still need separate
+sanitizer checks.
 
 ## Passive USB timing observation
 

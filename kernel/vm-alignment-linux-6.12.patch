@@ -9,6 +9,7 @@ string destinations and inflate copies. Select ACPICA's portable byte
 accesses. Traverse ordinary and RCU list sentinels through their actual
 node alignment, and use the underlying SMP structure alignment for queues
 shared with IRQ and wakeup nodes; retain the aligned CSD allocation typedef.
+Select naturally aligned widths for no-fault copy operands on all architectures.
 
 ---
 --- a/include/linux/list.h
@@ -419,3 +420,31 @@ shared with IRQ and wakeup nodes; retain the aligned CSD allocation typedef.
  		pos = list_entry_rcu(pos->member.next, typeof(*(pos)), member))
  
  /**
+--- a/mm/maccess.c
++++ b/mm/maccess.c
+@@ -23,10 +23,8 @@
+ 
+ long copy_from_kernel_nofault(void *dst, const void *src, size_t size)
+ {
+-	unsigned long align = 0;
+-
+-	if (!IS_ENABLED(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS))
+-		align = (unsigned long)dst | (unsigned long)src;
++	/* Typed accesses require aligned operands even on x86. */
++	unsigned long align = (unsigned long)dst | (unsigned long)src;
+ 
+ 	if (!copy_from_kernel_nofault_allowed(src, size))
+ 		return -ERANGE;
+@@ -57,10 +55,8 @@
+ 
+ long copy_to_kernel_nofault(void *dst, const void *src, size_t size)
+ {
+-	unsigned long align = 0;
+-
+-	if (!IS_ENABLED(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS))
+-		align = (unsigned long)dst | (unsigned long)src;
++	/* Typed accesses require aligned operands even on x86. */
++	unsigned long align = (unsigned long)dst | (unsigned long)src;
+ 
+ 	pagefault_disable();
+ 	if (!(align & 7))
