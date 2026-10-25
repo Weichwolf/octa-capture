@@ -1,7 +1,7 @@
 octa-capture (0.1.0-1~trixie7) trixie; urgency=medium
 
-  * Match fixed unavailable-channel presentation at 192 kHz and cancel
-    captured controls or unfinished edits when their channel becomes unavailable.
+  * Match fixed unavailable-channel presentation at 192 kHz. Cancel captured
+    controls and unfinished edits when their channel becomes unavailable.
   * Allow the offline Playwright suite to validate installed package assets.
 
  -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Sun, 25 Oct 2026 20:25:00 +0100
