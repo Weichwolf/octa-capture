@@ -2,6 +2,7 @@
 
 - Repository language is English: documentation, code comments, commit messages, and UI text. Continue speaking German with the user unless asked otherwise.
 - Roland OCTA-CAPTURE / UA-1010, USB `0582:0120`. Linux support targets native Debian with direct USB.
+- VS EXPAND uses USB `0582:0121`, confirmed in both references. Initial module/status/discovery support is under development; activation/permission selectors and physical EXP validation still need completion.
 - Investigate and extend existing ALSA support in `snd-usb-audio` first. Device detection does not prove working audio streaming.
 - Deliver a standalone `snd-octa-capture` module for Debian; users must not patch or rebuild their kernel. ALSA source changes belong only in the private module copy.
 - Current user priority: deliver the working HTML GUI on the verified device backend while continuing the remaining driver/reference audit. Keep unverified functions explicit; do not postpone all GUI work until every hardware limitation is resolved.

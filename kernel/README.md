@@ -1,6 +1,11 @@
 # Standalone ALSA module
 
-The driver is built as **`snd-octa-capture.ko`**, using isolated copies of ALSA's USB audio and MIDI implementations. Debian's kernel and its source tree remain untouched. The module matches only `0582:0120`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` and `snd-usbmidi-lib` modules to coexist for other devices. The embedded MIDI helper closes interrupted SysEx and filters input events like the Windows/macOS references.
+The driver is built as **`snd-octa-capture.ko`**, using isolated copies of ALSA's USB audio and MIDI implementations. Debian's kernel and its source tree remain untouched. The module matches `0582:0120` and its VS EXPAND personality `0582:0121`; its ALSA implementation exports no symbols, allowing the standard `snd-usb-audio` and `snd-usbmidi-lib` modules to coexist for other devices. The embedded MIDI helper closes interrupted SysEx and filters input events like the Windows/macOS references.
+
+EXP matching, status registration and GUI discovery follow the shared reference
+paths. Physical EXP descriptors/audio/CTRL/clock behavior and multi-unit
+aggregation remain unverified. Native hardware results below cover `0120` only;
+activation/permission tooling currently still targets the base personality.
 
 The embedded-MIDI module builds against Debian 6.12 with `W=1` and `-Werror`; its MIDI source passes Sparse. The private MIDI source passes the offline reference comparison. The module exposes descriptor-based audio formats and both MIDI cables, with vendor clock control recovered from the macOS driver. Native Debian 6.12 passes clock/status reads and PCM meter/lifecycle checks at 44.1/48/96/192 kHz. Mixer A digital-return PRBS streams pass on all ten playback sources at 44.1/48/96 kHz, using ten-second streams, 1024-frame periods and an 8192-frame buffer. The 192 kHz mode has four capture/playback channels and no return 11/12; its PCM checks do not establish signal integrity.
 
@@ -283,6 +288,10 @@ readers, checking 120 complete raw replies and read-only control metadata.
 The generic ALSA module is unloaded before each simulated device appears.
 Helper workers terminate with their gadget parent, so disconnect closes all
 raw-gadget handles. Missing USB/read markers also fail the check.
+An additional model changes only idProduct to `0121`: the checker verifies that
+exact sysfs product ID, standalone binding, 20 complete status replies and
+teardown. This tests EXP ID handling with modeled legal descriptors; it does not
+validate the physical expansion unit's descriptors or streaming.
 
 Seven fixed status-error scenarios check empty/7-byte replies (`EIO`), an
 invalid phase (`EPROTO`), a phase-1 zero rate (`ENODATA`), four packets without

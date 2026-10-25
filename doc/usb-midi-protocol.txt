@@ -2,6 +2,14 @@ OCTA-CAPTURE USB/MIDI protocol
 =============================
 
 Device: Roland UA-1010, USB VID:PID 0582:0120.
+VS EXPAND changes its USB product ID to 0121. The official x64 RDIF1110.INF
+lists 0582:0120 and 0582:0121 in the same install section. Windows constructor
+0x140017780 selects Rdwm1110Ex for descriptor idProduct 0121 and assigns its
+logical slots after the four base slots. macOS CA_Device::device_GetPropertyData
+(0xBBCA, selector 'lnam') returns OCTA-CAPTURE EXP when CuUsbDevIf::Pid is 0121.
+The references use shared audio/status opening paths for both personalities.
+Actual EXP descriptors, audio, CTRL and clock responses have not been captured
+or verified here; normal-mode hardware results do not establish EXP operation.
 Reference packages: Windows 1.5.3 and macOS 1.5.9, identified in
 drivers-manifest.json. The Windows archive includes a legacy x86 1.5.2 branch
 (INF DriverVer=07/21/2015,1.05.02.0000; English README version 1.5.2), alongside

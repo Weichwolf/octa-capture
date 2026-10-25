@@ -34,6 +34,35 @@ bool initialize() {
                  "status metadata, PCM-control delegation and ownership");
 }
 
+bool device_ids() {
+  for (const auto id : {USB_ID(0x0582U, 0x0120U),
+                        USB_ID(0x0582U, 0x0121U),
+                        USB_ID(0x0582U, 0x0122U),
+                        USB_ID(0x0581U, 0x0121U)}) {
+    reset();
+    auto &state = transport();
+    state.chip.usb_id = id;
+    const bool supported = id == USB_ID(0x0582U, 0x0120U) || id == USB_ID(0x0582U, 0x0121U);
+    if (!require(snd_usb_octa_capture_add_controls(&state.chip) == 0 && balanced() &&
+                     state.pcm_calls == (supported ? 1U : 0U),
+                 "base/EXP controls register while neighboring USB IDs remain excluded")) {
+      return false;
+    }
+    if (!supported) {
+      if (!require(state.allocations_attempted == 0, "unrelated USB IDs allocate no controls")) {
+        return false;
+      }
+      continue;
+    }
+    std::array<std::uint8_t, output_size> output{};
+    if (!require(get(output) == 0 && balanced() && state.calls == 2,
+                 "both product IDs execute the phase-coherent status transport")) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool read_result(int expected) {
   std::array<std::uint8_t, output_size> output{};
   const auto result = get(output);
@@ -201,8 +230,8 @@ bool registration() {
 }
 
 int main() {
-  const bool passed =
-      phases() && transfer_faults() && descriptors() && get_failures() && registration();
+  const bool passed = device_ids() && phases() && transfer_faults() && descriptors() &&
+                      get_failures() && registration();
   octa::kernel_status_test::cleanup();
   if (!passed) { return 1; }
   std::cout << "PASS actual kernel status C: phase order, all invalid phases, "

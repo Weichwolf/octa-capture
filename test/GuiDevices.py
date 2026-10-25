@@ -50,11 +50,23 @@ class Discovery(unittest.TestCase):
 
     def test_other_usb_products_and_sound_entries_are_excluded(self):
         self.card(0, vendor='1234')
-        self.card(1, 'OTHER', '1-2', product='0121')
+        self.card(1, 'OTHER', '1-2', product='0122')
         self.card(256, 'TOOMANY', '1-3')
         (self.sound / 'controlC0').mkdir()
         (self.sound / 'cardx').mkdir()
         self.assertEqual(discover(self.sound), ())
+
+    def test_expansion_product_has_its_own_model_name_and_card_selection(self):
+        self.card()
+        self.card(1, 'OCTACAPTURE_1', '1-2', product='0121', serial='EXP0001')
+        devices = discover(self.sound)
+        self.assertEqual(len(devices), 2)
+        expansion = devices[1]
+        self.assertEqual(expansion.product_id, '0121')
+        self.assertEqual(expansion.name, 'OCTA-CAPTURE EXP (EXP0001)')
+        self.assertEqual(expansion.identity, 'serial:EXP0001')
+        self.assertTrue(expansion.document(expansion.port)['selected'])
+        self.assertFalse(devices[0].document(expansion.port)['selected'])
 
     def test_missing_serial_uses_alsa_identity(self):
         self.card(serial=None)

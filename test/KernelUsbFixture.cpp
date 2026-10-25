@@ -71,6 +71,7 @@ struct Scenario {
   std::string_view name;
   StatusMode mode;
   int error;
+  std::uint16_t product_id = 0x0120;
 };
 
 constexpr std::array scenarios = {
@@ -82,7 +83,8 @@ constexpr std::array scenarios = {
     Scenario{.name = "missing-zero", .mode = StatusMode::missing_zero, .error = EAGAIN},
     Scenario{.name = "missing-one", .mode = StatusMode::missing_one, .error = EAGAIN},
     Scenario{.name = "timeout", .mode = StatusMode::timeout, .error = ETIMEDOUT},
-    Scenario{.name = "disconnect", .mode = StatusMode::timeout, .error = 0}};
+    Scenario{.name = "disconnect", .mode = StatusMode::timeout, .error = 0},
+    Scenario{.name = "expansion", .mode = StatusMode::normal, .error = 0, .product_id = 0x0121}};
 
 [[noreturn]] void fail(const char *message) {
   std::perror(message);
@@ -192,11 +194,28 @@ Bytes configuration() {
   return bytes;
 }
 
-Bytes descriptor(std::uint16_t value) {
+Bytes descriptor(std::uint16_t value, const Scenario &test) {
   switch (value >> 8) {
     case USB_DT_DEVICE: {
-      constexpr std::array<std::uint8_t, 18> device{
-          18, 1, 0, 2, 0, 0, 0, 64, 0x82, 5, 0x20, 1, 0, 2, 1, 2, 3, 1};
+      const std::array<std::uint8_t, 18> device{
+          18,
+          1,
+          0,
+          2,
+          0,
+          0,
+          0,
+          64,
+          0x82,
+          5,
+          static_cast<std::uint8_t>(test.product_id & byte_mask),
+          static_cast<std::uint8_t>(test.product_id >> 8),
+          0,
+          2,
+          1,
+          2,
+          3,
+          1};
       return {device.begin(), device.end()};
     }
     case USB_DT_CONFIG: return configuration();
@@ -235,8 +254,8 @@ static_assert(offsetof(Event, data) == sizeof(usb_raw_event));
 
 class Gadget {
 public:
-  explicit Gadget(StatusMode mode)
-      : fd_(checked(open("/dev/raw-gadget", O_RDWR | O_CLOEXEC), "raw gadget")), mode_(mode) {}
+  explicit Gadget(const Scenario &test)
+      : fd_(checked(open("/dev/raw-gadget", O_RDWR | O_CLOEXEC), "raw gadget")), test_(test) {}
 
   void run() {
     usb_raw_init init{};
@@ -262,7 +281,7 @@ public:
 
 private:
   const int fd_;
-  const StatusMode mode_;
+  const Scenario test_;
   std::array<std::uint8_t, 5> alts_{};
   int status_ep_{-1};
   pid_t writer_{-1};
@@ -310,24 +329,24 @@ private:
   }
 
   [[noreturn]] void write_status() const {
-    if (mode_ == StatusMode::timeout) {
+    if (test_.mode == StatusMode::timeout) {
       for (;;) { pause(); }
     }
     Io io{};
     io.ep = static_cast<std::uint16_t>(status_ep_);
     io.length = 8;
-    if (mode_ == StatusMode::empty) { io.length = 0; }
-    if (mode_ == StatusMode::short_packet) { io.length = 7; }
+    if (test_.mode == StatusMode::empty) { io.length = 0; }
+    if (test_.mode == StatusMode::short_packet) { io.length = 7; }
     io.data[3] = 0x80;
     io.data[4] = status_rate_high;
-    if (mode_ == StatusMode::zero_rate) {
+    if (test_.mode == StatusMode::zero_rate) {
       io.data[3] = 0;
       io.data[4] = 0;
     }
     for (;;) {
-      if (mode_ == StatusMode::invalid_phase) { io.data[0] = 2; }
-      if (mode_ == StatusMode::missing_zero) { io.data[0] = 1; }
-      if (mode_ == StatusMode::missing_one) { io.data[0] = 0; }
+      if (test_.mode == StatusMode::invalid_phase) { io.data[0] = 2; }
+      if (test_.mode == StatusMode::missing_zero) { io.data[0] = 1; }
+      if (test_.mode == StatusMode::missing_one) { io.data[0] = 0; }
       const int result = checked(ioctl(fd_, USB_RAW_IOCTL_EP_WRITE, &io), "STATUS WRITE");
       require(static_cast<std::uint32_t>(result) == io.length, "Complete modeled status packet");
       io.data[0] ^= 1;
@@ -354,7 +373,7 @@ private:
 
   void control(const usb_ctrlrequest &request) {
     if (request.bRequestType == 0x80 && request.bRequest == USB_REQ_GET_DESCRIPTOR) {
-      const auto bytes = descriptor(request.wValue);
+      const auto bytes = descriptor(request.wValue, test_);
       if (!bytes.empty()) {
         reply(request, bytes);
         return;
@@ -610,7 +629,7 @@ int main(int argc, char **argv) {
   }
   const auto test = scenario(argc == 3 ? argv[2] : "normal");
   if (std::string_view(argv[1]) == "gadget") {
-    Gadget gadget(test.mode);
+    Gadget gadget(test);
     gadget.run();
   } else if (std::string_view(argv[1]) == "read-status") {
     read_status(test);

@@ -138,7 +138,7 @@ int snd_usb_octa_capture_add_controls(struct snd_usb_audio *chip)
 	struct snd_kcontrol *kcontrol;
 	int err;
 
-	if (chip->usb_id != USB_ID(0x0582, 0x0120))
+	if (!snd_usb_octa_capture_id(chip->usb_id))
 		return 0;
 	status = kzalloc(sizeof(*status), GFP_KERNEL);
 	if (!status)

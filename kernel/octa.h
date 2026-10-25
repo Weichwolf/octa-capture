@@ -6,6 +6,12 @@ struct snd_usb_audio;
 struct snd_usb_endpoint;
 struct snd_urb_ctx;
 
+/* ALSA packs the USB vendor and product IDs into one unsigned word. */
+static inline bool snd_usb_octa_capture_id(unsigned int id)
+{
+	return id == 0x05820120U || id == 0x05820121U;
+}
+
 int snd_usb_octa_capture_set_rate(struct snd_usb_audio *chip, int rate);
 
 int snd_usb_octa_capture_add_controls(struct snd_usb_audio *chip);

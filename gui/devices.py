@@ -14,6 +14,7 @@ class Device:
     card_id: str
     card_index: int
     serial: str
+    product_id: str = '0120'
 
     @property
     def port(self):
@@ -21,7 +22,8 @@ class Device:
 
     @property
     def name(self):
-        return f'OCTA-CAPTURE ({self.serial or self.card_id})'
+        model = 'OCTA-CAPTURE EXP' if self.product_id == '0121' else 'OCTA-CAPTURE'
+        return f'{model} ({self.serial or self.card_id})'
 
     def document(self, port):
         selectors = (f'hw:CARD={self.card_id}', f'hw:CARD={self.card_index}', f'hw:{self.card_index}')
@@ -46,7 +48,8 @@ def _device(card):
     for usb in (interface, *interface.parents):
         if not (usb / 'idVendor').is_file() or not (usb / 'idProduct').is_file():
             continue
-        if _text(usb / 'idVendor').lower() != '0582' or _text(usb / 'idProduct').lower() != '0120':
+        product_id = _text(usb / 'idProduct').lower()
+        if _text(usb / 'idVendor').lower() != '0582' or product_id not in ('0120', '0121'):
             return None
         if not re.fullmatch(r'[0-9]+-[0-9]+(?:\.[0-9]+)*', usb.name):
             return None
@@ -57,12 +60,12 @@ def _device(card):
         if serial and not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', serial):
             return None
         identity = f'serial:{serial}' if serial else f'usb:{usb.name}'
-        return Device(identity, card_id, int(card.name[4:]), serial)
+        return Device(identity, card_id, int(card.name[4:]), serial, product_id)
     return None
 
 
 def discover(root=Path('/sys/class/sound')):
-    """Return only present 0582:0120 cards; disappearing/inaccessible cards are skipped."""
+    """Return present OCTA-CAPTURE/base or EXP cards, skipping inaccessible entries."""
     try:
         cards = tuple(root.iterdir())
     except OSError:

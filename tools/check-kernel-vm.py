@@ -87,6 +87,10 @@ def usb_script():
             '  /bin/usb-fixture read-status &', '  reader_two=$!',
             '  wait "$reader_one"', '  wait "$reader_two"', '  usb_stop',
             '  echo "OCTA_VM_USB_CYCLE $iteration"', 'done']
+    lines += ['usb_start expansion',
+              'test "$(cat /sys/bus/usb/devices/1-1/idProduct)" = 0121',
+              '/bin/usb-fixture read-status expansion', 'usb_stop',
+              'echo OCTA_VM_USB_EXPANSION_PASS']
     lines += ['for scenario in ' + ' '.join(STATUS_ERRORS) + '; do',
               '  usb_start "$scenario"', '  /bin/usb-fixture read-status "$scenario"',
               '  usb_stop', 'done']
@@ -144,7 +148,8 @@ def verify_output(result, text, usb):
     cycles = all(lines.count(f'OCTA_VM_MODULE_CYCLE {number}') == 1 for number in (1, 2, 3))
     if usb:
         cycles = cycles and all(lines.count(f'OCTA_VM_USB_CYCLE {number}') == 1 for number in (1, 2, 3))
-        cycles = cycles and lines.count('OCTA_VM_STATUS_READ_PASS') == 7
+        cycles = cycles and lines.count('OCTA_VM_STATUS_READ_PASS') == 8
+        cycles = cycles and lines.count('OCTA_VM_USB_EXPANSION_PASS') == 1
         cycles = cycles and all(lines.count(f'OCTA_VM_STATUS_ERROR_PASS {name}') == 1 for name in STATUS_ERRORS)
         cycles = cycles and lines.count('OCTA_VM_STATUS_ERROR_PASS disconnect') == 1
         cycles = cycles and lines.count('OCTA_VM_STATUS_UNPLUG_PASS') == 1
@@ -210,6 +215,7 @@ def main():
         print('PASS sanitizer VM boot and three generic/standalone module load/unload cycles. No device streaming was tested.')
         if fixture:
             print('PASS three synthetic USB probe/concurrent-status/disconnect cycles (120 status reads). No physical device was tested.')
+            print('PASS synthetic 0582:0121 expansion binding, 20 status reads and teardown. Actual EXP descriptors/streaming remain unverified.')
             print('PASS seven deterministic status errors with exact ALSA errno and untouched caller buffers. No fuzzing was run.')
             print('PASS in-flight disconnect confirmed by status URB submission/completion and ALSA error readback.')
             print('PASS 20 valid status reads after the error/disconnect scenarios and a fresh module/device lifecycle.')
