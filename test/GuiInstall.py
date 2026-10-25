@@ -25,7 +25,7 @@ class Installation(unittest.TestCase):
             subprocess.run([cmake, '--install', build, '--prefix', str(prefix)], check=True,
                            capture_output=True, timeout=10)
             binary = prefix / 'bin'
-            for name in ('octa-capture', 'octa-capture-http', 'octa-pulse-pairs'):
+            for name in ('octa-capture', 'octa-capture-http', 'octa-pulse-pairs', 'octa-aggregate'):
                 result = subprocess.run([str(binary / name), '--help'], cwd=foreign,
                                         check=True, capture_output=True, text=True, timeout=5)
                 self.assertIn('--bin-dir', result.stdout)

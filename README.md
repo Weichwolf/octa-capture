@@ -88,6 +88,9 @@ entry under **Applications → Settings** in Xfce.
 The DKMS package builds only the external module for its supported kernel
 series.
 
+Experimental `octa-aggregate` preparation and its physical-test limits are
+described in the [kernel guide](kernel/README.md#experimental-two-unit-alsa-configuration).
+
 For native PulseAudio, run `octa-pulse-pairs --install` as your regular user to
 enable five Playback and six Recording stereo pairs, including Recording 11-12.
 The user service installs device-specific ALSA `dshare`/`dsnoop` definitions and

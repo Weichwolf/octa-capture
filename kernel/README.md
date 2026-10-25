@@ -189,6 +189,50 @@ Sparse for 6.12. A whole ALSA-tree Sparse run still reports existing
 upstream Scarlett Boolean-expression issues. No diagnostics are suppressed.
 Host fuzzing does not replace kernel sanitizer/URB fault testing.
 
+## Experimental two-unit ALSA configuration
+
+`tools/aggregate-audio.py` prepares a private, opt-in 24-in/20-out ALSA
+configuration for one base unit and one EXP unit at 44.1/48/96 kHz. Its installed
+entry point is `octa-aggregate`. It changes no hardware setting or desktop
+profile and does not automatically modify `~/.asoundrc`. Both identities and two
+fresh clock snapshots must agree before it creates a new mode-0600 file;
+existing files and symlinks are refused. Run as the regular desktop user:
+
+```bash
+python3 tools/aggregate-audio.py --base serial:BASE_SERIAL --expansion serial:EXP_SERIAL \
+  --write-config /tmp/octa-pair.conf
+pasuspender -- env ALSA_CONFIG_PATH=/tmp/octa-pair.conf \
+  arecord -D octa_expand -f S24_3LE -r 48000 -c 24 recording.wav
+```
+
+Replace the identities and rate with the actual pair. The EXP coaxial output
+must feed the base coaxial input with DIGITAL AUTO. The base must report an
+active external-clock display; an externally clocked EXP must also report
+activation. These flags do not measure clock quality or phase alignment.
+Regenerate the file after clock changes, hotplug or ALSA card renumbering.
+Other applications/audio servers must release both PCM devices first.
+
+The configuration uses ALSA's standard [multi and route plugins](https://www.alsa-project.org/alsa-doc/alsa-lib/pcm_plugins.html),
+with base channels first and EXP as the polling master. Each raw hardware leaf
+restricts the exact rate, S24_3LE format and channel count; no resampler is added.
+The GUI continues to control individual units. Coupled rate/server coordination
+and physical EXP/aggregate timing, routing, streaming and recovery are unfinished
+or unverified; this is an experimental developer path.
+
+Reproduce the isolated sample-layout check with the real ALSA plugins:
+
+```bash
+cmake --build build/strict --target aggregate_pcm_fixture
+python3 tools/check-aggregate-pcm.py
+```
+
+The non-installed fixture and its host retain strict warnings, clang-tidy,
+ASan/UBSan and `-z defs`; both use the same shared sanitizer runtime. Bubblewrap
+removes host USB/audio nodes, sysfs and networking. Six cases check EXP poll
+selection and 4096 exact samples per channel in each direction at all three
+rates, including ring wraps and playback start at a full buffer. Its PCM sources
+use synthetic period advances and fixed capture samples, not a physical clock.
+
 ## USB runtime suspend/resume check
 
 `tools/check-runtime-pm.py --rates` prepares a regular-user check of all four

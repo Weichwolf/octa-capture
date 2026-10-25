@@ -451,8 +451,9 @@ The gate alone accepts coherent 192 kHz replies and does not enforce a two-unit
 maximum. Roland's owner manual pp. 65-66 separately requires at most two units,
 digital synchronization from the expansion unit via coaxial output to the base
 unit, DIGITAL AUTO, and no 192 kHz operation. Windows additionally requires the
-same USB controller. Native aggregation and actual two-unit timing/routing
-remain unimplemented/unverified. Reproduce the isolated gate check with:
+same USB controller. An experimental native ALSA aggregate configuration is
+available (kernel/README.md); coupled rate/server coordination is incomplete,
+and actual two-unit timing/routing remains unverified. Reproduce the isolated gate check with:
   python3 tools/verify-expand-readiness.py doc/local/windows-gui-analysis/RDDP1110.EXE
 
 The original callback 0x140004310, installed by 0x140001850/0x140026260,

@@ -94,6 +94,7 @@ enable_testing()
 include(cmake/KernelHost.cmake)
 include(cmake/ClockTests.cmake)
 include(cmake/KernelStatusTests.cmake)
+include(cmake/AggregatePcmTests.cmake)
 add_executable(initialization_test test/Initialization.cpp)
 target_link_libraries(initialization_test PRIVATE octa_protocol)
 add_test(NAME initialization COMMAND initialization_test)
@@ -153,6 +154,8 @@ add_test(NAME gui-window COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/te
 add_test(NAME gui-pointer COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiPointerControls.py")
 add_test(NAME gui-control-geometry COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiControlGeometry.py")
 add_test(NAME gui-devices COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiDevices.py")
+add_test(NAME aggregate-audio COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/AggregateAudio.py")
+set_tests_properties(aggregate-audio PROPERTIES TIMEOUT 10)
 add_test(NAME gui-preferences COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiPreferences.py")
 add_test(NAME gui-warnings COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs")
 add_test(NAME gui-graphs COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiGraphs.mjs")
@@ -313,6 +316,7 @@ add_custom_target(format-check
     ${octa_kernel_status_sources} ${octa_status_shims}
     ${octa_bridge_sources}
     ${octa_peak_sources}
+    ${octa_aggregate_sources}
     ${octa_midi_framing_sources}
     ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
@@ -388,6 +392,7 @@ add_custom_target(format
     ${octa_kernel_status_sources} ${octa_status_shims}
     ${octa_bridge_sources}
     ${octa_peak_sources}
+    ${octa_aggregate_sources}
     ${octa_midi_framing_sources}
     ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
@@ -462,6 +467,7 @@ add_custom_target(lint
     ${octa_kernel_status_sources}
     ${octa_bridge_sources}
     ${octa_peak_sources}
+    ${octa_aggregate_sources}
     ${octa_midi_framing_sources}
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/DeviceStatus.cpp"
