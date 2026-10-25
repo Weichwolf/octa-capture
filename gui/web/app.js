@@ -1004,7 +1004,12 @@ function setupDialogs() {
   $('#settings-device').addEventListener('change', event => {
     void selectDevice(event.target.value).then(() => settingsDevices());
   });
-  for (const button of all('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
+  for (const button of all('[data-close]')) {
+    button.addEventListener('click', () => {
+      const dialog = button.closest('dialog');
+      if (!dialog.hasAttribute('data-preference-dialog')) dialog.close();
+    });
+  }
   for (const button of all('[data-action]')) {
     button.addEventListener('click', () => {
       const action = button.dataset.action;
@@ -1157,7 +1162,7 @@ async function readMeters() {
 }
 
 makePreamps(); makeMixers(); setupDialogs(); setupEvents(); setConnected(false, 'Connecting to OCTA-CAPTURE…');
-const panelWarnings = new PanelWarnings(api, notify);
+const panelWarnings = new PanelWarnings(api, notify, () => { revision++; });
 addEventListener('pagehide', () => {
   if (token) {
     void fetch('/api/disconnect', {method: 'POST', keepalive: true,

@@ -110,14 +110,25 @@ Native Windows font rendering and full visual parity remain unverified.
 
 The read-only layout inspector also captures dialogs owned by the hash-verified
 original process. test/data/dialog-geometry.json records 14 Patch Bay, 10 Reverb,
-13 idle Auto-Sens and seven About control bounds at 96 DPI, including the runtime-adjusted
-edit/up-down rectangles. All four client sizes and these 44 rectangles match
+13 idle Auto-Sens, seven About and four port-warning control bounds at 96 DPI,
+including the runtime-adjusted edit/up-down rectangles. All five client sizes
+and these 48 rectangles match
 Chromium and native GTK/WebKit. The inspector only observes the visible dialog;
 the Wine device-interface model does not establish physical device behavior.
 The About dialog and main frame share their title. The inspector distinguishes
 the MFC main frame from #32770 dialogs before checking the process hash/ownership.
 Linux retains the About geometry with its own icon, project version and license
 text, without manufacturer copyright or Windows ASIO attribution.
+
+The audio-port warning has a 447x141 client. Windows CDrvWarnDlg::OnInit
+(0x14002c840) formats the runtime text with four inputs/outputs; the resource
+template alone is insufficient. About OnOK (0x140028dc0) and warning OnOK
+(0x14002cb00) save ShowWarnSilence only on confirmation. Native checkbox clicks
+in the offline Wine model leave the profile unchanged while open; SC_CLOSE
+discards the draft, whereas OK/Close saves it. The warning checkbox is inverse.
+Linux stages both preferences accordingly; synthetic Playwright checks also
+cover polling, delayed/failed saves, retry and stale state replies. This is
+dialog/profile behavior, without physical USB control or a hardware trigger.
 
 In the connected offline model, Ctrl+S/Ctrl+O/Ctrl+P open Save/Open/Patch Bay
 from the main panel. Auto-Sens and Patch Bay modal dialogs suppress these file

@@ -237,6 +237,13 @@ dialog select, dialog input[type=number] { min-width: 100px; padding: 2px 4px; f
 #about .about-divider { position: absolute; left: 9px; top: 77px; width: 461px; height: 2px; margin: 0; border: 0; border-top: 1px solid #aaa; border-bottom: 1px solid white; }
 #about .about-license { position: absolute; left: 9px; top: 86px; width: 450px; height: 12px; text-align: center; }
 #about footer button { left: 405px; top: 9px; width: 63px; }
+#port-warning { width: 451px; min-width: 0; font-size: 11px; background: #f4f4f4; }
+#port-warning .reference-dialog-client { height: 141px; }
+#port-warning .port-warning-message { position: absolute; left: 18px; top: 18px; width: 414px; height: 72px; margin: 0; line-height: 14px; }
+#port-warning .port-warning-divider { position: absolute; left: 9px; top: 101px; width: 425px; height: 2px; margin: 0; border: 0; border-top: 1px solid #aaa; border-bottom: 1px solid white; }
+#port-warning .port-warning-preference { position: absolute; left: 18px; top: 114px; width: 243px; height: 15px; margin: 0; justify-content: flex-start; gap: 4px; }
+#port-warning .port-warning-preference input { flex-shrink: 0; width: 13px; height: 13px; margin: 0; }
+#port-warning footer button { left: 333px; top: 111px; width: 75px; }
 .settings-fields { width: 340px; }
 .settings-fields .settings-device { margin: 0; }
 .settings-device select { width: 100%; }

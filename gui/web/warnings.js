@@ -13,15 +13,22 @@ export class PortWarningState {
 }
 
 export class PanelWarnings {
-  constructor(api, notify) {
-    this.api = api; this.notify = notify;
+  constructor(api, notify, changed = () => {}) {
+    this.api = api; this.notify = notify; this.changed = changed;
     this.state = new PortWarningState();
     this.rate = 0; this.preferences = null; this.saving = false;
     this.dialog = document.querySelector('#port-warning');
-    this.showCheck = document.querySelector('#show-port-warning');
-    this.hideCheck = document.querySelector('#hide-port-warning');
-    this.showCheck.addEventListener('change', () => { void this.save(this.showCheck.checked); });
-    this.hideCheck.addEventListener('change', () => { void this.save(!this.hideCheck.checked); });
+    this.editors = [
+      {dialog: document.querySelector('#about'), check: document.querySelector('#show-port-warning'), inverse: false, dirty: false},
+      {dialog: this.dialog, check: document.querySelector('#hide-port-warning'), inverse: true, dirty: false},
+    ];
+    for (const editor of this.editors) {
+      editor.check.addEventListener('change', () => { editor.dirty = true; });
+      editor.dialog.querySelector('[data-close]').addEventListener('click', () => { void this.save(editor); });
+      editor.dialog.addEventListener('cancel', event => { if (this.saving) event.preventDefault(); });
+      new MutationObserver(() => { editor.dirty = false; this.sync(); })
+        .observe(editor.dialog, {attributes: true, attributeFilter: ['open']});
+    }
     for (const dialog of document.querySelectorAll('dialog')) {
       dialog.addEventListener('close', () => { this.update(this.rate); });
     }
@@ -34,10 +41,12 @@ export class PanelWarnings {
     } catch (error) { this.notify(error.message); }
   }
   sync() {
-    this.showCheck.disabled = this.hideCheck.disabled = this.saving || !this.preferences;
-    if (this.preferences && !this.saving) {
-      this.showCheck.checked = this.preferences.show_port_warning;
-      this.hideCheck.checked = !this.preferences.show_port_warning;
+    for (const editor of this.editors) {
+      editor.check.disabled = this.saving || !this.preferences;
+      for (const button of editor.dialog.querySelectorAll('[data-close], .dialog-close')) button.disabled = this.saving;
+      if (this.preferences && !this.saving && (!editor.dialog.open || !editor.dirty)) {
+        editor.check.checked = editor.inverse ? !this.preferences.show_port_warning : this.preferences.show_port_warning;
+      }
     }
   }
   update(rate, preferences = null) {
@@ -48,11 +57,19 @@ export class PanelWarnings {
     const ready = !document.querySelector('dialog[open]');
     if (this.state.update(rate, this.preferences.show_port_warning, ready)) this.dialog.showModal();
   }
-  async save(enabled) {
-    if (this.saving) return;
-    this.saving = true; this.sync();
-    try { this.preferences = await this.api('/api/preferences', {show_port_warning: enabled}); }
-    catch (error) { this.notify(error.message); }
-    finally { this.saving = false; this.update(this.rate); }
+  accepted(editor, preferences) {
+    this.preferences = preferences;
+    editor.dirty = false;
+    editor.dialog.close();
+  }
+  async save(editor) {
+    if (this.saving || !editor.dialog.open) return;
+    if (!this.preferences) { editor.dialog.close(); return; }
+    const enabled = editor.inverse ? !editor.check.checked : editor.check.checked;
+    this.saving = true; this.changed(); this.sync();
+    try {
+      this.accepted(editor, await this.api('/api/preferences', {show_port_warning: enabled}));
+    } catch (error) { this.notify(error.message); }
+    finally { this.saving = false; this.changed(); this.update(this.rate); }
   }
 }

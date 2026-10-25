@@ -40,14 +40,16 @@ export async function checkRates(browser, api, directory, originalRate) {
         assert.match(await browser.evaluate('document.querySelector("#port-warning .dialog-content").textContent'), /inputs 1–4 and outputs 1–4/);
         await browser.screenshot(path.join(directory, 'port-warning.png'));
         await browser.click('#hide-port-warning');
-        await until(async () => !(await api('/api/preferences')).show_port_warning, 'warning suppression stored');
+        assert.equal((await api('/api/preferences')).show_port_warning, true, 'Warning edit is staged');
         await browser.click('#port-warning [data-close]');
+        await until(async () => !(await api('/api/preferences')).show_port_warning, 'warning suppression stored');
         await browser.click('[data-menu="driver"]');
         await browser.click('#menus button:nth-of-type(4)');
         assert.equal(await browser.evaluate('document.querySelector("#show-port-warning").checked'), false);
         await browser.click('#show-port-warning');
-        await until(async () => (await api('/api/preferences')).show_port_warning, 'About warning checkbox stored');
+        assert.equal((await api('/api/preferences')).show_port_warning, false, 'About edit is staged');
         await browser.click('#about [data-close]');
+        await until(async () => (await api('/api/preferences')).show_port_warning, 'About warning checkbox stored');
         assert.equal(await browser.evaluate('document.querySelector("#port-warning").open'), false, 'Reenabling does not repeat the warning at the same rate');
       }
       const expectedChannels = high ? 4 : 8;

@@ -69,6 +69,16 @@
         {"id":-1,"selector":".about-divider","rect":[9,77,461,2]},
         {"id":1142,"selector":".about-warning","rect":[54,45,414,32]}
       ]
+    },
+    "port-warning": {
+      "title": "There are audio ports that cannot be used",
+      "client_size": [447, 141],
+      "controls": [
+        {"id":1,"selector":"[data-close]","rect":[333,111,75,21]},
+        {"id":1139,"selector":".port-warning-preference","rect":[18,114,243,15]},
+        {"id":-1,"selector":".port-warning-divider","rect":[9,101,425,2]},
+        {"id":1140,"selector":".port-warning-message","rect":[18,18,414,72]}
+      ]
     }
   }
 }

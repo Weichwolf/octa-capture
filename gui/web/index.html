@@ -112,7 +112,7 @@
     </div>
     <footer><button data-close data-default>Close</button></footer>
   </dialog>
-  <dialog id="about" aria-labelledby="about-title" data-footer-first>
+  <dialog id="about" aria-labelledby="about-title" data-footer-first data-preference-dialog>
     <h2 id="about-title">About Driver &amp; Control Panel</h2>
     <div class="reference-dialog-client">
       <div class="dialog-content about-content">
@@ -126,10 +126,16 @@
       <footer><button data-close data-default autofocus>OK</button></footer>
     </div>
   </dialog>
-  <dialog id="port-warning" aria-labelledby="port-warning-title" data-footer-first>
-    <h2 id="port-warning-title">OCTA-CAPTURE — Audio Ports</h2>
-    <div class="dialog-content"><p>At 192 kHz, only inputs 1–4 and outputs 1–4 are available.<br>Other audio ports cannot be used at this sample rate.</p><label><input id="hide-port-warning" type="checkbox"> Do not show this message again.</label></div>
-    <footer><button data-close data-default autofocus>Close</button></footer>
+  <dialog id="port-warning" aria-labelledby="port-warning-title" data-footer-first data-preference-dialog>
+    <h2 id="port-warning-title">There are audio ports that cannot be used</h2>
+    <div class="reference-dialog-client">
+      <div class="dialog-content port-warning-content">
+        <p class="port-warning-message">At 192 kHz, the audio configuration is 4-in/4-out.<br>Only inputs 1–4 and outputs 1–4 are available.<br>If recording or playback is unavailable, check the application's selected input/output ports.</p>
+        <hr class="port-warning-divider">
+        <label class="port-warning-preference"><input id="hide-port-warning" type="checkbox"> Do not show this message again.</label>
+      </div>
+      <footer><button data-close data-default autofocus>Close</button></footer>
+    </div>
   </dialog>
   <dialog id="confirm" aria-labelledby="confirm-title">
     <h2 id="confirm-title">OCTA-CAPTURE</h2>
