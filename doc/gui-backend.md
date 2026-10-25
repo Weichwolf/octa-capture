@@ -519,6 +519,9 @@ the grid. Unavailable strips are inert and excluded from accessibility. A rate
 change cancels captured knob/fader drags and unfinished sensitivity edits;
 returning to lower rates restores cached values without sending device writes.
 These checks do not establish physical 192 kHz signal routing or bitmap parity.
+Pass `--prefix PATH` to run the same browser check against the launcher and web
+assets in an extracted Debian package or staged CMake install, with device APIs
+still intercepted and hardware binaries unavailable.
 Another 540 fixed wheel/drag events verify that wheel input changes the current
 value while retaining the pointer anchor; the next drag compares against the
 updated value. `--save-interleaved PATH` saves these numeric traces for the same

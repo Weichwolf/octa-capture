@@ -6,13 +6,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
+import {parseArgs} from 'node:util';
 import {PlaywrightClient} from './PlaywrightClient.mjs';
 import {until} from './BrowserClient.mjs';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
+const {values} = parseArgs({options: {prefix: {type: 'string'}}});
 await fs.mkdir(path.join(root, 'build/gui'), {recursive: true});
 const directory = await fs.mkdtemp(path.join(root, 'build/gui/knob-display-offline-'));
-const server = spawn('/usr/bin/python3', ['-u', 'tools/serve-gui.py', '--port', '0',
+const executable = values.prefix ? path.join(path.resolve(values.prefix), 'bin/octa-capture-http') : '/usr/bin/python3';
+const server = spawn(executable, [...(values.prefix ? [] : ['-u', 'tools/serve-gui.py']), '--port', '0',
   '--bin-dir', path.join(directory, 'no-device-binaries'), '--data-dir', path.join(directory, 'state')],
 {cwd: root, stdio: ['ignore', 'pipe', 'pipe']});
 let serverOutput = '', serverErrors = '', browser;
