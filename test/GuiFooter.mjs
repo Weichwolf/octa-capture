@@ -8,7 +8,7 @@ export async function checkFooter(browser, api) {
   const rate = [44100, 48000, 96000, 192000][parseInt(document.state.payload_hex.slice(4, 6), 16)];
   await until(() => browser.evaluate(`Number(document.querySelector('#footer-rate').value) === ${rate}`), 'footer rate readback');
   assert.deepEqual(await browser.evaluate(`[...document.querySelectorAll('#footer-rate option:not(:disabled)')].map(node=>Number(node.value))`), [44100, 48000, 96000, 192000]);
-  assert.equal(await browser.evaluate('document.querySelector("#device-label").textContent'), 'OCTA-CAPTURE');
+  assert.equal(await browser.evaluate('document.querySelector("#device-label").textContent'), document.device?.model || 'OCTA-CAPTURE');
   assert.equal(await browser.evaluate('document.querySelector("#footer-clock").textContent === document.querySelector("#settings-clock").textContent'), true);
   await browser.call('Emulation.setDeviceMetricsOverride', {width: 978, height: 429, deviceScaleFactor: 1, mobile: false});
   assert.equal(await browser.evaluate(`(() => {

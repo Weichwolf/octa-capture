@@ -21,13 +21,16 @@ class Device:
         return f'hw:CARD={self.card_id},DEV=0,SUBDEV=1'
 
     @property
+    def model(self):
+        return 'OCTA-CAPTURE EXP' if self.product_id == '0121' else 'OCTA-CAPTURE'
+
+    @property
     def name(self):
-        model = 'OCTA-CAPTURE EXP' if self.product_id == '0121' else 'OCTA-CAPTURE'
-        return f'{model} ({self.serial or self.card_id})'
+        return f'{self.model} ({self.serial or self.card_id})'
 
     def document(self, port):
         selectors = (f'hw:CARD={self.card_id}', f'hw:CARD={self.card_index}', f'hw:{self.card_index}')
-        return {'id': self.identity, 'name': self.name,
+        return {'id': self.identity, 'name': self.name, 'model': self.model, 'product_id': self.product_id,
                 'selected': port.split(',')[0] in selectors}
 
 

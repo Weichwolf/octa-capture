@@ -49,6 +49,8 @@ class Application:
         self._cache_lock = threading.Lock()
         self._lifecycle = threading.Lock()
         self._cached = None
+        self._cached_device = None
+        self._device = None
         self._updated = 0
         self._status = None
         self._status_updated = 0
@@ -82,12 +84,14 @@ class Application:
     def _remember(self, state):
         with self._cache_lock:
             self._cached = state
+            self._cached_device = self._device.document(self.port) if self._device else None
             self._updated = time.monotonic()
         return state
 
     def _document(self, busy=None):
         with self._cache_lock:
             state = self._cached
+            device = self._cached_device
             transaction = self._transaction
         if state is None:
             raise DeviceError('The OCTA-CAPTURE device is not available.')
@@ -97,6 +101,7 @@ class Application:
             job = self._observed_auto.observe(activity) or job
         blocked = bool(job and (job['active'] or (job.get('origin') == 'device' and job['state'] == 'failed')))
         return {'connected': True, 'busy': (transaction if busy is None else busy) or blocked, 'state': state,
+                'device': device,
                 'status': self._status, 'meters': self.bridge.meters(),
                 'preferences': self._preferences.document(),
                 'capabilities': {'auto_sense': True},
@@ -122,6 +127,7 @@ class Application:
                 except DeviceError:
                     with self._cache_lock:
                         self._cached = None
+                        self._cached_device = None
                     self._retry_after = time.monotonic() + 1
                     raise
             self._clock_status()
@@ -167,18 +173,23 @@ class Application:
         self.port = device.port
         self.control_port = self.port.split(',')[0]
         self.bridge = Bridge(self.bin_dir / 'octa-bridge', self.port)
+        self._device = device
         self._status = None
         self._invalidate()
 
     def _sync_selected_device(self):
+        devices = discover()
         if self._selected_identity is None:
+            self._device = next((device for device in devices if device.document(self.port)['selected']), None)
             return
-        device = next((device for device in discover() if device.identity == self._selected_identity), None)
+        device = next((device for device in devices if device.identity == self._selected_identity), None)
         if device is None:
+            self._device = None
             self.bridge.close()
             raise DeviceError('The selected OCTA-CAPTURE is disconnected.')
         if device.port != self.port:
             self._bind_device(device)
+        self._device = device
 
     def select_device(self, body):
         if type(body) is not dict or set(body) != {'id'} or type(body['id']) is not str:
@@ -298,6 +309,7 @@ class Application:
         with self._cache_lock:
             if not preserve:
                 self._cached = None
+                self._cached_device = None
             self._updated = 0
         self._retry_after = 0
         self._status_updated = 0

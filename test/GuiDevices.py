@@ -105,6 +105,9 @@ class Selection(unittest.TestCase):
         self.application.bridge = self.old
         self.devices = (Device('1-1', 'OCTACAPTURE', 0, 'FIRST'),
                         Device('1-2', 'OCTACAPTURE_1', 2, 'SECOND'))
+        discovery = patch('gui.application.discover', return_value=self.devices)
+        discovery.start()
+        self.addCleanup(discovery.stop)
 
     def test_startup_and_reconnection_read_device_state_without_restoring_old_settings(self):
         self.application._clock_status = Mock(return_value=None)
@@ -116,6 +119,7 @@ class Selection(unittest.TestCase):
         with self.assertRaises(DeviceError):
             self.application.snapshot()
         self.assertIsNone(self.application._cached)
+        self.assertIsNone(self.application._cached_device)
         self.application._retry_after = 0
         self.assertEqual(self.application.snapshot()['state'], restored)
         self.assertEqual([call.args for call in self.old.request.call_args_list], [('state',)] * 3)
@@ -137,6 +141,7 @@ class Selection(unittest.TestCase):
                 patch('gui.application.Bridge', side_effect=create):
             result = self.application.select_device({'id': '1-2'})
         self.assertEqual(result['state'], {'new': True})
+        self.assertEqual(result['device']['name'], 'OCTA-CAPTURE (SECOND)')
         self.assertEqual(self.application.port, self.devices[1].port)
         self.assertEqual(self.application.control_port, 'hw:CARD=OCTACAPTURE_1')
         self.assertIsNone(self.application._status)
@@ -180,13 +185,40 @@ class Selection(unittest.TestCase):
             with self.assertRaises(DeviceError):
                 self.application.select_device({'id': '1-2'})
         self.assertIsNone(self.application._cached)
+        self.assertIsNone(self.application._cached_device)
         self.assertEqual(self.application.port, self.devices[1].port)
         self.old.close.assert_called_once_with()
         self.assertIs(self.application.bridge, new)
 
+    def test_model_identity_changes_only_with_the_corresponding_successful_state(self):
+        self.application._clock_status = Mock(return_value=None)
+        self.old.request.return_value = {'state': {'base': True}}
+        first = self.application.snapshot()
+        self.assertEqual(first['device']['model'], 'OCTA-CAPTURE')
+        self.assertEqual(first['device']['product_id'], '0120')
+        expansion = Device('1-1', 'OCTACAPTURE', 0, 'FIRST', '0121')
+        with patch('gui.application.discover', return_value=(expansion,)):
+            self.application._sync_selected_device()
+            # Busy readers still see the previous state and its matching identity.
+            self.assertEqual(self.application._document()['device'], first['device'])
+            self.old.request.return_value = {'state': {'expansion': True}}
+            self.application._updated = 0
+            result = self.application.snapshot()
+        self.assertEqual(result['state'], {'expansion': True})
+        self.assertEqual(result['device']['model'], 'OCTA-CAPTURE EXP')
+        self.assertEqual(result['device']['product_id'], '0121')
+        self.application.disconnect()
+        self.assertIsNone(self.application._cached_device)
+
+    def test_missing_discovery_never_invents_a_model_identity(self):
+        self.application._clock_status = Mock(return_value=None)
+        self.old.request.return_value = {'state': {'read': True}}
+        with patch('gui.application.discover', return_value=()):
+            self.assertIsNone(self.application.snapshot()['device'])
+
     def test_reconnect_follows_serial_when_alsa_card_identity_changes(self):
         self.application._selected_identity = 'serial:FIRST'
-        replacement = Device('serial:FIRST', 'OCTACAPTURE_2', 3, 'FIRST')
+        replacement = Device('serial:FIRST', 'OCTACAPTURE_2', 3, 'FIRST', '0121')
         new = Mock()
         new.auto_sense_activity.return_value = None
         new.request.return_value = {'state': {'reconnected': True}}
@@ -194,7 +226,10 @@ class Selection(unittest.TestCase):
         self.application._clock_status = Mock(return_value=None)
         with patch('gui.application.discover', return_value=(replacement,)), \
                 patch('gui.application.Bridge', return_value=new):
-            self.assertEqual(self.application.snapshot()['state'], {'reconnected': True})
+            result = self.application.snapshot()
+            self.assertEqual(result['state'], {'reconnected': True})
+            self.assertEqual(result['device']['model'], 'OCTA-CAPTURE EXP')
+            self.assertEqual(result['device']['name'], 'OCTA-CAPTURE EXP (FIRST)')
             self.assertTrue(self.application.devices()['devices'][0]['selected'])
         self.assertEqual(self.application.port, replacement.port)
         self.old.close.assert_called_once_with()

@@ -87,6 +87,21 @@ async function geometry() {
   assert.deepEqual(result, {checked: 302, hidden: 0}, 'Original control rectangles in both views');
 }
 
+async function deviceIdentity() {
+  const original = model.device;
+  for (const device of [
+    {id: 'serial:EXP', name: 'OCTA-CAPTURE EXP (EXP)', model: 'OCTA-CAPTURE EXP', product_id: '0121'},
+    null, original]) {
+    model.device = device;
+    const label = device?.model || 'OCTA-CAPTURE', name = device?.name || 'OCTA-CAPTURE';
+    await until(async () => await browser.page.locator('#device-label').textContent() === label &&
+      (await browser.page.locator('#device-status').getAttribute('title')).startsWith(`${name} · `),
+    'footer model and serial follow the state reply');
+    assert.equal(await browser.page.locator('#device-label').evaluate(node => node.scrollWidth <= node.clientWidth), true,
+      'Expansion model fits in the device footer');
+  }
+}
+
 async function setRate(index) {
   const rate = [44100, 48000, 96000, 192000][index];
   model.state.payload_hex = `0000${index.toString(16).padStart(2, '0')}` + '00'.repeat(1143);
@@ -188,12 +203,13 @@ try {
   await displayCases();
   await editing();
   await geometry();
+  await deviceIdentity();
   await maskedPreamps();
   await maskedMixers();
   await browser.page.locator('.panel').screenshot({path: path.join(directory, 'preamp.png')});
   for (const errors of [unexpected, browser.exceptions, browser.securityErrors, browser.networkErrors,
     browser.httpErrors, browser.consoleEvents]) assert.deepEqual(errors, []);
-  console.log('PASS Playwright: 302 original control rectangles, 101 sensitivity readouts/rotary positions, dB accessibility, commit/Escape, all-rate fixed channel presentation and interrupted knob/fader/edit recovery. All replies synthetic.');
+  console.log('PASS Playwright: base/EXP footer identity, 302 original control rectangles, 101 sensitivity readouts/rotary positions, dB accessibility, commit/Escape, all-rate fixed channel presentation and interrupted knob/fader/edit recovery. All replies synthetic.');
 } finally {
   if (browser) await browser.close();
   if (server.exitCode === null) { server.kill('SIGTERM'); await once(server, 'exit'); }

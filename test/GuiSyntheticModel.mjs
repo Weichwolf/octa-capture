@@ -4,6 +4,7 @@ export function fixture() {
   const group = () => ({channels: Array.from({length: 10}, () => ({mute: false, solo: false, pan: 0, volume: 0})),
     pairs: Array.from({length: 5}, () => ({linked: false, mono: false}))});
   return {connected: true, busy: false, preferences: {show_port_warning: false}, meters: null,
+    device: {id: 'serial:SYNTHETIC', name: 'OCTA-CAPTURE (SYNTHETIC)', model: 'OCTA-CAPTURE', product_id: '0120'},
     auto_sense: null, capabilities: {auto_sense: true},
     status: {sample_rate_hz: 48000, raw_status_hex: '01000080bb000001', clock_source: 'internal', clock_active: true},
     state: {payload_hex: '000001' + '00'.repeat(1143),

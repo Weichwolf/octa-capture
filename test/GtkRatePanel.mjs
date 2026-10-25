@@ -27,6 +27,17 @@ export async function checkRates(model, reference, checkGeometry) {
   await until(() => document.querySelector('.sensitivity input')?.value === '25.0');
   const geometry = await checkGeometry(reference);
   check(geometry.checked === 302 && geometry.hidden === 0, 'Original control rectangles in both views');
+  const originalDevice = model.device;
+  for (const device of [
+    {id: 'serial:EXP', name: 'OCTA-CAPTURE EXP (EXP)', model: 'OCTA-CAPTURE EXP', product_id: '0121'},
+    null, originalDevice]) {
+    model.device = device;
+    const label = device?.model || 'OCTA-CAPTURE', name = device?.name || 'OCTA-CAPTURE';
+    await until(() => document.querySelector('#device-label').textContent === label &&
+      document.querySelector('#device-status').title.startsWith(`${name} · `));
+    const node = document.querySelector('#device-label');
+    check(node.scrollWidth <= node.clientWidth, 'Expansion model fits in the device footer');
+  }
   const graph = () => document.querySelectorAll('.curve')[4].toDataURL();
   const normal = graph();
   for (const index of [3, 0, 3, 2, 1]) {

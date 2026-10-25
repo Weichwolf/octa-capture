@@ -629,8 +629,8 @@ function update(result) {
   const clock = result.status?.clock_source === 'external' ?
     (result.status.clock_active ? `EXTERNAL (${result.status.sample_rate_hz} Hz)` : 'EXTERNAL (Unlock)') :
     (result.status?.clock_source === 'internal' ? 'INTERNAL' : 'UNKNOWN');
-  $('#device-label').textContent = 'OCTA-CAPTURE';
-  $('#device-status').title = `OCTA-CAPTURE · ${rate ? rate / 1000 : '--'} kHz · ${clock}. Click to identify; right-click or Shift+F10 to select a device.`;
+  $('#device-label').textContent = result.device?.model || 'OCTA-CAPTURE';
+  $('#device-status').title = `${result.device?.name || 'OCTA-CAPTURE'} · ${rate ? rate / 1000 : '--'} kHz · ${clock}. Click to identify; right-click or Shift+F10 to select a device.`;
   $('#footer-clock').textContent = clock;
   $('#settings-clock').textContent = clock;
   $('#settings-channels').textContent = rateIndex === 3 ? '4 in / 4 out' : '12 in / 10 out';
