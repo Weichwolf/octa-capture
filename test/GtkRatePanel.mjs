@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Real WebKit rendering with synthetic fetch replies; no device operation is forwarded.
-export async function checkRates(model, reference, checkGeometry) {
+export async function checkRates(model, reference, checkGeometry, dialogReference, checkDialogs) {
   const check = (condition, message) => { if (!condition) throw new Error(message); };
   const until = async predicate => {
     const deadline = Date.now() + 5000;
@@ -27,6 +27,8 @@ export async function checkRates(model, reference, checkGeometry) {
   await until(() => document.querySelector('.sensitivity input')?.value === '25.0');
   const geometry = await checkGeometry(reference);
   check(geometry.checked === 302 && geometry.hidden === 0, 'Original control rectangles in both views');
+  const dialogs = await checkDialogs(dialogReference);
+  check(dialogs.dialogs === 3 && dialogs.checked === 37, 'Original dialog client/control rectangles');
   const originalDevice = model.device;
   for (const device of [
     {id: 'serial:EXP', name: 'OCTA-CAPTURE EXP (EXP)', model: 'OCTA-CAPTURE EXP', product_id: '0121'},
@@ -63,5 +65,5 @@ export async function checkRates(model, reference, checkGeometry) {
     document.querySelector('#view-switch').click();
   }
   check(unexpected.length === 0, `Unexpected requests: ${unexpected.join(', ')}`);
-  return {rates: 4, transitions: 5, device_writes: 0, geometry};
+  return {rates: 4, transitions: 5, device_writes: 0, geometry, dialogs};
 }

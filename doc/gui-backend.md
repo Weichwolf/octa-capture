@@ -611,6 +611,14 @@ Reverb pre-delay/time use read-only text and clamped arrow controls, matching
 Windows edit style `0x50800882` and both original 0..12/0..49 index ranges.
 Patch Bay's top preset row and compact output selectors, and Reverb's compact
 controls follow Windows dialog resources 178/188 and the offline Wine captures.
+Patch Bay, Reverb and idle Auto-Sens now match 37 original Win32 child bounds
+and client sizes (227×189, 195×135 and 294×146) at 96 DPI. The numeric fixture
+is `test/data/dialog-geometry.json`; the read-only inspector accepts, for example,
+`py tools/inspect-windows-layout.py --dialog "PATCH BAY" --compare test/data/dialog-geometry.json`.
+It checks the original process hash and dialog ownership. Chromium and native
+WebKit compare the same bounds and keep multiline Auto-Sens failures readable
+above the recovery controls. These checks exclude native window decorations,
+font/bitmap parity and physical device behavior.
 Secondary dialogs have draggable captions and a caption Close button. Reopening
 returns to centered placement; viewport/content changes keep moved dialogs
 reachable. The inactive panel retains its colors, matching reference captures.

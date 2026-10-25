@@ -108,6 +108,13 @@ direct-mixer-offline-model.png, patchbay-offline-model.png and
 reverb-offline-model.png. Only our own HTML/CSS/vector artwork is shipped.
 Native Windows font rendering and full visual parity remain unverified.
 
+The read-only layout inspector also captures dialogs owned by the hash-verified
+original process. test/data/dialog-geometry.json records 14 Patch Bay, 10 Reverb
+and 13 idle Auto-Sens control bounds at 96 DPI, including the runtime-adjusted
+edit/up-down rectangles. All three client sizes and these 37 rectangles match
+Chromium and native GTK/WebKit. The inspector only observes the visible dialog;
+the Wine device-interface model does not establish physical device behavior.
+
 In the connected offline model, Ctrl+S/Ctrl+O/Ctrl+P open Save/Open/Patch Bay
 from the main panel. Auto-Sens and Patch Bay modal dialogs suppress these file
 shortcuts; Ctrl+Shift+S does not invoke Save. Accelerator resource 128 confirms

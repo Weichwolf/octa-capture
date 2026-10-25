@@ -44,18 +44,22 @@
   <input id="load-file" type="file" accept=".octa" hidden>
   <dialog id="patchbay" aria-labelledby="patchbay-title" data-footer-first>
     <h2 id="patchbay-title">PATCH BAY</h2>
-    <div class="patchbay-presets"><span>Preset :</span><button data-action="multi-monitor">Multi-Monitor</button><button data-action="routing-default">Initial Setting</button></div>
-    <div class="dialog-content" id="patchbay-content"></div>
-    <footer><button data-close data-default autofocus>Close</button></footer>
+    <div class="reference-dialog-client">
+      <div class="patchbay-presets"><span>Preset :</span><button data-action="multi-monitor">Multi-Monitor</button><button data-action="routing-default">Initial Setting</button></div>
+      <div class="dialog-content" id="patchbay-content"></div>
+      <footer><button data-close data-default autofocus>Close</button></footer>
+    </div>
   </dialog>
   <dialog id="reverb" aria-labelledby="reverb-title" data-footer-first>
     <h2 id="reverb-title">REVERB</h2>
-    <div class="dialog-content reverb-fields">
-      <label>TYPE: <select id="reverb-type"></select></label>
-      <label>PRE DELAY [ms] : <span class="reference-stepper" id="reverb-delay-stepper"><input id="reverb-delay" type="text" readonly aria-label="Reverb pre-delay"><button type="button" data-step="1" aria-label="Increase reverb pre-delay">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb pre-delay">▾</button></span></label>
-      <label>TIME [sec] : <span class="reference-stepper" id="reverb-time-stepper"><input id="reverb-time" type="text" readonly aria-label="Reverb time"><button type="button" data-step="1" aria-label="Increase reverb time">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb time">▾</button></span></label>
+    <div class="reference-dialog-client">
+      <div class="dialog-content reverb-fields">
+        <label><span>TYPE:</span><select id="reverb-type"></select></label>
+        <label><span>PRE DELAY [ms] :</span><span class="reference-stepper" id="reverb-delay-stepper"><input id="reverb-delay" type="text" readonly aria-label="Reverb pre-delay"><span class="stepper-buttons"><button type="button" data-step="1" aria-label="Increase reverb pre-delay">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb pre-delay">▾</button></span></span></label>
+        <label><span>TIME [sec] :</span><span class="reference-stepper" id="reverb-time-stepper"><input id="reverb-time" type="text" readonly aria-label="Reverb time"><span class="stepper-buttons"><button type="button" data-step="1" aria-label="Increase reverb time">▴</button><button type="button" data-step="-1" aria-label="Decrease reverb time">▾</button></span></span></label>
+      </div>
+      <footer><button data-close data-default autofocus>Close</button><button data-action="reverb-default">Initial Setting</button></footer>
     </div>
-    <footer><button data-close data-default autofocus>Close</button><button data-action="reverb-default">Initial Setting</button></footer>
   </dialog>
   <dialog id="settings" aria-labelledby="settings-title">
     <h2 id="settings-title">OCTA-CAPTURE Linux Audio Settings</h2>
@@ -69,11 +73,13 @@
   </dialog>
   <dialog id="auto-sens" aria-labelledby="auto-sens-title" data-footer-first>
     <h2 id="auto-sens-title">AUTO-SENS</h2>
-    <div class="dialog-content auto-sens-content">
-      <fieldset><legend>Channel</legend><div class="auto-selection"><div id="auto-channels" class="auto-channels"></div><div class="auto-selection-buttons"><button id="auto-all">Select All</button><button id="auto-none">Clear All</button></div></div></fieldset>
-      <p id="auto-status" role="status"></p>
+    <div class="reference-dialog-client">
+      <div class="dialog-content auto-sens-content">
+        <fieldset><legend>Channel</legend><div class="auto-selection"><div id="auto-channels" class="auto-channels"></div><div class="auto-selection-buttons"><button id="auto-all">Select All</button><button id="auto-none">Clear All</button></div></div></fieldset>
+        <p id="auto-status" role="status"></p>
+      </div>
+      <footer><button id="auto-start" data-default autofocus disabled>Start</button><button id="auto-cancel">Cancel</button></footer>
     </div>
-    <footer><button id="auto-start" data-default autofocus disabled>Start</button><button id="auto-cancel">Cancel</button></footer>
   </dialog>
   <dialog id="diagram" aria-labelledby="diagram-title">
     <h2 id="diagram-title">OCTA-CAPTURE Signal Flow</h2>

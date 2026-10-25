@@ -958,7 +958,8 @@ function setupDialogs() {
   reverbDelay = new ReferenceStepper($('#reverb-delay-stepper'), 12, preDelayText, 'ms', reverbChange('pre-delay'));
   reverbTime = new ReferenceStepper($('#reverb-time-stepper'), 49, reverbTimeText, 'seconds', reverbChange('time'));
   for (let pair = 0; pair < 5; pair++) {
-    const label = el('label', '', `OUTPUT ${pair * 2 + 1}-${pair * 2 + 2} :`);
+    const label = el('label');
+    label.append(el('span', 'route-label', `OUTPUT ${pair * 2 + 1}-${pair * 2 + 2} :`));
     const select = el('select'); select.dataset.pair = pair;
     for (const [index, name] of ROUTES.entries()) { const option = el('option', '', name); option.value = index; select.append(option); }
     select.addEventListener('change', () => queueChange({kind: 'route', pair, selection: Number(select.value)}));

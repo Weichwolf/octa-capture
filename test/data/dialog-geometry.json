@@ -1,0 +1,61 @@
+{
+  "source_sha256": "634c140bc4e49b0d65c70d5156be19573ad3d440ac5ea24e24d3ad59974da406",
+  "dpi": 96,
+  "dialogs": {
+    "patchbay": {
+      "title": "PATCH BAY",
+      "client_size": [227, 189],
+      "controls": [
+        {"id":1,"selector":"[data-close]","rect":[143,161,75,21]},
+        {"id":1084,"selector":"[data-action=multi-monitor]","rect":[66,11,75,21]},
+        {"id":1083,"selector":"[data-action=routing-default]","rect":[143,11,75,21]},
+        {"id":1072,"selector":"select[data-pair='0']","rect":[96,42,111,20]},
+        {"id":1073,"selector":"select[data-pair='1']","rect":[96,63,111,20]},
+        {"id":1074,"selector":"select[data-pair='2']","rect":[96,84,111,20]},
+        {"id":1075,"selector":"select[data-pair='3']","rect":[96,105,111,20]},
+        {"id":1076,"selector":"select[data-pair='4']","rect":[96,126,111,20]},
+        {"id":-1,"selector":"label:nth-child(1) .route-label","rect":[18,45,72,12]},
+        {"id":-1,"selector":"label:nth-child(2) .route-label","rect":[18,66,72,12]},
+        {"id":-1,"selector":"label:nth-child(3) .route-label","rect":[18,87,72,12]},
+        {"id":-1,"selector":"label:nth-child(4) .route-label","rect":[18,108,72,12]},
+        {"id":-1,"selector":"label:nth-child(5) .route-label","rect":[18,129,72,12]},
+        {"id":-1,"selector":".patchbay-presets > span","rect":[11,14,39,12]}
+      ]
+    },
+    "reverb": {
+      "title": "REVERB",
+      "client_size": [195, 135],
+      "controls": [
+        {"id":1,"selector":"[data-close]","rect":[101,105,75,21]},
+        {"id":1109,"selector":"[data-action=reverb-default]","rect":[20,105,75,21]},
+        {"id":1110,"selector":"#reverb-type","rect":[63,9,111,20]},
+        {"id":-1,"selector":".reverb-fields label:nth-child(1) > span:first-child","rect":[18,12,30,12]},
+        {"id":-1,"selector":".reverb-fields label:nth-child(2) > span:first-child","rect":[24,47,86,12]},
+        {"id":-1,"selector":".reverb-fields label:nth-child(3) > span:first-child","rect":[24,77,75,12]},
+        {"id":1111,"selector":"#reverb-delay","rect":[113,41,52,21]},
+        {"id":1112,"selector":"#reverb-delay-stepper .stepper-buttons","rect":[163,41,16,21]},
+        {"id":1113,"selector":"#reverb-time","rect":[113,72,52,21]},
+        {"id":1114,"selector":"#reverb-time-stepper .stepper-buttons","rect":[163,72,16,21]}
+      ]
+    },
+    "auto-sens": {
+      "title": "AUTO-SENS",
+      "client_size": [294, 146],
+      "controls": [
+        {"id":1,"selector":"#auto-start","rect":[117,117,75,21]},
+        {"id":2,"selector":"#auto-cancel","rect":[198,117,81,21]},
+        {"id":1171,"selector":"fieldset","rect":[9,9,279,81]},
+        {"id":1160,"selector":".auto-channels label:nth-child(1)","rect":[27,32,30,15]},
+        {"id":1161,"selector":".auto-channels label:nth-child(2)","rect":[63,32,30,15]},
+        {"id":1162,"selector":".auto-channels label:nth-child(3)","rect":[99,32,30,15]},
+        {"id":1163,"selector":".auto-channels label:nth-child(4)","rect":[135,32,30,15]},
+        {"id":1164,"selector":".auto-channels label:nth-child(5)","rect":[27,59,30,15]},
+        {"id":1165,"selector":".auto-channels label:nth-child(6)","rect":[63,59,30,15]},
+        {"id":1166,"selector":".auto-channels label:nth-child(7)","rect":[99,59,30,15]},
+        {"id":1167,"selector":".auto-channels label:nth-child(8)","rect":[135,59,30,15]},
+        {"id":1168,"selector":"#auto-all","rect":[189,27,90,21]},
+        {"id":1169,"selector":"#auto-none","rect":[189,54,90,21]}
+      ]
+    }
+  }
+}

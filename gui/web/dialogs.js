@@ -19,7 +19,11 @@ export class DialogWindow {
     });
     this.caption.append(close);
     // Resource order starts with the bottom buttons in these Windows dialogs.
-    if (dialog.hasAttribute('data-footer-first')) this.caption.after(dialog.querySelector(':scope > footer'));
+    if (dialog.hasAttribute('data-footer-first')) {
+      const footer = dialog.querySelector('footer');
+      if (footer.parentElement === dialog) this.caption.after(footer);
+      else footer.parentElement.prepend(footer);
+    }
     dialog.addEventListener('keydown', event => this.keyboard(event));
     dialog.addEventListener('focusin', () => this.defaultStyle());
     this.caption.addEventListener('pointerdown', event => this.start(event));

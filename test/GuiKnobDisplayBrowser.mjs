@@ -10,6 +10,7 @@ import {parseArgs} from 'node:util';
 import {PlaywrightClient} from './PlaywrightClient.mjs';
 import {until} from './BrowserClient.mjs';
 import {fixture} from './GuiSyntheticModel.mjs';
+import {checkDialogWindows} from './GuiDialogs.mjs';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 const {values} = parseArgs({options: {prefix: {type: 'string'}}});
@@ -85,6 +86,10 @@ async function geometry() {
   const source = (await fs.readFile(path.join(root, 'test/GuiControlGeometry.mjs'), 'utf8')).replace('export ', '');
   const result = await browser.evaluate(`(async () => {${source}\nreturn await checkControlGeometry(${JSON.stringify(reference)});})()`);
   assert.deepEqual(result, {checked: 302, hidden: 0}, 'Original control rectangles in both views');
+  const dialogs = JSON.parse(await fs.readFile(path.join(root, 'test/data/dialog-geometry.json'), 'utf8'));
+  const dialogSource = (await fs.readFile(path.join(root, 'test/GuiDialogGeometry.mjs'), 'utf8')).replace('export ', '');
+  const dialogResult = await browser.evaluate(`(async () => {${dialogSource}\nreturn await checkDialogGeometry(${JSON.stringify(dialogs)});})()`);
+  assert.deepEqual(dialogResult, {dialogs: 3, checked: 37}, 'Original dialog client/control rectangles');
 }
 
 async function deviceIdentity() {
@@ -203,6 +208,12 @@ try {
   await displayCases();
   await editing();
   await geometry();
+  for (const id of ['patchbay', 'reverb', 'auto-sens']) {
+    await browser.evaluate(`document.getElementById(${JSON.stringify(id)}).showModal()`);
+    await browser.page.locator(`#${id}`).screenshot({path: path.join(directory, `${id}.png`)});
+    await browser.page.locator(`#${id} .dialog-close`).click();
+  }
+  await checkDialogWindows(browser, directory, async () => model);
   await deviceIdentity();
   await maskedPreamps();
   await maskedMixers();
@@ -211,7 +222,7 @@ try {
   await browser.page.locator('.panel').screenshot({path: path.join(directory, 'mixer.png')});
   for (const errors of [unexpected, browser.exceptions, browser.securityErrors, browser.networkErrors,
     browser.httpErrors, browser.consoleEvents]) assert.deepEqual(errors, []);
-  console.log('PASS Playwright: base/EXP footer identity, 302 original control rectangles, 101 sensitivity readouts/rotary positions, dB accessibility, commit/Escape, all-rate fixed channel presentation and interrupted knob/fader/edit recovery. All replies synthetic.');
+  console.log('PASS Playwright: base/EXP footer identity, 302 main and 37 dialog control rectangles, 101 sensitivity readouts/rotary positions, dB accessibility, commit/Escape, all-rate fixed channel presentation and interrupted knob/fader/edit recovery. All replies synthetic.');
 } finally {
   if (browser) await browser.close();
   if (server.exitCode === null) { server.kill('SIGTERM'); await once(server, 'exit'); }

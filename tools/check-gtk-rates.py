@@ -63,8 +63,10 @@ class Check(Desktop):
         source = (ROOT / 'test/GuiSyntheticModel.mjs').read_text().replace('export function', 'function')
         source += (ROOT / 'test/GtkRatePanel.mjs').read_text().replace('export async function', 'async function')
         source += (ROOT / 'test/GuiControlGeometry.mjs').read_text().replace('export ', '')
+        source += (ROOT / 'test/GuiDialogGeometry.mjs').read_text().replace('export ', '')
         reference = json.loads((ROOT / 'test/data/control-geometry.json').read_text())
-        source += f'\nreturn await checkRates(fixture(), {json.dumps(reference)}, checkControlGeometry);'
+        dialogs = json.loads((ROOT / 'test/data/dialog-geometry.json').read_text())
+        source += f'\nreturn await checkRates(fixture(), {json.dumps(reference)}, checkControlGeometry, {json.dumps(dialogs)}, checkDialogGeometry);'
 
         def finished(view, result, _data):
             try:

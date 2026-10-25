@@ -30,7 +30,27 @@ def compare(observed, reference):
     return {'view': view, 'matched': len(reference['views'][view])}
 
 
-def capture():
+def compare_dialog(observed, reference):
+    for key in ('source_sha256', 'dpi'):
+        if observed.get(key) != reference[key]:
+            raise ValueError(f'Original dialog metadata differs: {key}.')
+    matches = [(name, item) for name, item in reference['dialogs'].items()
+               if item['title'] == observed.get('dialog_title')]
+    if len(matches) != 1:
+        raise ValueError('Expected one known original dialog title.')
+    name, item = matches[0]
+    if observed.get('client_size') != item['client_size']:
+        raise ValueError('Original dialog client bounds differ.')
+    for control in item['controls']:
+        # Static captions share ID -1; their distinct rectangles identify them.
+        candidates = [node for node in observed['controls'] if node['id'] == control['id'] and
+                      (control['id'] != -1 or node['rect'] == control['rect'])]
+        if len(candidates) != 1 or candidates[0]['rect'] != control['rect']:
+            raise ValueError(f'Original dialog control bounds differ: {name}/{control["id"]}.')
+    return {'dialog': name, 'matched': len(item['controls'])}
+
+
+def capture(dialog=None):
     if sys.platform != 'win32':
         raise OSError('Run this inspector with Windows Python alongside the original control panel.')
     from ctypes import wintypes as w
@@ -88,6 +108,20 @@ def capture():
             raise ValueError('Unexpected original control-panel executable hash.')
     finally:
         kernel.CloseHandle(process)
+    if dialog is not None:
+        dialogs = []
+
+        @callback
+        def find_dialog(node, _data):
+            owner = w.DWORD()
+            user.GetWindowThreadProcessId(node, ctypes.byref(owner))
+            if owner.value == pid.value and user.IsWindowVisible(node) and text(node) == dialog and \
+                    text(node, 'GetClassNameW') == '#32770':
+                dialogs.append(node)
+            return True
+        if not user.EnumWindows(find_dialog, 0) or len(dialogs) != 1:
+            raise OSError('Expected one visible dialog in the verified original process.')
+        window = dialogs[0]
     origin, client = w.POINT(), w.RECT()
     if not user.ClientToScreen(window, ctypes.byref(origin)) or not user.GetClientRect(window, ctypes.byref(client)):
         raise ctypes.WinError(ctypes.get_last_error())
@@ -108,7 +142,7 @@ def capture():
     user.EnumChildWindows(window, child, 0)
     if errors:
         raise ctypes.WinError(errors[0])
-    return {'source_sha256': digest, 'client_size': [client.right, client.bottom],
+    return {'source_sha256': digest, 'dialog_title': dialog, 'client_size': [client.right, client.bottom],
             'menu_height': user.GetSystemMetrics(15), 'dpi': user.GetDpiForWindow(window),
             'controls': controls}
 
@@ -116,11 +150,13 @@ def capture():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, help='save a private JSON observation instead of printing it')
-    parser.add_argument('--compare', type=Path, help='compare the visible view with our numeric layout fixture')
+    parser.add_argument('--compare', type=Path, help='compare the visible view/dialog with our numeric layout fixture')
+    parser.add_argument('--dialog', help='inspect a visible dialog owned by the verified original panel')
     args = parser.parse_args()
     try:
-        observation = capture()
-        comparison = compare(observation, json.loads(args.compare.read_text(encoding='utf-8'))) if args.compare else None
+        observation = capture(args.dialog)
+        comparator = compare_dialog if args.dialog else compare
+        comparison = comparator(observation, json.loads(args.compare.read_text(encoding='utf-8'))) if args.compare else None
         result = json.dumps(observation, indent=2) + '\n'
         if args.output:
             with args.output.open('x', encoding='utf-8') as output:
