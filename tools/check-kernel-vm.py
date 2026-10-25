@@ -17,8 +17,9 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 MARKER = 'OCTA_VM_MODULE_LIFECYCLE_PASS'
 REQUIRED = ('KASAN', 'KASAN_GENERIC', 'UBSAN', 'UBSAN_ALIGNMENT', 'FAULT_INJECTION',
-            'USB_DUMMY_HCD', 'USB_RAW_GADGET', 'IKCONFIG_PROC')
+            'USB_DUMMY_HCD', 'USB_RAW_GADGET', 'USB_MON', 'IKCONFIG_PROC')
 REPORT = re.compile(r'BUG:|WARNING:|KASAN:|UBSAN:|Oops:|Kernel panic|general protection fault')
+STATUS_ERRORS = ('empty', 'short', 'phase', 'zero-rate', 'missing-zero', 'missing-one', 'timeout')
 
 
 def entry(name, data=b'', mode=stat.S_IFREG | 0o644, major=0, minor=0):
@@ -71,19 +72,28 @@ def module_order(kernel, standalone, release):
 
 
 def usb_script():
-    return ['for iteration in 1 2 3; do', '  insmod /modules/snd_octa_capture.ko',
-            '  /bin/usb-fixture gadget &', '  gadget=$!',
+    lines = ['usb_start() {', '  insmod /modules/snd_octa_capture.ko',
+            '  /bin/usb-fixture gadget "${1:-normal}" &', '  gadget=$!',
             '  for _ in $(seq 1 20); do',
             '    test ! -c /dev/snd/controlC0 || break', '    sleep 1', '  done',
-            '  test -c /dev/snd/controlC0',
-            '  /bin/usb-fixture read-status &', '  reader_one=$!',
-            '  /bin/usb-fixture read-status &', '  reader_two=$!',
-            '  wait "$reader_one"', '  wait "$reader_two"',
-            '  kill "$gadget"', '  wait "$gadget" || test "$?" -eq 143',
+            '  test -c /dev/snd/controlC0', '}', 'usb_finish() {',
+            '  wait "$gadget" || test "$?" -eq 143',
             '  for _ in $(seq 1 10); do',
             '    test -d /sys/class/sound/card0 || break', '    sleep 1', '  done',
             '  test ! -d /sys/class/sound/card0', '  rmmod snd_octa_capture',
+            '}', 'usb_stop() {', '  kill "$gadget"', '  usb_finish', '}',
+            'for iteration in 1 2 3; do', '  usb_start normal',
+            '  /bin/usb-fixture read-status &', '  reader_one=$!',
+            '  /bin/usb-fixture read-status &', '  reader_two=$!',
+            '  wait "$reader_one"', '  wait "$reader_two"', '  usb_stop',
             '  echo "OCTA_VM_USB_CYCLE $iteration"', 'done']
+    lines += ['for scenario in ' + ' '.join(STATUS_ERRORS) + '; do',
+              '  usb_start "$scenario"', '  /bin/usb-fixture read-status "$scenario"',
+              '  usb_stop', 'done']
+    lines += ['usb_start timeout', '/bin/usb-fixture disconnect-read "$gadget"', 'usb_finish',
+              'usb_start normal', '/bin/usb-fixture read-status', 'usb_stop',
+              'echo OCTA_VM_STATUS_RECOVERY_PASS']
+    return lines
 
 
 def init_script(modules, release, usb=False):
@@ -134,7 +144,11 @@ def verify_output(result, text, usb):
     cycles = all(lines.count(f'OCTA_VM_MODULE_CYCLE {number}') == 1 for number in (1, 2, 3))
     if usb:
         cycles = cycles and all(lines.count(f'OCTA_VM_USB_CYCLE {number}') == 1 for number in (1, 2, 3))
-        cycles = cycles and lines.count('OCTA_VM_STATUS_READ_PASS') == 6
+        cycles = cycles and lines.count('OCTA_VM_STATUS_READ_PASS') == 7
+        cycles = cycles and all(lines.count(f'OCTA_VM_STATUS_ERROR_PASS {name}') == 1 for name in STATUS_ERRORS)
+        cycles = cycles and lines.count('OCTA_VM_STATUS_ERROR_PASS disconnect') == 1
+        cycles = cycles and lines.count('OCTA_VM_STATUS_UNPLUG_PASS') == 1
+        cycles = cycles and lines.count('OCTA_VM_STATUS_RECOVERY_PASS') == 1
     return not result and lines.count(MARKER) == 1 and cycles and not REPORT.search(text)
 
 
@@ -192,6 +206,9 @@ def main():
         print('PASS sanitizer VM boot and three generic/standalone module load/unload cycles. No device streaming was tested.')
         if fixture:
             print('PASS three synthetic USB probe/concurrent-status/disconnect cycles (120 status reads). No physical device was tested.')
+            print('PASS seven deterministic status errors with exact ALSA errno and untouched caller buffers. No fuzzing was run.')
+            print('PASS in-flight disconnect confirmed by status URB submission/completion and ALSA error readback.')
+            print('PASS 20 valid status reads after the error/disconnect scenarios and a fresh module/device lifecycle.')
 
 
 if __name__ == '__main__':

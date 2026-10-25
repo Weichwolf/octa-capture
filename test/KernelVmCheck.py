@@ -14,7 +14,10 @@ def console(usb=False):
     lines = [f'OCTA_VM_MODULE_CYCLE {index}' for index in (1, 2, 3)]
     if usb:
         lines += [f'OCTA_VM_USB_CYCLE {index}' for index in (1, 2, 3)]
-        lines += ['OCTA_VM_STATUS_READ_PASS'] * 6
+        lines += ['OCTA_VM_STATUS_READ_PASS'] * 7
+        lines += [f'OCTA_VM_STATUS_ERROR_PASS {name}' for name in CHECK['STATUS_ERRORS']]
+        lines += ['OCTA_VM_STATUS_ERROR_PASS disconnect', 'OCTA_VM_STATUS_UNPLUG_PASS',
+                  'OCTA_VM_STATUS_RECOVERY_PASS']
     return '\n'.join([*lines, CHECK['MARKER']])
 
 
@@ -27,13 +30,19 @@ class Evidence(unittest.TestCase):
         self.assertFalse(CHECK['verify_output'](0, console(), True))
         text = console(True)
         for marker in ('OCTA_VM_MODULE_CYCLE 2', 'OCTA_VM_USB_CYCLE 2',
-                       'OCTA_VM_STATUS_READ_PASS', CHECK['MARKER']):
+                       'OCTA_VM_STATUS_READ_PASS', 'OCTA_VM_STATUS_ERROR_PASS disconnect',
+                       'OCTA_VM_STATUS_UNPLUG_PASS', 'OCTA_VM_STATUS_RECOVERY_PASS', CHECK['MARKER']):
             self.assertFalse(CHECK['verify_output'](0, text.replace(marker, '', 1), True), marker)
         self.assertFalse(CHECK['verify_output'](0, text + '\nOCTA_VM_STATUS_READ_PASS', True))
+        for name in CHECK['STATUS_ERRORS']:
+            marker = f'OCTA_VM_STATUS_ERROR_PASS {name}'
+            self.assertFalse(CHECK['verify_output'](0, text.replace(marker, '', 1), True), name)
+            self.assertFalse(CHECK['verify_output'](0, text + '\n' + marker, True), name)
 
     def test_marker_fragments_and_duplicate_cycles_are_rejected(self):
         text = console(True)
-        for marker in ('OCTA_VM_MODULE_CYCLE 2', 'OCTA_VM_USB_CYCLE 2', CHECK['MARKER']):
+        for marker in ('OCTA_VM_MODULE_CYCLE 2', 'OCTA_VM_USB_CYCLE 2',
+                       'OCTA_VM_STATUS_UNPLUG_PASS', CHECK['MARKER']):
             self.assertFalse(CHECK['verify_output'](0, text.replace(marker, marker + '0'), True))
             self.assertFalse(CHECK['verify_output'](0, text + '\n' + marker, True))
 

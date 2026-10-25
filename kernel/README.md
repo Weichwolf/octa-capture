@@ -284,18 +284,32 @@ The generic ALSA module is unloaded before each simulated device appears.
 Helper workers terminate with their gadget parent, so disconnect closes all
 raw-gadget handles. Missing USB/read markers also fail the check.
 
+Seven fixed status-error scenarios check empty/7-byte replies (`EIO`), an
+invalid phase (`EPROTO`), a phase-1 zero rate (`ENODATA`), four packets without
+the required phase transition (`EAGAIN`, both missing-phase directions), and
+an unanswered interrupt request (`ETIMEDOUT`). Every failed ALSA read must leave
+the caller's complete byte array untouched; disconnect/unload must still finish.
+The in-flight unplug case waits for usbmon to observe a pending status URB before
+terminating the virtual gadget. It checks the corresponding completion and
+ALSA error, then a fresh module/device lifecycle must pass another 20 good reads.
+Dummy HCD can complete a removed endpoint with `EPROTO`; the test compares the
+actual USB and ALSA errors instead of assuming `ESHUTDOWN`. A timeout cannot
+substitute for this disconnect result.
+
 This is a legal descriptor/status model, not a recording of the device's full
 descriptors or a firmware emulator. MIDI packet sizes and strings are fixture
 values. The model rejects audio streaming alternates and does not service MIDI,
-physical audio, DSP controls or external clocks. No malformed traffic is generated.
+physical audio, DSP controls or external clocks. Fixed malformed replies exist
+only on the guest's dummy USB bus. This is deterministic testing, not fuzzing;
+no malformed traffic is sent to physical hardware.
 
 The patched Linux 6.12.113 fixture passes strict VM startup, three paired
 generic/standalone module load/unload cycles and the synthetic USB/status
 cycles without kernel warnings or KASAN/UBSAN reports.
 Clock, status, monitor and PCM meter objects contain
-KASAN and UBSAN alignment instrumentation. Streaming, transport failures,
-in-flight unplug, fault injection and power management still need separate
-sanitizer checks.
+KASAN and UBSAN alignment instrumentation. Streaming, other transport failures,
+physical-controller unplug, allocation fault injection and power management
+still need separate sanitizer checks.
 
 ## Passive USB timing observation
 
