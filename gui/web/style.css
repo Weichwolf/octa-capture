@@ -110,7 +110,13 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .busy-message { z-index: 16; width: 290px; min-height: 50px; padding: 18px; }
 .disconnected main button, .disconnected .knob { pointer-events: none; }
 .disconnected .preamp-strip { filter: saturate(.5); }
-.unavailable-channel { opacity: .3; pointer-events: none; }
+.unavailable-channel { pointer-events: none; }
+.unavailable-channel .toggle:disabled > :not(.lamp) { opacity: 1; }
+.unavailable-channel .knob-dial { filter: brightness(.55); }
+.unavailable-channel .knob-needle { transform: rotate(-135deg); }
+.unavailable-channel input.knob-value { color: transparent; }
+.unavailable-channel output.knob-value { display: none; }
+.unavailable-channel .level-fill, .unavailable-channel .meter-fill, .unavailable-channel .meter-peak, .unavailable-channel .meter-clip { visibility: hidden; }
 .mixer-view { height: 350px; }
 .mixer-tabs { display: flex; align-items: flex-end; height: 19px; gap: 0; padding-left: 18px; background: #292929; color: #ccc; }
 .mixer-tabs button { position: relative; top: -2px; height: 18px; width: 129px; flex-shrink: 0; border: 1px solid #999; border-bottom: 0; border-radius: 7px 7px 0 0; background: linear-gradient(#505050,#343434); color: #bbb; padding: 1px 7px; font-size: 12px; }

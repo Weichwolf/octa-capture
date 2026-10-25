@@ -212,7 +212,7 @@ class Knob {
   display(caption) {
     const text = caption || this.format(this.value);
     this.dial.style.setProperty('--angle', `${knobAngle(this.value, this.maximum)}deg`);
-    if (this.output instanceof HTMLInputElement) this.output.value = text.replace(/ dB$/, '').padStart(4);
+    if (this.output instanceof HTMLInputElement) this.output.value = this.node.closest('.unavailable-channel') ? '' : text.replace(/ dB$/, '').padStart(4);
     else this.output.textContent = text;
     this.node.title = text;
     this.node.setAttribute('aria-valuenow', String(this.value));
@@ -246,6 +246,7 @@ class Knob {
   }
   move(event) {
     if (!this.dragging) return;
+    if (!connected || busy || this.node.closest('.unavailable-channel')) { this.end(); return; }
     if (!(event.buttons & 1)) { this.end(); return; }
     if (event.button !== -1) return;
     this.origin.value = this.value;
@@ -550,10 +551,12 @@ function renderFaders(state) {
   for (const {input, output, read, control, interaction} of faders) {
     const identifier = key(control(0));
     const value = previews.get(identifier) ?? pending.get(identifier) ?? read(state);
-    if (!interaction.dragging) input.value = volumeIndex(value);
-    input.title = volumeText(value);
-    if (output) output.textContent = volumeText(value).replace(/ dB$/, '');
-    input.disabled = !connected || busy || input.closest('.unavailable-channel') !== null;
+    const unavailable = input.closest('.unavailable-channel') !== null;
+    if (unavailable && interaction.dragging) interaction.end();
+    if (!interaction.dragging || unavailable) input.value = unavailable ? 0 : volumeIndex(value);
+    input.title = unavailable ? '' : volumeText(value);
+    if (output) output.textContent = unavailable ? '' : volumeText(value).replace(/ dB$/, '');
+    input.disabled = !connected || busy || unavailable;
   }
   for (const [source, value] of Object.entries(masterDisplay.sync(state.mixers[bus], controls.filter(control => control.bus === bus)))) {
     masterOutputs.get(source).textContent = volumeText(value).replace(/ dB$/, '');
@@ -574,11 +577,16 @@ function update(result) {
   const multiple = state.output_routes.some(route => route >= 1 && route <= 3);
   if (rateIndex === 3 || !multiple) bus = 0;
   for (const strip of all('.preamp-strip, .mixer-strip')) {
-    strip.classList.toggle('unavailable-channel', rateIndex === 3 && Number(strip.dataset.channel) >= 4);
+    const unavailable = rateIndex === 3 && Number(strip.dataset.channel) >= 4;
+    strip.classList.toggle('unavailable-channel', unavailable);
+    strip.inert = unavailable;
+    strip.setAttribute('aria-hidden', String(unavailable));
   }
   for (const knob of knobs) {
-    knob.set(knob.read(state));
     const disabled = busy || knob.node.closest('.unavailable-channel') !== null;
+    if (disabled && knob.dragging) knob.end();
+    if (disabled && knob.editing) knob.finishEdit(false);
+    knob.set(knob.read(state));
     knob.node.tabIndex = disabled ? -1 : 0;
     knob.node.setAttribute('aria-disabled', String(disabled));
     if (knob.output instanceof HTMLInputElement) knob.output.disabled = disabled;
@@ -590,7 +598,9 @@ function update(result) {
     button.disabled = busy || pending.has(key(control(0))) || button.closest('.unavailable-channel') !== null;
   }
   renderFaders(state);
-  for (const {canvas, channel} of plots) drawCompressor(canvas, state.preamps[channel].compressor);
+  for (const {canvas, channel} of plots) {
+    drawCompressor(canvas, state.preamps[channel].compressor, rateIndex !== 3 || channel < 4);
+  }
   for (const node of all('.mixer-send, .master-return, .master-reverb-type')) node.style.visibility = bus === 0 && rateIndex !== 3 ? 'visible' : 'hidden';
   $('.master-reverb-type').classList.toggle('lit', state.reverb.type !== 0);
   $('.master-reverb-type').setAttribute('aria-pressed', String(state.reverb.type !== 0));

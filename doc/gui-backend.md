@@ -512,6 +512,13 @@ across all legal indices. Sensitivity fields show bare numbers; accessibility
 text retains dB. `node test/GuiKnobDisplayBrowser.mjs` checks all 101 readouts
 across eight inputs, reference needle positions and trusted editing/cancellation
 with synthetic API replies and no hardware binaries.
+The same check cycles all four rates and verifies the fixed 192 kHz presentation:
+inputs 5–8 and mixer channels 5–10 retain their captions/backgrounds while values
+and meters are blank, controls rest at minimum and compressor plots show only
+the grid. Unavailable strips are inert and excluded from accessibility. A rate
+change cancels captured knob/fader drags and unfinished sensitivity edits;
+returning to lower rates restores cached values without sending device writes.
+These checks do not establish physical 192 kHz signal routing or bitmap parity.
 Another 540 fixed wheel/drag events verify that wheel input changes the current
 value while retaining the pointer anchor; the next drag compares against the
 updated value. `--save-interleaved PATH` saves these numeric traces for the same

@@ -116,8 +116,11 @@ The sensitivity field shows the original bare number while its accessibility
 text retains dB. Full text update/comparison additionally matches 1,648 cases
 per original, including four-column numeric padding, all inputs/indices and
 unchanged/invalid text. Eighty visibility cases verify the rate/view gate.
-The 192 kHz fixed channel masks, bitmap/font painting remain outside these
-arithmetic checks; complete-strip dimming still differs from the original.
+The HTML 192 kHz presentation retains bright captions/backgrounds while showing
+fixed resting controls, empty values/meters and grid-only compressor plots.
+Synthetic Playwright rate transitions cover control capture/edit cancellation
+and cached-value restoration without device writes. Exact original bitmap/font
+painting remains outside these checks; authored control artwork still differs.
 The original knob/button right-release handlers also match 192 fixed hit/flag
 cases and 96 unavailable-button cases with window/popup stubs. Wine child
 bounds distinguish the actual skin from its painted label. HTML pointer actions

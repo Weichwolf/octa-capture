@@ -25,17 +25,19 @@ function path(context, points) {
   for (const point of points.slice(1)) context.lineTo(...point);
 }
 
-export function drawCompressor(canvas, compressor) {
+export function drawCompressor(canvas, compressor, available = true) {
   const context = canvas.getContext('2d');
-  const style = compressor.enabled ? GRAPH_STYLE.enabled : GRAPH_STYLE.bypassed;
-  const shape = compressorShape(compressor);
+  const style = available && compressor.enabled ? GRAPH_STYLE.enabled : GRAPH_STYLE.bypassed;
   context.setTransform(canvas.width / 51, 0, 0, canvas.height / 51, 0, 0);
   context.clearRect(0, 0, 51, 51);
   context.fillStyle = style.background; context.fillRect(0, 0, 51, 51);
-  path(context, shape.polygon); context.closePath();
-  context.fillStyle = style.fill; context.fill();
-  path(context, shape.line);
-  context.strokeStyle = style.line; context.lineWidth = GRAPH_STYLE.lineWidth; context.stroke();
+  if (available) {
+    const shape = compressorShape(compressor);
+    path(context, shape.polygon); context.closePath();
+    context.fillStyle = style.fill; context.fill();
+    path(context, shape.line);
+    context.strokeStyle = style.line; context.lineWidth = GRAPH_STYLE.lineWidth; context.stroke();
+  }
   // The reference grid is composited after the filled curve, at 12 dB intervals.
   context.fillStyle = style.grid;
   for (let position = 0; position <= 50; position += 10) {

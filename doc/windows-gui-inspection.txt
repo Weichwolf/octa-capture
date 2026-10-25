@@ -242,8 +242,12 @@ The original shows a fixed 483x353 mask at complete-panel position 490,49 for
 inputs 5-8, retaining static captions and replacing live controls/readouts.
 Private captures and visible/hidden child observations are preamp-rate-1/3
 under build/wine-reference/. The original rate and view were restored.
-The HTML channel guard is functional; exact recreation of these rate masks
-remains open. Dimming the complete strip is not original bitmap behavior.
+HTML retains the strip/caption brightness and uses fixed minimum-position
+knobs/faders, blank values and grid-only compressor plots for unavailable
+channels. Meter activity is hidden; captured drags and text edits are cancelled
+when their channel becomes unavailable. Synthetic Playwright rate transitions
+verify these states and restore cached values without device writes. Our own
+control artwork and native font/bitmap painting still differ from the original.
 
 The shared master readout getter 0x140019900 reads a source-specific selected
 side from state offsets 0x144c/0x1450. Callback 0x14001f040 selects that side;
