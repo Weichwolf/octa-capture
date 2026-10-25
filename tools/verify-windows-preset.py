@@ -144,6 +144,9 @@ class Windows:
         stack = self.cpu.reg_read(registers.UC_X86_REG_RSP)
         require(read(self.cpu, stack + 0x28) == 3 and read(self.cpu, stack + 0x30) == 0x40000000,
                 'Unexpected original device open flags.')
+        require(bytes(self.cpu.mem_read(self.argument(0), len(self.path_bytes))) == self.path_bytes,
+                'Original preset loader changed the selected device path.')
+        self.opened_paths.append(self.device_path)
         self.opens += 1
         return 0x55 if self.device_available else 0xffffffffffffffff
 
@@ -171,7 +174,7 @@ class Windows:
         return int(self.ioctl_available)
 
     def load(self, source, current, *, valid=True, file=True, device=True, ioctl=True,
-             ready=True, connected=True, midi=True):
+             ready=True, connected=True, midi=True, device_path='\\\\.\\Rdwm1110001'):
         self.source, self.position, self.reads, self.opens, self.requests = source, 0, 0, 0, []
         self.file_available, self.device_available, self.ioctl_available = file, device, ioctl
         self.cpu.mem_write(CONTEXT, bytes(0x2000))
@@ -182,7 +185,10 @@ class Windows:
             write(self.cpu, MODEL + 0x3f0 + bus * 0x208, 1)
             for source_kind, pair in itertools.product(range(2), range(5)):
                 write(self.cpu, MODEL + 0x210 + bus * 0x208 + source_kind * 0xf0 + pair * 0x30, 1)
-        self.cpu.mem_write(CONTEXT + 4, '\\\\.\\Rdwm1110001\0'.encode('utf-16le'))
+        self.device_path, self.opened_paths = device_path, []
+        self.path_bytes = (device_path + '\0').encode('utf-16le')
+        require(len(self.path_bytes) <= 128, 'Oversized selected-device fixture.')
+        self.cpu.mem_write(CONTEXT + 4, self.path_bytes)
         write(self.cpu, CONTEXT + 0x1438, int(valid))
         for offset, value in zip((8, 12, 16, 20, 24),
                                  (current[11] & 1, current[12], current[13], current[14] & 1, current[15]), strict=True):
@@ -300,6 +306,20 @@ def stricter_format_cases(windows, binary, profile, current):
     return len(variants)
 
 
+def unit_cases(windows, profile, current):
+    _, expected = windows.load(profile, current)
+    require(len(expected) == 1, 'Expected one reference import frame.')
+    count = 0
+    for prefix, slot in itertools.product(('Rdwm1110', 'Rdwm1110Ex'), range(1, 5)):
+        path = f'\\\\.\\{prefix}{slot:03d}'
+        result, frames = windows.load(profile, current, device_path=path)
+        require(result == 1 and frames == expected and windows.requests == [5, 47] and
+                windows.opened_paths == [path, path] and windows.opens == 2,
+                'Original preset import did not follow its selected base/EXP context.')
+        count += 1
+    return count
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('windows_gui', type=Path)
@@ -310,6 +330,7 @@ def main():
     windows = Windows(args.windows_gui, Kernel(args.windows_kernel))
     count, profile, current = compare(windows, args.preset_binary.resolve(), args.fixtures)
     print(json.dumps({'preset_import_cases': count, **failure_cases(windows, profile, current),
+                      'selected_base_exp_paths': unit_cases(windows, profile, current),
                       'stricter_linux_format_cases': stricter_format_cases(
                           windows, args.preset_binary.resolve(), profile, current),
                       'file_reads_per_complete_case': 631, 'kernel_requests': [5, 47],

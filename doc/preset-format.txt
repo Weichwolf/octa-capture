@@ -162,6 +162,11 @@ Ver100/size checks because no other layout is established.
     doc/local/windows-gui-analysis/RDDP1110.EXE \
     doc/local/windows-kernel-analysis/RDWM1110.SYS build/strict/octa-preset
 
+The loader also executes against all four Rdwm1110 and four Rdwm1110Ex
+instance paths. Both device opens retain the selected context path, while
+IOCTL selectors 5/47 and the complete preset frame stay unchanged. Path lookup
+and final transmission are modeled; physical multi-unit loading is unverified.
+
 Both manufacturer hashes are pinned. Inputs are synthetic and this optional
 reference check performs no hardware I/O or fuzzing.
 
