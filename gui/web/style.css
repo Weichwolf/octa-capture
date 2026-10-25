@@ -40,8 +40,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focu
 .toggle:disabled .lamp, .header-action:disabled .lamp { --lamp-light: #8a8a8a; --lamp-face: #8a8a8a; border-color: #666; box-shadow: inset 0 0 0 2px #686868, inset 0 -2px 3px #595959; }
 #view-switch { margin-right: 11px; color: #ddd; background: linear-gradient(#676767,#414141); box-shadow: inset 0 0 0 2px #4d4d4d; border: 1px solid #929292; border-radius: 2px; height: 19px; min-width: 117px; font-weight: bold; font-size: 11px; font-style: italic; }
 main { position: relative; border: 4px ridge #777; height: 358px; background: #252525; }
-.preamp-view { position: relative; left: -1px; width: 968px; height: 350px; display: grid; grid-template-columns: repeat(8, 121px); padding: 0; }
-.preamp-strip { position: relative; min-width: 0; padding: 12px 4px 0; background: linear-gradient(#fff1,#0003),linear-gradient(90deg,#565656,#626262 55%,#4a4a4a); border-right: 1px solid #444; font-family: 'Arial Narrow','Liberation Sans Narrow',Arial,sans-serif; }
+.preamp-view { position: relative; left: -1px; width: 968px; height: 350px; display: grid; grid-template-columns: repeat(8, 121px); padding: 0; background: linear-gradient(transparent 211px,#525252 211px),radial-gradient(ellipse 260px 225px at 0 0,#737373,#272727 100%); }
+.preamp-strip { position: relative; min-width: 0; padding: 12px 4px 0; border-right: 1px solid #444; font-family: 'Arial Narrow','Liberation Sans Narrow',Arial,sans-serif; }
 .preamp-strip:nth-child(even) { border-right: 4px ridge #757575; }
 .preamp-strip:last-child { border-right: 0; }
 .pair-title { position: absolute; top: 3px; left: 67%; width: 84px; border-radius: 8px; background: #636363; color: #ddd; text-align: center; height: 12px; line-height: 12px; font: bold 10px Arial,sans-serif; z-index: 1; }

@@ -248,6 +248,10 @@ channels. Meter activity is hidden; captured drags and text edits are cancelled
 when their channel becomes unavailable. Synthetic Playwright rate transitions
 verify these states and restore cached values without device writes. Our own
 control artwork and native font/bitmap painting still differ from the original.
+The preamp background resources use a dark upper field (approximately #272727
+away from the upper-left highlight) and a uniform #525252 parameter field.
+HTML recreates these areas with panel-wide CSS gradients; it no longer repeats
+the same highlight independently in every strip. The highlight is approximate.
 
 The shared master readout getter 0x140019900 reads a source-specific selected
 side from state offsets 0x144c/0x1450. Callback 0x14001f040 selects that side;
