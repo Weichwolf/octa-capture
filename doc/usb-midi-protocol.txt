@@ -336,7 +336,10 @@ Verified response at the device's current 48 kHz setting:
   response: 80 bb 00 00
   decoded: 48000 Hz, flags=00
 Implemented in src/Usb.cpp (octa-probe), without claiming interfaces or
-changing settings.
+changing settings. The probe selects 0582:0120 or 0582:0121 and reports the
+actual product ID. Fixed libusb-boundary tests cover both IDs, foreign-device
+exclusion, short/error reads and cleanup; they do not establish physical EXP
+responses. Clock flags remain raw.
 
 Fsc_GetStatChk2 at 0x1757e reads c0/03/0002/0000, length 1, and compares
 the result with 01. The hardware returned 01. Fsc_GetDIN at 0x17606 reads

@@ -9,6 +9,7 @@ namespace octa {
 struct ClockStatus {
   std::uint32_t sample_rate_hz;
   std::uint8_t flags;
+  std::uint16_t product_id;
   bool operator==(const ClockStatus &) const = default;
 };
 

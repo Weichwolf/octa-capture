@@ -14,17 +14,23 @@ namespace {
 
 constexpr std::uint16_t vendor_id = 0x0582;
 constexpr std::uint16_t product_id = 0x0120;
+constexpr std::uint16_t expansion_product_id = 0x0121;
 constexpr std::uint8_t vendor_in = 0xc0;
 constexpr std::uint8_t clock_request = 3;
 constexpr std::uint16_t clock_status_value = 1;
 constexpr unsigned int timeout_ms = 1500;
 using UsbHandle = std::unique_ptr<libusb_device_handle, decltype(&libusb_close)>;
 
+struct OpenedDevice {
+  UsbHandle handle;
+  std::uint16_t product_id;
+};
+
 struct FreeDeviceList {
   void operator()(libusb_device **devices) const noexcept { libusb_free_device_list(devices, 1); }
 };
 
-std::expected<UsbHandle, UsbError> find_device(libusb_context *context) {
+std::expected<OpenedDevice, UsbError> find_device(libusb_context *context) {
   libusb_device **raw_list = nullptr;
   const auto count = libusb_get_device_list(context, &raw_list);
   if (count < 0) { return std::unexpected(UsbError{.code = static_cast<int>(count)}); }
@@ -34,11 +40,15 @@ std::expected<UsbHandle, UsbError> find_device(libusb_context *context) {
     libusb_device_descriptor descriptor{};
     const int result = libusb_get_device_descriptor(device, &descriptor);
     if (result != LIBUSB_SUCCESS) { return std::unexpected(UsbError{.code = result}); }
-    if (descriptor.idVendor != vendor_id || descriptor.idProduct != product_id) { continue; }
+    if (descriptor.idVendor != vendor_id ||
+        (descriptor.idProduct != product_id && descriptor.idProduct != expansion_product_id)) {
+      continue;
+    }
     libusb_device_handle *raw_handle = nullptr;
     const int opened = libusb_open(device, &raw_handle);
     if (opened != LIBUSB_SUCCESS) { return std::unexpected(UsbError{.code = opened}); }
-    return UsbHandle(raw_handle, &libusb_close);
+    return OpenedDevice{.handle = UsbHandle(raw_handle, &libusb_close),
+                        .product_id = descriptor.idProduct};
   }
   return std::unexpected(UsbError{.code = LIBUSB_ERROR_NO_DEVICE});
 }
@@ -53,7 +63,7 @@ std::expected<ClockStatus, UsbError> read_clock_status() {
   const auto device = find_device(context.get());
   if (!device) { return std::unexpected(device.error()); }
   std::array<std::uint8_t, 4> data{};
-  const int received = libusb_control_transfer(device->get(),
+  const int received = libusb_control_transfer(device->handle.get(),
                                                vendor_in,
                                                clock_request,
                                                clock_status_value,
@@ -70,7 +80,7 @@ std::expected<ClockStatus, UsbError> read_clock_status() {
   const auto rate = static_cast<std::uint32_t>(data[0]) |
                     (static_cast<std::uint32_t>(data[1]) << middle_shift) |
                     (static_cast<std::uint32_t>(data[2]) << high_shift);
-  return ClockStatus{.sample_rate_hz = rate, .flags = data[3]};
+  return ClockStatus{.sample_rate_hz = rate, .flags = data[3], .product_id = device->product_id};
 }
 
 }

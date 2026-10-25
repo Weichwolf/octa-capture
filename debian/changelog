@@ -1,3 +1,13 @@
+octa-capture (0.1.0-1~trixie9) trixie; urgency=medium
+
+  * Recognize the EXP USB personality in the standalone module, activation,
+    device permissions, diagnostics and control-panel selection.
+  * Keep model/serial labels consistent with successful device snapshots.
+  * Check modeled EXP binding/status in the isolated sanitizer VM; physical
+    EXP streaming and multi-unit aggregation remain unverified/incomplete.
+
+ -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Sun, 25 Oct 2026 21:46:11 +0100
+
 octa-capture (0.1.0-1~trixie8) trixie; urgency=medium
 
   * Recreate shared panel highlights, framed mixer fader beds and fixed

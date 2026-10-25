@@ -119,7 +119,7 @@ device operation without being cut off by the input deadline.
 
 | Endpoint | Operation |
 | --- | --- |
-| `GET /api/state` | Full state, clock status, connection/busy/capability flags |
+| `GET /api/state` | Full state, matching device identity/model, clock status, connection/busy/capability flags |
 | `GET /api/meters` | Latest actual input frame, including staleness |
 | `GET /api/devices` | Present OCTA-CAPTURE cards and selected identity; works while disconnected |
 | `POST /api/device` | Select a discovered identity and reopen its CTRL session |
@@ -147,7 +147,7 @@ identification; selecting a different visible mixer tab sends LCD selection.
 Right-click the device name, or use its Context Menu key/Shift+F10, to select a
 unit. While disconnected, the visible Select OCTA-CAPTURE button opens that menu.
 Selection accepts only `{"id":"serial:…"}` returned by discovery, never a
-client-supplied ALSA port or path. Discovery checks USB `0582:0120` through sysfs
+client-supplied ALSA port or path. Discovery checks USB `0582:0120` and EXP `0582:0121` through sysfs
 without claiming USB interfaces. Serial identities survive ALSA card renumbering;
 devices without a serial use their USB bus path. Before subsequent live operations,
 the backend resolves the selected identity again and refuses an absent unit rather

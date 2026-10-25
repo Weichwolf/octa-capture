@@ -106,6 +106,10 @@ add_test(NAME device-status COMMAND device_status_test)
 add_executable(status_control_test test/StatusControl.cpp)
 target_link_libraries(status_control_test PRIVATE octa_status PkgConfig::ALSA)
 add_test(NAME status-control COMMAND status_control_test)
+add_executable(usb_test test/Usb.cpp)
+target_link_libraries(usb_test PRIVATE octa_usb PkgConfig::LIBUSB)
+add_test(NAME usb COMMAND usb_test)
+set_tests_properties(usb PROPERTIES TIMEOUT 10)
 add_executable(protocol_test test/Protocol.cpp)
 target_link_libraries(protocol_test PRIVATE octa_protocol)
 add_test(NAME protocol COMMAND protocol_test)
@@ -335,6 +339,7 @@ add_custom_target(format-check
     "${CMAKE_SOURCE_DIR}/src/StatusMain.cpp"
     "${CMAKE_SOURCE_DIR}/test/DeviceStatus.cpp"
     "${CMAKE_SOURCE_DIR}/test/StatusControl.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
@@ -409,6 +414,7 @@ add_custom_target(format
     "${CMAKE_SOURCE_DIR}/src/StatusMain.cpp"
     "${CMAKE_SOURCE_DIR}/test/DeviceStatus.cpp"
     "${CMAKE_SOURCE_DIR}/test/StatusControl.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
@@ -467,6 +473,7 @@ add_custom_target(lint
     "${CMAKE_SOURCE_DIR}/src/StatusMain.cpp"
     "${CMAKE_SOURCE_DIR}/test/DeviceStatus.cpp"
     "${CMAKE_SOURCE_DIR}/test/StatusControl.cpp"
+    "${CMAKE_SOURCE_DIR}/test/Usb.cpp"
     "${CMAKE_SOURCE_DIR}/src/Preamp.cpp"
     "${CMAKE_SOURCE_DIR}/src/Control.cpp"
     "${CMAKE_SOURCE_DIR}/src/ControlMain.cpp"
