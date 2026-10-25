@@ -1,0 +1,20 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-METERS 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-meters \- observe the eight SysEx input meters
+.SH SYNOPSIS
+.nf
+\fBocta-meters\fR [DURATION-MS [CTRL-PORT]]
+.fi
+.SH DESCRIPTION
+Enable input-meter notifications, print input_levels and input_db as JSON lines,
+then disable notifications on ordinary exit or handled SIGINT/SIGTERM.
+DURATION-MS is 1..60000, default 5000.
+This observes the device's input meters and does not open an audio PCM stream.
+.PP
+The default CTRL MIDI port is hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1. Close other control-panel/CTRL clients before opening it. Audio streaming is independent of this connection.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

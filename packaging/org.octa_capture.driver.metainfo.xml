@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: FSFAP -->
+<!-- Copyright 2026 OCTA-CAPTURE contributors.
+     Copying and distribution of this file, with or without modification, are
+     permitted in any medium without royalty provided the copyright notice and
+     this notice are preserved. This file is offered as-is, without any warranty. -->
+<component type="driver">
+  <id>org.octa_capture.driver</id>
+  <metadata_license>FSFAP</metadata_license>
+  <project_license>GPL-2.0-only</project_license>
+  <name>OCTA-CAPTURE ALSA driver</name>
+  <summary>Standalone audio and MIDI driver for Roland OCTA-CAPTURE</summary>
+  <description>
+    <p>Standalone ALSA USB audio and MIDI module for the Roland OCTA-CAPTURE
+      UA-1010. A private Linux 6.12 ALSA source snapshot builds with DKMS against
+      matching kernel headers, without rebuilding or patching the kernel.</p>
+    <p>Base and VS EXPAND USB personalities are recognized. Physical EXP operation
+      and synchronized two-unit streaming remain experimental and unverified.</p>
+  </description>
+  <url type="homepage">https://github.com/Weichwolf/octa-capture</url>
+  <developer id="org.octa_capture">
+    <name>OCTA-CAPTURE contributors</name>
+  </developer>
+  <provides>
+    <modalias>usb:v0582p0120d*</modalias>
+    <modalias>usb:v0582p0121d*</modalias>
+  </provides>
+</component>

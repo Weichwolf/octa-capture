@@ -11,6 +11,15 @@ Files: *
 Copyright: 2026 OCTA-CAPTURE contributors
 License: GPL-2
 
+Files: packaging/org.octa_capture.driver.metainfo.xml
+Copyright: 2026 OCTA-CAPTURE contributors
+License: FSFAP
+
+License: FSFAP
+ Copying and distribution of this file, with or without modification, are
+ permitted in any medium without royalty provided the copyright notice and
+ this notice are preserved. This file is offered as-is, without any warranty.
+
 License: GPL-2
  This program is free software; you can redistribute it and/or modify
  it under the terms of version 2 of the GNU General Public License as

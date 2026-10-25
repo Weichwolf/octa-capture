@@ -1,0 +1,34 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-DSP 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-dsp \- set direct-mixer, master, effect or routing controls
+.SH SYNOPSIS
+.nf
+\fBocta-dsp\fR [\fB\-\-dry-run\fR] mixer SOURCE BUS CHANNEL PARAMETER VALUE [CTRL-PORT]
+\fBocta-dsp\fR [\fB\-\-dry-run\fR] master SOURCE BUS CHANNEL PARAMETER VALUE [CTRL-PORT]
+\fBocta-dsp\fR [\fB\-\-dry-run\fR] reverb PARAMETER BANK VALUE [CTRL-PORT]
+\fBocta-dsp\fR [\fB\-\-dry-run\fR] route PAIR SELECTION [CTRL-PORT]
+.fi
+.SH DESCRIPTION
+Set a typed DSP control and print fresh state as JSON.
+SOURCE is input or playback; BUS is A, B, C or D.
+Mixer channels use 1..10; master channels use 1/2 (left/right).
+Mixer link/mono use odd channels; master switches use channel 1.
+.PP
+Mixer parameters: link, mono, solo, mute, pan, volume, send.
+Master parameters: link, volume, return, io-link.
+Send and return belong to Mixer A's input section.
+Reverb parameters: type (bank 0), pre-delay or time (banks 1..4).
+Routing pairs use 1..5 and selections 0..8.
+.PP
+Arguments use decimal wire indices or coefficients rather than displayed units.
+Run as the regular user with access to the ALSA device.
+.PP
+\fB\-\-dry-run\fR prints frame_hex JSON and opens no hardware.
+.PP
+The default CTRL MIDI port is hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1. Close other control-panel/CTRL clients before opening it. Audio streaming is independent of this connection.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

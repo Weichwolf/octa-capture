@@ -1,0 +1,24 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-AUDIO-CHECK 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-audio\-check \- prepare or exercise an ALSA PCM stream
+.SH SYNOPSIS
+.nf
+\fBocta-audio-check\fR RATE capture|playback|prepare-capture|prepare-playback [PCM]
+.fi
+.SH DESCRIPTION
+Configure S24_3LE interleaved hardware PCM at 44100, 48000, 96000 or 192000 Hz.
+The default PCM is hw:CARD=OCTACAPTURE,DEV=0.
+Capture/playback use 12/10 transport channels below 192 kHz and 4/4 at 192 kHz.
+The requested period is RATE/100 frames with four periods per buffer.
+.PP
+Prepare modes configure and prepare without timed streaming.
+Capture and playback exercise roughly one second of transfer; playback sends zeros.
+The command may change hardware rate. Other PCM users must release the device.
+Print preparation, transfer, timing and error information as JSON.
+A successful transfer does not establish physical analog response or long-term stability.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

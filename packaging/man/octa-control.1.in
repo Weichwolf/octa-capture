@@ -1,0 +1,29 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-CONTROL 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-control \- set a preamp or compressor parameter
+.SH SYNOPSIS
+.nf
+\fBocta-control\fR [\fB\-\-dry-run\fR] CHANNEL PARAMETER VALUE [CTRL-PORT]
+.fi
+.SH DESCRIPTION
+Set one input parameter and print the freshly read device state as JSON.
+\fB\-\-dry-run\fR emits frame_hex JSON without opening hardware.
+Channels are numbered 1 through 8. Hi-Z uses only 1/2; stereo-link uses 1/3/5/7.
+.PP
+Parameters and index bounds are:
+phantom, low-cut, phase, hi-z, stereo-link, compressor (0/1);
+sensitivity (0..100), gate (0..50), attack (0..25), release (0..45),
+threshold (0..50), ratio (0..8), gain (0..74).
+Attack, release and ratio use fixed lookup tables.
+Phantom and Hi-Z change physical input conditions.
+.PP
+Arguments use decimal wire indices or coefficients rather than displayed units.
+Run as the regular user with access to the ALSA device.
+.PP
+The default CTRL MIDI port is hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1. Close other control-panel/CTRL clients before opening it. Audio streaming is independent of this connection.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

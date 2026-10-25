@@ -1,0 +1,19 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-PCM-PEAK-CHECK 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-pcm\-peak\-check \- check kernel peak retention with quiet channel tags
+.SH SYNOPSIS
+.nf
+\fBocta-pcm-peak-check\fR
+.fi
+.SH DESCRIPTION
+Developer check using exclusive PCM/meter access on hw:CARD=OCTACAPTURE.
+It plays very quiet positive channel tags and zeros, then checks the retained
+playback peaks and their clearing behavior.
+This writes real PCM output and must not run alongside other meter/audio clients.
+It uses the current hardware rate and does not establish calibrated physical gain.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

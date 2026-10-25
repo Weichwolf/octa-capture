@@ -65,6 +65,8 @@ sudo apt install ./build/debian-trixie/octa-capture_*_amd64.deb
 The package configures the driver on installation and after reconnecting the
 device. GUI and audio services run as the desktop user. Existing settings and
 presets are retained. DKMS builds only the external module for matching headers.
+Installed commands have manual pages, including `man octa-capture` and
+`man octa-capture-activate`.
 
 Userspace uses C++23, CMake/Ninja, LLVM 19, ALSA and libusb; kernel additions use
 C/Kbuild. Development packages include `clang-19`, `clang-tidy-19`,

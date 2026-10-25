@@ -1,0 +1,19 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-PROBE 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-probe \- read a raw USB clock diagnostic
+.SH SYNOPSIS
+.nf
+\fBocta-probe\fR
+.fi
+.SH DESCRIPTION
+Find an accessible OCTA-CAPTURE base or EXP USB device with libusb and read clock status.
+Print the actual device VID:PID, sample_rate_hz and raw clock_flags as JSON.
+This developer diagnostic uses raw USB access; normal installed clients should
+prefer octa-status(1), which reads through the kernel driver.
+Device detection and a successful clock query do not prove audio streaming.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

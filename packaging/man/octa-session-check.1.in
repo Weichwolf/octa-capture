@@ -1,0 +1,20 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-SESSION-CHECK 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-session\-check \- check shared CTRL queries and meter notifications
+.SH SYNOPSIS
+.nf
+\fBocta-session-check\fR [CTRL-PORT]
+.fi
+.SH DESCRIPTION
+Developer check that enables input meters, interleaves eight bulk queries with
+four same-value writes of the current input-1 Mixer-A pan, validates complete
+state preservation, disables meters and checks the trailing notification queue.
+This performs real idempotent device writes and needs exclusive CTRL access.
+.PP
+The default CTRL MIDI port is hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1. Close other control-panel/CTRL clients before opening it. Audio streaming is independent of this connection.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

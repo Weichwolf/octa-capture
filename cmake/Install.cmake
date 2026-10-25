@@ -39,6 +39,20 @@ install(FILES "${CMAKE_SOURCE_DIR}/LICENSE"
 install(FILES "${CMAKE_SOURCE_DIR}/README.md"
   DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/octa-capture" COMPONENT Runtime)
 
+set(OCTA_MAN_PROGRAMS octa-capture octa-capture-http octa-aggregate octa-pulse-pairs
+  octa-control octa-dsp octa-state octa-status octa-probe octa-panel octa-meters
+  octa-pcm-meters octa-pcm-peak-check octa-audio-check octa-session-check
+  octa-auto-sense octa-preset octa-bridge)
+find_program(OCTA_GZIP NAMES gzip REQUIRED)
+foreach(OCTA_MAN_PROGRAM IN LISTS OCTA_MAN_PROGRAMS)
+  configure_file("${CMAKE_SOURCE_DIR}/packaging/man/${OCTA_MAN_PROGRAM}.1.in"
+    "${CMAKE_BINARY_DIR}/man/${OCTA_MAN_PROGRAM}.1" @ONLY)
+  execute_process(COMMAND "${OCTA_GZIP}" -n -9 -c "${CMAKE_BINARY_DIR}/man/${OCTA_MAN_PROGRAM}.1"
+    OUTPUT_FILE "${CMAKE_BINARY_DIR}/man/${OCTA_MAN_PROGRAM}.1.gz" COMMAND_ERROR_IS_FATAL ANY)
+  install(FILES "${CMAKE_BINARY_DIR}/man/${OCTA_MAN_PROGRAM}.1.gz"
+    DESTINATION "${CMAKE_INSTALL_MANDIR}/man1" COMPONENT Runtime)
+endforeach()
+
 set(CPACK_PACKAGE_NAME octa-capture)
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VENDOR "OCTA-CAPTURE contributors")

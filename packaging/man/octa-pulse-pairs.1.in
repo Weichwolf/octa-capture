@@ -1,0 +1,30 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-PULSE-PAIRS 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-pulse\-pairs \- manage native PulseAudio stereo pairs and rate changes
+.SH SYNOPSIS
+.nf
+\fBocta-pulse-pairs\fR [\fB\-\-install\fR | \fB\-\-watch\fR | \fB\-\-packaged-service\fR | \fB\-\-rate\fR HZ]
+                 [\fB\-\-device\fR CARD] [\fB\-\-bin-dir\fR DIR] [\fB\-\-help\fR]
+.fi
+.SH DESCRIPTION
+Reconcile the OCTA-CAPTURE stereo-pair profile with its current hardware rate.
+Native PulseAudio is required for coordinated rate changes.
+At 44.1/48/96 kHz there are five playback and six recording stereo pairs;
+Recording 11-12 is the Mixer A return. At 192 kHz only pairs 1-2 and 3-4 remain.
+.PP
+The default device is hw:CARD=OCTACAPTURE.
+\fB\-\-rate\fR briefly pauses affected PulseAudio streams, changes the hardware rate,
+then restores pair assignments, volumes and mutes.
+Stop streams on unavailable higher pairs before requesting 192 kHz.
+Direct ALSA clients must release their own streams; PipeWire coordination is unverified.
+.PP
+\fB\-\-watch\fR watches for present devices.
+\fB\-\-install\fR installs and starts the regular-user service.
+\fB\-\-packaged-service\fR is the packaged user-service entry point and retires its exact legacy unit.
+These operations may briefly interrupt device audio.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

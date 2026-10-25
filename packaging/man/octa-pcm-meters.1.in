@@ -1,0 +1,23 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-PCM-METERS 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-pcm\-meters \- read capture and playback PCM peaks
+.SH SYNOPSIS
+.nf
+\fBocta-pcm-meters\fR [SECONDS | \fB\-\-read\fR] [ALSA-CARD]
+.fi
+.SH DESCRIPTION
+Read PCM peak controls exposed by the standalone module.
+SECONDS is 1..60, default 1. Normal mode acquires a meter lease and may run
+the driver's zero-output idle PCM engine when ordinary audio streams are absent.
+Normal PCM users take precedence. Handled SIGINT/SIGTERM releases the lease.
+.PP
+\fB\-\-read\fR reads one passive snapshot without enabling the engine.
+Output is JSON. Missing/stale peaks are not fabricated.
+.PP
+The default ALSA control device is hw:CARD=OCTACAPTURE.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

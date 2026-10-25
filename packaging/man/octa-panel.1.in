@@ -1,0 +1,20 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-PANEL 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-panel \- select the device display or identify a unit
+.SH SYNOPSIS
+.nf
+\fBocta-panel display\fR BUS [CTRL-PORT]
+\fBocta-panel identify\fR [CTRL-PORT]
+.fi
+.SH DESCRIPTION
+Send the LCD mixer-selection command (BUS 0..3 for A..D), or the identification blink command.
+Print fresh device state as JSON. These are device commands; a successful send
+alone does not visually confirm the physical display or lamp.
+.PP
+The default CTRL MIDI port is hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1. Close other control-panel/CTRL clients before opening it. Audio streaming is independent of this connection.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

@@ -1,0 +1,22 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-STATUS 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-status \- read kernel-owned clock status
+.SH SYNOPSIS
+.nf
+\fBocta-status\fR [ALSA-CARD]
+.fi
+.SH DESCRIPTION
+Read the read-only ALSA CARD control named OCTA-CAPTURE Status.
+Print sample_rate_hz, clock_source, clock_active and raw_status_hex as JSON.
+Unmapped status bits remain raw. Clock display activation is not a measurement
+of synchronization quality.
+.PP
+The default ALSA control device is hw:CARD=OCTACAPTURE.
+The standalone module must expose the status control.
+The read uses the kernel's USB/PM guard and does not detach USB interfaces.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

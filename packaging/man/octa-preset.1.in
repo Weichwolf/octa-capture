@@ -1,0 +1,37 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-PRESET 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-preset \- inspect, save, apply or recover OCTA-CAPTURE settings
+.SH SYNOPSIS
+.nf
+\fBocta-preset inspect|normalize\fR FILE
+\fBocta-preset export\fR [CTRL-PORT] > settings.octa
+\fBocta-preset prepare\fR FILE CURRENT.syx > prepared.syx
+\fBocta-preset apply\fR FILE NEW-RECOVERY.syx [CTRL-PORT]
+\fBocta-preset restore|restore-auto\fR RECOVERY.syx [CTRL-PORT]
+\fBocta-preset memory-store|memory-load\fR NEW-RECOVERY.syx [CTRL-PORT]
+\fBocta-preset routing\fR multi-monitor|playback NEW-RECOVERY.syx [CTRL-PORT]
+\fBocta-preset direct-out\fR NEW-RECOVERY.syx [CTRL-PORT]
+\fBocta-preset initialize\fR all|preamps|direct-mix|reverb|patchbay NEW-RECOVERY.syx [CTRL-PORT]
+.fi
+.SH DESCRIPTION
+Inspect, normalize and prepare operate on local files without hardware.
+Normalize and export write binary Ver100 .octa data to standard output.
+Export reads current hardware state. Prepare combines an imported preset with
+a supplied current raw snapshot and writes the prepared SysEx frame.
+.PP
+Apply, initialization, routing, Direct Out and device-memory commands change hardware.
+They create a new raw recovery file before writes and verify fresh state afterward.
+Keep recovery files after errors. Restore writes a saved raw snapshot;
+restore-auto uses the Auto-Sens recovery path.
+.PP
+Memory-store overwrites persistent device memory. A runtime snapshot cannot undo
+a previous persistent-memory preset after it has been overwritten.
+Initialization can change input power settings; choose the target deliberately.
+.PP
+The default CTRL MIDI port is hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1. Close other control-panel/CTRL clients before opening it. Audio streaming is independent of this connection.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

@@ -1,0 +1,24 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-BRIDGE 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-bridge \- run the persistent device-backend line protocol
+.SH SYNOPSIS
+.nf
+\fBocta-bridge\fR [CTRL-PORT]
+.fi
+.SH DESCRIPTION
+Backend process used by the control panel, reading bounded request-ID command lines
+from standard input and emitting JSON replies/events on standard output.
+It keeps one exclusive CTRL session, validates commands and separates meter events
+from solicited replies. Some commands change device parameters or start Auto-Sens.
+Use the graphical panel or typed command-line tools for ordinary control.
+.PP
+This is a local process protocol, not a network service. Its framing and operation
+reference is doc/gui-backend.md in the source repository.
+.PP
+The default CTRL MIDI port is hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1. Close other control-panel/CTRL clients before opening it. Audio streaming is independent of this connection.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

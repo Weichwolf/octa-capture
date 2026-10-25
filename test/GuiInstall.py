@@ -2,6 +2,7 @@
 """Check installed launchers/assets from a foreign directory without device I/O."""
 
 import http.client
+import gzip
 import json
 import os
 from pathlib import Path
@@ -25,6 +26,12 @@ class Installation(unittest.TestCase):
             subprocess.run([cmake, '--install', build, '--prefix', str(prefix)], check=True,
                            capture_output=True, timeout=10)
             binary = prefix / 'bin'
+            for executable in binary.iterdir():
+                manual = prefix / 'share/man/man1' / f'{executable.name}.1.gz'
+                self.assertTrue(manual.is_file(), executable.name)
+                content = gzip.decompress(manual.read_bytes()).decode()
+                self.assertIn(executable.name.replace('-', r'\-') + r' \- ', content)
+                self.assertNotIn('@PROJECT_VERSION@', content)
             for name in ('octa-capture', 'octa-capture-http', 'octa-pulse-pairs', 'octa-aggregate'):
                 result = subprocess.run([str(binary / name), '--help'], cwd=foreign,
                                         check=True, capture_output=True, text=True, timeout=5)

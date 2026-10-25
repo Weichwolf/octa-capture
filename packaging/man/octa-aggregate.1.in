@@ -1,0 +1,32 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-AGGREGATE 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-aggregate \- prepare an experimental base/EXP ALSA configuration
+.SH SYNOPSIS
+.nf
+\fBocta-aggregate \-\-base\fR ID \fB\-\-expansion\fR ID [\fB\-\-write-config\fR FILE]
+               [\fB\-\-bin-dir\fR DIR] [\fB\-\-help\fR]
+.fi
+.SH DESCRIPTION
+Inspect one base device (0582:0120) and one EXP device (0582:0121) by discovered identity,
+for example serial:SERIAL. Emit a JSON plan after two matching clock snapshots
+and repeated identity checks. Run as the regular user.
+.PP
+Both devices must already use the same 44100, 48000 or 96000 Hz rate.
+Connect EXP COAXIAL OUT to base COAXIAL IN and enable DIGITAL AUTO on the base.
+The base must report an active external-clock display. These flags do not prove clock quality.
+.PP
+With \fB\-\-write-config\fR, create a new mode-0600 ALSA configuration file.
+Existing files and symlinks are refused. The PCM name is octa_expand:
+24 capture channels, 20 playback channels, base channels first, EXP poll master,
+S24_3LE with no resampling. Set ALSA_CONFIG_PATH to this file when opening the PCM.
+.PP
+This command does not change hardware rate, pause an audio server, install a desktop
+profile or modify ~/.asoundrc automatically. Other clients must release both devices.
+Regenerate after clock changes, unplug or card renumbering.
+Coupled rate changes and physical pair synchronization, streaming and recovery remain unverified/incomplete.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

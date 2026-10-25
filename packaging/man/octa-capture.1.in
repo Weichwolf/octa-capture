@@ -1,0 +1,38 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-CAPTURE 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-capture \- open the OCTA-CAPTURE GTK control panel
+.SH SYNOPSIS
+.nf
+\fBocta-capture\fR [\fB\-\-bin-dir\fR DIR] [\fB\-\-midi-port\fR PORT]
+             [\fB\-\-data-dir\fR DIR] [\fB\-\-help\fR]
+.fi
+.SH DESCRIPTION
+Open the local HTML control panel inside GTK4/WebKitGTK as the regular desktop user.
+The Xfce Applications menu lists it under Settings.
+The panel controls preamps, compressors, direct mixers, reverb, output routing,
+sample rate, Auto-Sens and preset files.
+Closing it releases its CTRL connection; independent audio applications continue running.
+.PP
+At 192 kHz only channels 1 through 4 and Mixer A are available.
+The panel reports Linux ALSA information; application/server settings own buffer size.
+.PP
+The default CTRL MIDI port is hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1. Close other control-panel/CTRL clients before opening it. Audio streaming is independent of this connection.
+.SH OPTIONS
+.TP
+.B \-\-bin-dir DIR
+Directory containing the C++ backend programs; installed launchers use their own binary directory.
+.TP
+.B \-\-midi-port PORT
+Select the ALSA raw-MIDI CTRL port.
+.TP
+.B \-\-data-dir DIR
+Private preferences and recovery directory. The default is
+$XDG_STATE_HOME/octa-capture, or ~/.local/state/octa-capture.
+.TP
+.B \-\-help
+Print options without opening the device.
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-status(1), octa-preset(1)

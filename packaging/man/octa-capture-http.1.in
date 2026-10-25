@@ -1,0 +1,25 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-CAPTURE-HTTP 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-capture\-http \- serve the local OCTA-CAPTURE control panel
+.SH SYNOPSIS
+.nf
+\fBocta-capture-http\fR [\fB\-\-port\fR PORT] [\fB\-\-open\fR]
+                  [\fB\-\-bin-dir\fR DIR] [\fB\-\-midi-port\fR PORT]
+                  [\fB\-\-data-dir\fR DIR] [\fB\-\-help\fR]
+.fi
+.SH DESCRIPTION
+Serve the same panel as octa-capture(1), bound to 127.0.0.1.
+The default HTTP port is 8765; port 0 chooses an unused port.
+The printed private link includes the authentication token.
+Keep this link private. The server checks request Host/Origin and control tokens,
+and loads local assets.
+.PP
+The directory and MIDI options have the meanings documented in octa-capture(1).
+The \fB\-\-open\fR option opens the private link in the default browser.
+SIGINT or SIGTERM shuts down the server and releases its control connection.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

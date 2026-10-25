@@ -1,0 +1,26 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-CAPTURE-ACTIVATE 8 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-capture\-activate \- bind OCTA-CAPTURE devices to the standalone module
+.SH SYNOPSIS
+.nf
+\fBocta-capture-activate\fR [\fB\-\-check\fR]
+.fi
+.SH DESCRIPTION
+Load an already installed snd-octa-capture module and bind only Roland USB
+0582:0120 or 0582:0121 interfaces. Normal activation requires root.
+Unrelated USB audio devices remain on their current drivers.
+Unexpected or mixed interface owners are rejected. On a failed rebind from the
+generic USB audio driver, activation attempts to restore that previous binding.
+.PP
+\fB\-\-check\fR is read-only and works without root. It reports whether a present
+OCTA-CAPTURE needs activation, without loading, unloading or rebinding modules.
+.PP
+This command does not build or replace the running kernel or compile a module.
+Install a module built for the running kernel first.
+EXP recognition does not establish physical EXP streaming or pair synchronization.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)

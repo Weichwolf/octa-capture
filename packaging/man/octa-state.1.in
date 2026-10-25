@@ -1,0 +1,19 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-STATE 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-state \- read the complete CTRL device state
+.SH SYNOPSIS
+.nf
+\fBocta-state\fR [CTRL-PORT]
+.fi
+.SH DESCRIPTION
+Read and validate the complete 1146-byte device bulk state.
+Print decoded parameters and raw payload as JSON; do not change parameter values.
+This does not measure analog signal response or establish streaming.
+.PP
+The default CTRL MIDI port is hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1. Close other control-panel/CTRL clients before opening it. Audio streaming is independent of this connection.
+
+.SH EXIT STATUS
+Zero indicates success; nonzero indicates a usage, device or operation error.
+.SH SEE ALSO
+octa-capture(1), octa-status(1), octa-preset(1)
