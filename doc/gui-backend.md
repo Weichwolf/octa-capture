@@ -531,6 +531,8 @@ GSK_RENDERER=cairo GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- /usr
 Add `--installed-prefix PATH/TO/usr` for an extracted Debian package. This checks
 all-rate channel/readout/reverb presentation and cached-value restoration in the
 real WebKit renderer; replies are synthetic and no hardware operation is sent.
+Both offline browser/GTK checks also compare all 302 original main-view control
+rectangles, including after switching between the Preamp and Mixer views.
 Another 540 fixed wheel/drag events verify that wheel input changes the current
 value while retaining the pointer anchor; the next drag compares against the
 updated value. `--save-interleaved PATH` saves these numeric traces for the same

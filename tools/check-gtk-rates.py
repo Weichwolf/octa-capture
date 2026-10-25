@@ -62,7 +62,9 @@ class Check(Desktop):
         self.started = True
         source = (ROOT / 'test/GuiSyntheticModel.mjs').read_text().replace('export function', 'function')
         source += (ROOT / 'test/GtkRatePanel.mjs').read_text().replace('export async function', 'async function')
-        source += '\nreturn await checkRates(fixture());'
+        source += (ROOT / 'test/GuiControlGeometry.mjs').read_text().replace('export ', '')
+        reference = json.loads((ROOT / 'test/data/control-geometry.json').read_text())
+        source += f'\nreturn await checkRates(fixture(), {json.dumps(reference)}, checkControlGeometry);'
 
         def finished(view, result, _data):
             try:

@@ -80,6 +80,13 @@ async function editing() {
   assert.equal(actions.length, 1, 'Escape sends no control request');
 }
 
+async function geometry() {
+  const reference = JSON.parse(await fs.readFile(path.join(root, 'test/data/control-geometry.json'), 'utf8'));
+  const source = (await fs.readFile(path.join(root, 'test/GuiControlGeometry.mjs'), 'utf8')).replace('export ', '');
+  const result = await browser.evaluate(`(async () => {${source}\nreturn await checkControlGeometry(${JSON.stringify(reference)});})()`);
+  assert.deepEqual(result, {checked: 302, hidden: 0}, 'Original control rectangles in both views');
+}
+
 async function setRate(index) {
   const rate = [44100, 48000, 96000, 192000][index];
   model.state.payload_hex = `0000${index.toString(16).padStart(2, '0')}` + '00'.repeat(1143);
@@ -180,12 +187,13 @@ try {
   await until(() => browser.evaluate('document.querySelector("#connection-message")?.hidden === true'), 'synthetic panel');
   await displayCases();
   await editing();
+  await geometry();
   await maskedPreamps();
   await maskedMixers();
   await browser.page.locator('.panel').screenshot({path: path.join(directory, 'preamp.png')});
   for (const errors of [unexpected, browser.exceptions, browser.securityErrors, browser.networkErrors,
     browser.httpErrors, browser.consoleEvents]) assert.deepEqual(errors, []);
-  console.log('PASS Playwright: 101 sensitivity readouts/rotary positions, dB accessibility, commit/Escape, all-rate fixed channel presentation and interrupted knob/fader/edit recovery. All replies synthetic.');
+  console.log('PASS Playwright: 302 original control rectangles, 101 sensitivity readouts/rotary positions, dB accessibility, commit/Escape, all-rate fixed channel presentation and interrupted knob/fader/edit recovery. All replies synthetic.');
 } finally {
   if (browser) await browser.close();
   if (server.exitCode === null) { server.kill('SIGTERM'); await once(server, 'exit'); }

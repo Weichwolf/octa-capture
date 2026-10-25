@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Real WebKit rendering with synthetic fetch replies; no device operation is forwarded.
-export async function checkRates(model) {
+export async function checkRates(model, reference, checkGeometry) {
   const check = (condition, message) => { if (!condition) throw new Error(message); };
   const until = async predicate => {
     const deadline = Date.now() + 5000;
@@ -25,6 +25,8 @@ export async function checkRates(model) {
   model.state.preamps.forEach(preamp => { preamp.sensitivity_index = 50; });
   model.state.mixers[0].input.channels[4].volume = 23;
   await until(() => document.querySelector('.sensitivity input')?.value === '25.0');
+  const geometry = await checkGeometry(reference);
+  check(geometry.checked === 302 && geometry.hidden === 0, 'Original control rectangles in both views');
   const graph = () => document.querySelectorAll('.curve')[4].toDataURL();
   const normal = graph();
   for (const index of [3, 0, 3, 2, 1]) {
@@ -50,5 +52,5 @@ export async function checkRates(model) {
     document.querySelector('#view-switch').click();
   }
   check(unexpected.length === 0, `Unexpected requests: ${unexpected.join(', ')}`);
-  return {rates: 4, transitions: 5, device_writes: 0};
+  return {rates: 4, transitions: 5, device_writes: 0, geometry};
 }

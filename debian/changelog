@@ -1,3 +1,12 @@
+octa-capture (0.1.0-1~trixie8) trixie; urgency=medium
+
+  * Recreate shared panel highlights, framed mixer fader beds and fixed
+    192 kHz control shading with authored CSS.
+  * Verify all-rate presentation and original control bounds in native WebKit.
+  * Exercise failed PCM activation and recovery in the isolated sanitizer VM.
+
+ -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Sun, 25 Oct 2026 20:59:00 +0100
+
 octa-capture (0.1.0-1~trixie7) trixie; urgency=medium
 
   * Match fixed unavailable-channel presentation at 192 kHz. Cancel captured
