@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sys
 import socket
+import struct
 import tempfile
 import threading
 import time
@@ -277,6 +278,39 @@ class Http(unittest.TestCase):
         with patch.object(self.server, 'request_input_timeout', 0.1), \
                 patch.object(self.application, 'set_preferences', side_effect=operation):
             self.assertEqual(self.request('POST', '/api/preferences', '{"show_port_warning":false}')[0], 200)
+
+    def test_client_reset_during_backend_failure_does_not_escape_the_error_reply(self):
+        entered, release, done = threading.Event(), threading.Event(), threading.Event()
+        original = self.server.shutdown_request
+        def operation(_body):
+            entered.set()
+            if not release.wait(3):
+                raise RuntimeError('Test did not release the backend')
+            raise DeviceError('Injected backend failure after browser close')
+        def finished(request):
+            try:
+                original(request)
+            finally:
+                done.set()
+        body = b'{"action":"sample-rate","rate":96000}'
+        with patch.object(self.application, 'action', side_effect=operation), \
+                patch.object(self.server, 'handle_error') as error, \
+                patch.object(self.server, 'shutdown_request', side_effect=finished):
+            client = socket.create_connection(self.server.server_address, timeout=2)
+            try:
+                headers = (f'POST /api/action HTTP/1.0\r\nHost: {self.server.host}\r\n'
+                           f'Origin: {self.server.origin}\r\nAuthorization: Bearer private-test-token\r\n'
+                           f'Content-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n').encode()
+                client.sendall(headers + body)
+                self.assertTrue(entered.wait(2))
+                client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+                client.close()
+            finally:
+                release.set()
+                client.close()
+            self.assertTrue(done.wait(3), 'Disconnected request cleanup completes')
+            error.assert_not_called()
+        self.assertEqual(self.request('GET', '/api/preferences')[0], 200)
 
 
 class Operations(unittest.TestCase):

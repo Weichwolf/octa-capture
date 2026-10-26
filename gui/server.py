@@ -148,6 +148,14 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.0'
     rbufsize = 0
 
+    def handle(self):
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError, socket.timeout):
+            # A reply sent by an exception handler can race browser shutdown as
+            # well. Contain disconnects outside the request/error dispatch.
+            self.close_connection = True
+
     def setup(self):
         super().setup()
         self.rfile = io.BufferedReader(RequestInput(self.rfile, self.connection, self.server.request_input_timeout))
