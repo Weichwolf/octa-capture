@@ -109,11 +109,16 @@ def ordered_modules(owner, nodes, modules):
 
 
 class Transaction:
-    def __init__(self, binary, plan):
+    def __init__(self, binary, plan, *, cancelled=None):
         self.binary, self.plan = Path(binary), plan
         self.units = [Unit(audio.Controller(binary, device)) for device in (plan.base, plan.expansion)]
         self.info = None
         self.clock_attempted = False
+        self.cancelled = cancelled
+
+    def check_cancelled(self):
+        if self.cancelled is not None and self.cancelled.is_set():
+            raise pair_clock.ClockCancelled('Paired clock operation cancelled.')
 
     def present(self):
         devices = aggregate.selected(discover(), self.plan.base.identity, self.plan.expansion.identity)
@@ -317,35 +322,46 @@ class Transaction:
             raise RuntimeError('Audio endpoints are active, but temporary endpoint cleanup failed.') from errors[0]
 
     def run(self, rate):
+        self.check_cancelled()
         self.snapshot(rate)
         try:
             for unit in self.units:
+                self.check_cancelled()
                 if unit.card is not None:
                     unit.holding = unit.controller.hold(unit.nodes, unit.streams, self.info)
             self.present()
             for unit in self.units:
                 for index, _name, _arguments in reversed(unit.modules):
+                    self.check_cancelled()
                     if index in audio.modules():
                         audio.pulse('unload-module', index)
             for unit in self.units:
+                self.check_cancelled()
                 if unit.card is not None:
                     unit.files_attempted = True
                     unit.controller.files.install(unit.controller.device.card_id, rate)
             self.clock_attempted = True
-            pair_clock.change(self.binary, self.plan, rate)
+            if self.cancelled is None:
+                pair_clock.change(self.binary, self.plan, rate)
+            else:
+                pair_clock.change(self.binary, self.plan, rate, cancelled=self.cancelled)
             result = self.inspect(rate)
             for unit in reversed(self.units):
+                self.check_cancelled()
                 if unit.card is not None:
                     self.load(unit, unit.arguments, PROFILE)
                     unit.controller.validate_endpoints(unit.owner, rate)
                     self.load_remaps(unit)
             result = self.inspect(rate)
             for unit in self.units:
+                self.check_cancelled()
                 if unit.card is not None:
                     self.levels(unit, original=False)
             for unit in self.units:
+                self.check_cancelled()
                 if unit.card is not None:
                     self.resume(unit, original=False)
+            self.check_cancelled()
         except BaseException as primary:
             try:
                 self.recover()
@@ -358,7 +374,7 @@ class Transaction:
         return result
 
 
-def change_rate(binary, base_id, expansion_id, rate, *, expected_devices=None):
+def change_rate(binary, base_id, expansion_id, rate, *, expected_devices=None, cancelled=None):
     if os.geteuid() == 0:
         raise ValueError('Run the paired desktop clock transaction as the regular user.')
     if type(rate) is not int or rate not in aggregate.RATES:
@@ -372,8 +388,10 @@ def change_rate(binary, base_id, expansion_id, rate, *, expected_devices=None):
     executable = Path(binary) / 'octa-pair-clock'
     if not executable.is_file() or not os.access(executable, os.X_OK):
         raise ValueError('Install the native octa-pair-clock backend before changing the paired rate.')
-    with audio.configuration_lock(tuple(device.card_id for device in devices)):
+    cards = tuple(device.card_id for device in devices)
+    lock = audio.configuration_lock(cards) if cancelled is None else audio.configuration_lock(cards, cancelled=cancelled)
+    with lock:
         plan = aggregate.inspect(binary, base_id, expansion_id, require_master=True)
         if (plan.base, plan.expansion) != devices:
             raise ValueError('The pair changed while waiting for the desktop audio lock.')
-        return Transaction(binary, plan).run(rate)
+        return Transaction(binary, plan, cancelled=cancelled).run(rate)

@@ -8,6 +8,7 @@ import select
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -76,6 +77,33 @@ class Locks(unittest.TestCase):
             with self.assertRaises(ValueError), audio.device_lock('../outside'):
                 self.fail('Invalid card lock accepted')
             self.assertEqual(target.read_text(), 'original')
+
+    def test_cancelled_waiter_exits_while_another_controller_still_owns_the_shared_lock(self):
+        with tempfile.TemporaryDirectory() as name, patch.dict(os.environ, {'XDG_RUNTIME_DIR': name}):
+            cancelled, started, done = threading.Event(), threading.Event(), threading.Event()
+            errors = []
+            def waiter():
+                started.set()
+                try:
+                    with audio.configuration_lock(('EXP',), cancelled=cancelled):
+                        errors.append('A waiting controller entered the held lock')
+                except RuntimeError as error:
+                    errors.append(str(error))
+                finally:
+                    done.set()
+            with audio.configuration_lock(('BASE',)):
+                thread = threading.Thread(target=waiter)
+                thread.start()
+                try:
+                    self.assertTrue(started.wait(2))
+                    self.assertFalse(done.wait(.1))
+                    cancelled.set()
+                    self.assertTrue(done.wait(2), 'Cancellation must not wait for the lock owner to finish')
+                finally:
+                    cancelled.set()
+                    thread.join(timeout=2)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(errors, ['Audio configuration lock acquisition cancelled.'])
 
 
 if __name__ == '__main__':

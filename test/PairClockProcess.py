@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -152,6 +153,42 @@ class Processes(unittest.TestCase):
                 pair_clock.change(self.root, PLAN, 96000)
         self.assertFalse((self.root / 'recovered').exists())
         self.assert_reaped()
+
+    def test_shared_shutdown_flag_waits_for_cooperative_native_recovery(self):
+        self.recovery_worker()
+        cancelled = threading.Event()
+        errors = []
+        def close_panel():
+            deadline = time.monotonic() + 3
+            while not (self.root / 'pid').exists():
+                if time.monotonic() >= deadline:
+                    errors.append('Worker did not start')
+                    break
+                time.sleep(.005)
+            cancelled.set()
+        thread = threading.Thread(target=close_panel)
+        thread.start()
+        try:
+            with self.assertRaises(pair_clock.ClockCancelled):
+                pair_clock.change(self.root, PLAN, 96000, cancelled=cancelled)
+        finally:
+            cancelled.set()
+            thread.join(timeout=3)
+        self.assertEqual(errors, [])
+        self.assertTrue((self.root / 'recovered').is_file())
+        self.assert_reaped()
+
+    def test_shutdown_before_launch_never_spawns_the_helper(self):
+        cancelled = threading.Event()
+        cancelled.set()
+        with patch.object(pair_clock.subprocess, 'Popen') as spawn:
+            with self.assertRaises(pair_clock.ClockCancelled):
+                pair_clock.change(self.root, PLAN, 96000, cancelled=cancelled)
+            spawn.assert_not_called()
+
+    def test_cancellable_wait_preserves_one_complete_success_after_multiple_polls(self):
+        self.worker('time.sleep(.25)\nprint(' + repr(json.dumps(success())) + ')\n')
+        pair_clock.change(self.root, PLAN, 96000, cancelled=threading.Event())
 
 
 if __name__ == '__main__':

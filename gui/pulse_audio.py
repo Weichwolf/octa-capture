@@ -105,28 +105,41 @@ def inherited_controls(nodes):
 
 
 @contextmanager
-def _file_lock(filename):
+def _file_lock(filename, *, cancelled=None):
     runtime = Path(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'))
     path = runtime / filename
     descriptor = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'w') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        if cancelled is None:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        else:
+            while True:
+                if cancelled.is_set():
+                    raise RuntimeError('Audio configuration lock acquisition cancelled.')
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    cancelled.wait(.1)
         yield
 
 
-def device_lock(card_id):
+def device_lock(card_id, *, cancelled=None):
     if not re.fullmatch(r'[A-Za-z0-9_]{1,15}', card_id):
         raise ValueError('Invalid ALSA card identifier for an audio lock.')
-    return _file_lock(f'octa-pulse-{card_id}.lock')
+    filename = f'octa-pulse-{card_id}.lock'
+    return _file_lock(filename) if cancelled is None else _file_lock(filename, cancelled=cancelled)
 
 
 @contextmanager
-def configuration_lock(card_ids):
+def configuration_lock(card_ids, *, cancelled=None):
     # Every controller writes the shared ~/.asoundrc. Acquire this lock before
     # sorted card locks; the dot keeps its name distinct from every card ID.
-    with _file_lock('octa-pulse.configuration.lock'), ExitStack() as stack:
+    filename = 'octa-pulse.configuration.lock'
+    shared = _file_lock(filename) if cancelled is None else _file_lock(filename, cancelled=cancelled)
+    with shared, ExitStack() as stack:
         for card in sorted(set(card_ids)):
-            stack.enter_context(device_lock(card))
+            stack.enter_context(device_lock(card) if cancelled is None else device_lock(card, cancelled=cancelled))
         yield
 
 

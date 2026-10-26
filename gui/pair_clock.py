@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import time
 
 from .aggregate import RATES
 
@@ -13,6 +14,10 @@ RECOVERY_TIMEOUT = 45
 
 
 class ClockError(RuntimeError):
+    pass
+
+
+class ClockCancelled(ClockError):
     pass
 
 
@@ -68,18 +73,39 @@ def _stop(process):
         raise
 
 
-def change(binary, plan, rate):
+def _communicate(process, cancelled):
+    if cancelled is None:
+        return process.communicate(timeout=CHANGE_TIMEOUT)
+    deadline = time.monotonic() + CHANGE_TIMEOUT
+    while True:
+        if cancelled.is_set():
+            raise ClockCancelled('Paired clock operation cancelled.')
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(process.args, CHANGE_TIMEOUT)
+        try:
+            result = process.communicate(timeout=min(.1, remaining))
+        except subprocess.TimeoutExpired:
+            continue
+        if cancelled.is_set():
+            raise ClockCancelled('Paired clock operation cancelled.')
+        return result
+
+
+def change(binary, plan, rate, *, cancelled=None):
     if type(rate) is not int or rate not in RATES:
         raise ValueError('The paired clock requires 44.1, 48 or 96 kHz.')
     devices = (plan.base, plan.expansion)
     if (not all(re.fullmatch(r'[A-Za-z0-9_-]{1,64}', device.serial) for device in devices) or
             devices[0].serial == devices[1].serial):
         raise ValueError('Select two distinct serial identities before changing a paired clock.')
+    if cancelled is not None and cancelled.is_set():
+        raise ClockCancelled('Paired clock operation cancelled.')
     arguments = [str(Path(binary) / 'octa-pair-clock'), '--experimental', str(rate),
                  *(value for device in devices for value in (device.card_id, device.serial))]
     with subprocess.Popen(arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
         try:
-            output, _errors = process.communicate(timeout=CHANGE_TIMEOUT)
+            output, _errors = _communicate(process, cancelled)
         except BaseException:
             _stop(process)
             raise

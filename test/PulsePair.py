@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -160,7 +161,7 @@ class Peer:
             raise AssertionError(arguments)
         return ''
 
-    def clock(self, _binary, plan, rate):
+    def clock(self, _binary, plan, rate, *, cancelled=None):
         if self.cards:
             raise AssertionError('Clock prepared before BOTH PulseAudio cards were released')
         if plan.rate != self.rate:
@@ -348,6 +349,20 @@ class Coordination(unittest.TestCase):
             self.transaction().run(NEW)
         self.assertEqual(self.peer.state(), before)
         self.assertEqual(self.peer.calls, [])
+
+    def test_shutdown_at_each_phase_recovers_both_units_despite_the_cancellation_flag(self):
+        for stage in ('hold:1', 'unload:EXP', 'clock', 'activate:EXP', 'levels', 'resume'):
+            with self.subTest(stage=stage):
+                self.peer.__init__()
+                before = self.peer.state()
+                cancelled = threading.Event()
+                self.peer.on_event = lambda name: cancelled.set() if name == stage else None
+                transaction = pulse_pair.Transaction('/unused', aggregate.Plan(BASE, EXP, OLD), cancelled=cancelled)
+                with self.assertRaises(pulse_pair.pair_clock.ClockCancelled):
+                    transaction.run(NEW)
+                self.assertEqual(self.peer.state(), before)
+                self.assertEqual(len(self.peer.loaded), 2)
+                self.assertTrue(cancelled.is_set(), 'Recovery must not clear or obey the cancellation flag')
 
     def test_legacy_multichannel_monitor_gains_and_mute_are_split_without_touching_capture(self):
         transaction = self.transaction()
