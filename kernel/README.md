@@ -219,6 +219,14 @@ The GUI continues to control individual units. Coupled rate/server coordination
 and physical EXP/aggregate timing, routing, streaming and recovery are unfinished
 or unverified; this is an experimental developer path.
 
+The C++ `PairPcmReservation` component provides nonblocking ownership of both
+native capture/playback PCMs before a future paired clock transaction. It checks
+the opened handles' card/device/subdevice metadata, rejects card aliases and
+releases partial acquisitions on failure. Fake-ALSA tests cover ownership moves,
+busy/disconnect/allocation errors and inconsistent metadata under ASan/UBSan.
+Clock changes and CLI/GUI integration of this component remain unfinished;
+the aggregate command above still only prepares a configuration.
+
 Reproduce the isolated sample-layout check with the real ALSA plugins:
 
 ```bash
