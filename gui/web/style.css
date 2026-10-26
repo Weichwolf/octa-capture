@@ -59,10 +59,9 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .toggle, .header-action { cursor: default; }
 .toggle:not(:disabled) .lamp, .header-action:not(:disabled) .lamp { cursor: pointer; }
 .knob-label { font-weight: bold; font-stretch: condensed; white-space: nowrap; }
-.knob-dial { position: relative; display: block; width: 25px; height: 25px; border-radius: 50%; border: 2px solid #444; background: radial-gradient(circle at 35% 25%,#797979 0%,#525252 34%,#2c2c2c 65%,#151515 70%,#4b4b4b 80%); box-shadow: 0 2px 2px #0009, -1px -1px 1px #8888; }
-.knob-dial::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; border: 1px solid #333; }
+.knob-dial { position: relative; display: block; width: 25px; height: 25px; border-radius: 50%; background: url('/knob-face.svg') center / 25px 25px no-repeat; }
 .knob-needle { position: absolute; inset: 2px; transform: rotate(var(--angle,-135deg)); }
-.knob-needle::after { content: ''; position: absolute; top: 0; left: calc(50% - .5px); width: 1px; height: 6px; background: #e6bf20; box-shadow: 0 0 1px #000; }
+.knob-needle::after { content: ''; position: absolute; top: 0; left: calc(50% - .5px); width: 1px; height: 7px; background: #ffc000; box-shadow: 0 0 1px #000; }
 .knob-value { display: none; position: absolute; top: 38px; left: 50%; transform: translateX(-50%); z-index: 7; min-width: 46px; padding: 1px 3px; border: 1px solid #777; background: #171717; color: #f5edc9; text-align: center; white-space: nowrap; font: 10px Arial,sans-serif; }
 .knob:hover .knob-value, .knob:focus .knob-value, .knob.dragging .knob-value { display: block; }
 .sensitivity .knob-value { display: block; position: static; transform: none; background: #151515; color: #e5e5e5; font-size: 8px; order: -1; height: 12px; min-width: 38px; padding: 0; border: 0; }
@@ -116,7 +115,7 @@ main { position: relative; border: 4px ridge #777; height: 358px; background: #2
 .unavailable-channel .toggle:disabled > :not(.lamp) { opacity: 1; }
 .unavailable-channel .toggle:disabled .lamp { --lamp-light: #817e7d; --lamp-face: #555352; --lamp-rim: #696666; --lamp-recess: #353333; --lamp-bevel: #7c7979; --lamp-edge: #4b4949; border-color: #343333; box-shadow: inset 0 0 0 1px #535050; }
 .unavailable-channel .knob-dial { filter: contrast(.5) brightness(.65); }
-.unavailable-channel .knob-needle { transform: rotate(-135deg); }
+.unavailable-channel .knob-needle { transform: rotate(-128deg); }
 .unavailable-channel input.knob-value { color: transparent; }
 .unavailable-channel output.knob-value { display: none; }
 .unavailable-channel .level-fill, .unavailable-channel .meter-fill, .unavailable-channel .meter-peak, .unavailable-channel .meter-clip { visibility: hidden; }

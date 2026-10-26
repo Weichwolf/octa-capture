@@ -8,7 +8,7 @@ export function knobFrame(value, maximum) {
 }
 
 export function knobAngle(value, maximum) {
-  return -135 + 270 * knobFrame(value, maximum) / 64;
+  return -128 + 4 * knobFrame(value, maximum);
 }
 
 export function controlPointerHit(event, target) {

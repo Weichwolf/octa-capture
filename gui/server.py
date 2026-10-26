@@ -41,6 +41,7 @@ ASSETS = {'/': ('index.html', 'text/html; charset=utf-8'),
           '/knobs.js': ('knobs.js', 'text/javascript; charset=utf-8'),
           '/fader-white.svg': ('fader-white.svg', 'image/svg+xml'),
           '/fader-red.svg': ('fader-red.svg', 'image/svg+xml'),
+          '/knob-face.svg': ('knob-face.svg', 'image/svg+xml'),
           '/signal-flow.svg': ('signal-flow.svg', 'image/svg+xml'),
           '/favicon.svg': ('favicon.svg', 'image/svg+xml'),
           '/style.css': ('style.css', 'text/css; charset=utf-8')}

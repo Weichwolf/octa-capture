@@ -9,7 +9,13 @@ const cases = JSON.parse(readFileSync(new URL('data/knob-drag.json', import.meta
 const displays = JSON.parse(readFileSync(new URL('data/knob-display.json', import.meta.url), 'utf8'));
 for (const {value, maximum, frame} of displays.cases) {
   assert.equal(knobFrame(value, maximum), frame, `Original knob frame: ${value}/${maximum}`);
-  assert.equal(knobAngle(value, maximum), -135 + frame * 270 / 64, `Knob needle: ${value}/${maximum}`);
+}
+const needles = JSON.parse(readFileSync(new URL('data/knob-needle.json', import.meta.url), 'utf8'));
+assert.equal(needles.frames.length, 65);
+for (const {frame, center_x, center_y} of needles.frames) {
+  const angle = knobAngle(frame, 64) * Math.PI / 180;
+  const distance = Math.hypot(12.5 + 7 * Math.sin(angle) - center_x, 12.5 - 7 * Math.cos(angle) - center_y);
+  assert.ok(distance <= .35, `Reference needle centroid, frame ${frame}: ${distance} px`);
 }
 let count = 0, keys = 0;
 for (const test of cases) {

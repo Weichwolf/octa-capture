@@ -1,0 +1,333 @@
+{
+  "windows_sha256": "634c140bc4e49b0d65c70d5156be19573ad3d440ac5ea24e24d3ad59974da406",
+  "png_sha256": "fa24d51104ab36d2902bb9d36d75913269270121ab0e57d948bc4417e51e9401",
+  "resource_id": 300,
+  "measurement": "R-B coverage centroid at pixel centers; R-B > 20 and R-G > 6",
+  "frames": [
+    {
+      "frame": 0,
+      "center_x": 6.856271,
+      "center_y": 16.786481
+    },
+    {
+      "frame": 1,
+      "center_x": 6.657492,
+      "center_y": 16.340469
+    },
+    {
+      "frame": 2,
+      "center_x": 6.357576,
+      "center_y": 15.966162
+    },
+    {
+      "frame": 3,
+      "center_x": 6.123494,
+      "center_y": 15.540161
+    },
+    {
+      "frame": 4,
+      "center_x": 5.926365,
+      "center_y": 15.11689
+    },
+    {
+      "frame": 5,
+      "center_x": 5.792146,
+      "center_y": 14.654577
+    },
+    {
+      "frame": 6,
+      "center_x": 5.56817,
+      "center_y": 14.220144
+    },
+    {
+      "frame": 7,
+      "center_x": 5.474072,
+      "center_y": 13.745043
+    },
+    {
+      "frame": 8,
+      "center_x": 5.653963,
+      "center_y": 13.228925
+    },
+    {
+      "frame": 9,
+      "center_x": 5.496635,
+      "center_y": 12.5
+    },
+    {
+      "frame": 10,
+      "center_x": 5.496635,
+      "center_y": 12.5
+    },
+    {
+      "frame": 11,
+      "center_x": 5.652799,
+      "center_y": 11.775845
+    },
+    {
+      "frame": 12,
+      "center_x": 5.476118,
+      "center_y": 11.249492
+    },
+    {
+      "frame": 13,
+      "center_x": 5.569601,
+      "center_y": 10.762027
+    },
+    {
+      "frame": 14,
+      "center_x": 5.773344,
+      "center_y": 10.281429
+    },
+    {
+      "frame": 15,
+      "center_x": 5.948751,
+      "center_y": 9.823814
+    },
+    {
+      "frame": 16,
+      "center_x": 6.065978,
+      "center_y": 9.31558
+    },
+    {
+      "frame": 17,
+      "center_x": 6.317269,
+      "center_y": 8.861948
+    },
+    {
+      "frame": 18,
+      "center_x": 6.663476,
+      "center_y": 8.472581
+    },
+    {
+      "frame": 19,
+      "center_x": 6.864477,
+      "center_y": 7.96764
+    },
+    {
+      "frame": 20,
+      "center_x": 7.227725,
+      "center_y": 7.622449
+    },
+    {
+      "frame": 21,
+      "center_x": 7.49265,
+      "center_y": 7.405834
+    },
+    {
+      "frame": 22,
+      "center_x": 7.81358,
+      "center_y": 7.065926
+    },
+    {
+      "frame": 23,
+      "center_x": 8.27494,
+      "center_y": 6.753012
+    },
+    {
+      "frame": 24,
+      "center_x": 8.749875,
+      "center_y": 6.534552
+    },
+    {
+      "frame": 25,
+      "center_x": 9.138257,
+      "center_y": 6.314044
+    },
+    {
+      "frame": 26,
+      "center_x": 9.621076,
+      "center_y": 6.132785
+    },
+    {
+      "frame": 27,
+      "center_x": 10.061395,
+      "center_y": 5.857073
+    },
+    {
+      "frame": 28,
+      "center_x": 10.54004,
+      "center_y": 5.729857
+    },
+    {
+      "frame": 29,
+      "center_x": 11.036723,
+      "center_y": 5.668978
+    },
+    {
+      "frame": 30,
+      "center_x": 11.51346,
+      "center_y": 5.554337
+    },
+    {
+      "frame": 31,
+      "center_x": 12.006196,
+      "center_y": 5.503813
+    },
+    {
+      "frame": 32,
+      "center_x": 12.5,
+      "center_y": 5.5
+    },
+    {
+      "frame": 33,
+      "center_x": 12.994516,
+      "center_y": 5.505246
+    },
+    {
+      "frame": 34,
+      "center_x": 13.486035,
+      "center_y": 5.55586
+    },
+    {
+      "frame": 35,
+      "center_x": 13.963277,
+      "center_y": 5.668978
+    },
+    {
+      "frame": 36,
+      "center_x": 14.460416,
+      "center_y": 5.731074
+    },
+    {
+      "frame": 37,
+      "center_x": 14.9461,
+      "center_y": 5.873075
+    },
+    {
+      "frame": 38,
+      "center_x": 15.380798,
+      "center_y": 6.130424
+    },
+    {
+      "frame": 39,
+      "center_x": 15.861393,
+      "center_y": 6.314224
+    },
+    {
+      "frame": 40,
+      "center_x": 16.246072,
+      "center_y": 6.562848
+    },
+    {
+      "frame": 41,
+      "center_x": 16.72324,
+      "center_y": 6.754098
+    },
+    {
+      "frame": 42,
+      "center_x": 17.157059,
+      "center_y": 7.083781
+    },
+    {
+      "frame": 43,
+      "center_x": 17.494891,
+      "center_y": 7.439619
+    },
+    {
+      "frame": 44,
+      "center_x": 17.770015,
+      "center_y": 7.624316
+    },
+    {
+      "frame": 45,
+      "center_x": 18.134063,
+      "center_y": 7.968613
+    },
+    {
+      "frame": 46,
+      "center_x": 18.336524,
+      "center_y": 8.472581
+    },
+    {
+      "frame": 47,
+      "center_x": 18.680814,
+      "center_y": 8.863636
+    },
+    {
+      "frame": 48,
+      "center_x": 18.924322,
+      "center_y": 9.334029
+    },
+    {
+      "frame": 49,
+      "center_x": 19.049439,
+      "center_y": 9.824669
+    },
+    {
+      "frame": 50,
+      "center_x": 19.225521,
+      "center_y": 10.281771
+    },
+    {
+      "frame": 51,
+      "center_x": 19.431493,
+      "center_y": 10.761247
+    },
+    {
+      "frame": 52,
+      "center_x": 19.494492,
+      "center_y": 11.267651
+    },
+    {
+      "frame": 53,
+      "center_x": 19.346348,
+      "center_y": 11.776071
+    },
+    {
+      "frame": 54,
+      "center_x": 19.503365,
+      "center_y": 12.5
+    },
+    {
+      "frame": 55,
+      "center_x": 19.503365,
+      "center_y": 12.5
+    },
+    {
+      "frame": 56,
+      "center_x": 19.345184,
+      "center_y": 13.228694
+    },
+    {
+      "frame": 57,
+      "center_x": 19.493497,
+      "center_y": 13.725113
+    },
+    {
+      "frame": 58,
+      "center_x": 19.43183,
+      "center_y": 14.220144
+    },
+    {
+      "frame": 59,
+      "center_x": 19.218639,
+      "center_y": 14.670645
+    },
+    {
+      "frame": 60,
+      "center_x": 19.074588,
+      "center_y": 15.117284
+    },
+    {
+      "frame": 61,
+      "center_x": 18.873935,
+      "center_y": 15.539599
+    },
+    {
+      "frame": 62,
+      "center_x": 18.646033,
+      "center_y": 15.967913
+    },
+    {
+      "frame": 63,
+      "center_x": 18.344308,
+      "center_y": 16.343287
+    },
+    {
+      "frame": 64,
+      "center_x": 18.112154,
+      "center_y": 16.77668
+    }
+  ]
+}

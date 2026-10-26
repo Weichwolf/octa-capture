@@ -508,7 +508,14 @@ combinations and exact wire values. Focus, painting and notifications are stubbe
 `--save-vectors PATH` saves compared numeric cases; `gui-wheel` CTest runs these
 offline without manufacturer code or hardware. No fuzzing is involved.
 Rotary needles use 65 positions matching the original Windows/macOS mapping
-across all legal indices. Sensitivity fields show bare numbers; accessibility
+across all legal indices. Windows PNG resource 300 and macOS `KNOB.png` are
+byte-identical. The authored dial uses a 256-degree sweep and a seven-pixel
+needle; its 65 rendered marker centroids stay within half a pixel of the raster
+reference at 96 DPI in Chromium. This corrects the earlier assumed 270-degree
+sweep and inset CSS border. Reproduce with `node tools/verify-knob-artwork.mjs
+RDDP1110.EXE --macos KNOB.png`; only numerical fixtures and authored SVG/CSS ship.
+Complete bitmap parity remains unverified.
+Sensitivity fields show bare numbers; accessibility
 text retains dB. `node test/GuiKnobDisplayBrowser.mjs` checks all 101 readouts
 across eight inputs, reference needle positions and trusted editing/cancellation
 with synthetic API replies and no hardware binaries.

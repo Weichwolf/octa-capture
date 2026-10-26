@@ -125,6 +125,9 @@ comparison uses host-window/notification stubs and does not establish complete
 mouse/keyboard behavior for every control or dialog.
 The rotary display mapping additionally matches 1,566 executed Windows/macOS
 cases: every legal index and clamped boundaries select one of 65 positions.
+Independent measurements of the byte-identical Windows/macOS rotary artwork
+also compare all 65 needle centroids. The authored 256-degree renderer stays
+within half a pixel in Chromium at 96 DPI; full painting parity remains open.
 The sensitivity field shows the original bare number while its accessibility
 text retains dB. Full text update/comparison additionally matches 1,648 cases
 per original, including four-column numeric padding, all inputs/indices and

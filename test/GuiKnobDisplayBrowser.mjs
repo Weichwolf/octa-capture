@@ -67,7 +67,7 @@ async function displayCases() {
       const knob = browser.page.locator('.sensitivity').nth(channel);
       assert.equal(await knob.getAttribute('aria-valuetext'), `${(indices[channel] / 2).toFixed(1)} dB`);
       assert.equal(await knob.locator('.knob-dial').evaluate(node => node.style.getPropertyValue('--angle')),
-        `${-135 + 270 * reference.get(indices[channel]) / 64}deg`);
+        `${-128 + 4 * reference.get(indices[channel])}deg`);
     }
   }
 }
@@ -144,7 +144,7 @@ async function maskedPreamps() {
     [...node.querySelectorAll('output.knob-value')].every(output => getComputedStyle(output).display === 'none') &&
     [...node.querySelectorAll('.meter-fill')].every(fill => getComputedStyle(fill).visibility === 'hidden'))), true);
   const minimum = await browser.page.locator('.sensitivity .knob-needle').first().evaluate(node => {
-    const probe = node.cloneNode(); probe.style.transform = 'rotate(-135deg)'; node.parentElement.append(probe);
+    const probe = node.cloneNode(); probe.style.transform = 'rotate(-128deg)'; node.parentElement.append(probe);
     const matrix = getComputedStyle(probe).transform; probe.remove(); return matrix;
   });
   assert.equal(await knob.locator('.knob-needle').evaluate(node => getComputedStyle(node).transform), minimum);

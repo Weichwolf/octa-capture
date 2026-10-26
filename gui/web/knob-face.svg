@@ -1,0 +1,32 @@
+<!-- SPDX-License-Identifier: GPL-2.0-only -->
+<svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" viewBox="0 0 25 25">
+  <defs>
+    <linearGradient id="bezel" x1="0" y1="0" x2="1" y2=".7">
+      <stop stop-color="#e0e0e0" />
+      <stop offset=".35" stop-color="#777777" />
+      <stop offset=".7" stop-color="#1c1c1c" />
+      <stop offset="1" stop-color="#080808" />
+    </linearGradient>
+    <radialGradient id="socket" cx=".2" cy=".4" r=".85">
+      <stop stop-color="#c0c0c0" />
+      <stop offset=".25" stop-color="#545454" />
+      <stop offset=".5" stop-color="#3b3b3b" />
+      <stop offset=".75" stop-color="#242424" />
+      <stop offset="1" stop-color="#161616" />
+    </radialGradient>
+    <linearGradient id="face" gradientUnits="userSpaceOnUse" x1="3" y1="3" x2="21" y2="21">
+      <stop stop-color="#8c8c8c" />
+      <stop offset="1" stop-color="#0b0b0b" />
+    </linearGradient>
+    <linearGradient id="lip" gradientUnits="userSpaceOnUse" x1="2" y1="2" x2="21" y2="21">
+      <stop stop-color="#e0e0e0" />
+      <stop offset=".4" stop-color="#9c9c9c" />
+      <stop offset=".65" stop-color="#333333" />
+      <stop offset="1" stop-color="#101010" />
+    </linearGradient>
+  </defs>
+  <circle cx="12.5" cy="12.5" r="12.5" fill="url(#bezel)" />
+  <circle cx="12.5" cy="12.5" r="11.2" fill="url(#socket)" />
+  <circle cx="13" cy="13" r="10.1" fill="#151515" />
+  <circle cx="12.5" cy="12.5" r="9" fill="url(#face)" stroke="url(#lip)" stroke-width="1" />
+</svg>

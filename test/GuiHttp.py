@@ -138,7 +138,8 @@ class Http(unittest.TestCase):
         self.assertEqual(headers['Content-Type'], 'image/svg+xml')
         self.assertIn(b'OCTA-CAPTURE signal flow', body)
         for asset, mime in [('faders.js', 'text/javascript; charset=utf-8'),
-                            ('fader-white.svg', 'image/svg+xml'), ('fader-red.svg', 'image/svg+xml')]:
+                            ('fader-white.svg', 'image/svg+xml'), ('fader-red.svg', 'image/svg+xml'),
+                            ('knob-face.svg', 'image/svg+xml')]:
             with self.subTest(asset=asset):
                 status, headers, body = self.request('GET', '/' + asset, authorized=False)
                 self.assertEqual(status, 200)
