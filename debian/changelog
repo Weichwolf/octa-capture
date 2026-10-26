@@ -1,3 +1,14 @@
+octa-capture (0.1.0-1~trixie13) trixie; urgency=medium
+
+  * Add explicit experimental base/EXP clock coordination to the native
+    command line and GTK/HTTP panels, with serial checks and recovery.
+  * Preserve remap chains and client controls, silence temporary capture
+    endpoints and cancel pending paired operations during shutdown.
+  * Reject stale GUI replies and handle disconnected HTTP clients while
+    returning backend errors.
+
+ -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Mon, 26 Oct 2026 04:51:49 +0100
+
 octa-capture (0.1.0-1~trixie12) trixie; urgency=medium
 
   * Keep the installed VERSION data file non-executable after dh_fixperms.
