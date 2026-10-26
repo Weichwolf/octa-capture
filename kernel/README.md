@@ -229,6 +229,8 @@ octa-aggregate --base serial:BASE_SERIAL --expansion serial:EXP_SERIAL \
 EXP must be the internal master. Both cards' clients move to temporary endpoints
 before either card unloads. After native clock preparation, both stereo profiles,
 serial identities and coherent clocks are checked before restoring any clients.
+Temporary capture monitors are muted before routing clients or defaults to them;
+held playback must not enter recording streams during the interruption.
 Routes, endpoint/client volumes and mutes, defaults, remap chains and monitor recordings are preserved;
 remaps across stereo pairs, multichannel clients and untracked module-owned audio
 are rejected before mutation. Internal streams of captured remap modules must
@@ -251,7 +253,9 @@ Fixed graph/process/filesystem tests and an actual Python/native-helper rejectio
 in an empty device namespace pass. `python3 tools/check-pulse-pair.py` also uses
 a private real PulseAudio server, chained remaps and persistent playback/recording
 clients to check routes, levels, defaults, cancellation, client-gain failures, partial-resume recovery
-and holding-node retention with automatic rescue enabled. Only USB/clock and
+and holding-node retention with automatic rescue enabled. A real PCM positive
+control and one-second stereo recordings verify silence at the temporary capture
+monitor while playback continues. Only USB/clock and
 ALSA card creation are replaced with modeled stereo null endpoints; physical
 joint server/hardware operation remains unverified. See `octa-aggregate(1)` for limits.
 

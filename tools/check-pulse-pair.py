@@ -12,6 +12,7 @@ from contextlib import ExitStack
 import os
 from pathlib import Path
 import select
+import struct
 import subprocess
 import sys
 import tempfile
@@ -244,6 +245,56 @@ class RealPulsePair(unittest.TestCase):
                                                stream['sample_specification']) for stream in audio.document(category)
                                                if stream['driver'] == 'protocol-native.c'}
         return result
+
+    def monitor_peak(self, sink):
+        """Send nonzero PCM and measure a real native monitor recording."""
+        with ExitStack() as stack:
+            pattern = self.root / 'probe.raw'
+            pattern.write_bytes(struct.pack('<hh', 8192, -12288) * 48000 * 4)
+            common = ['pacat', '--raw', '--channels=2', '--rate=48000', '--format=s16le', '--latency-msec=20']
+            recording = subprocess.Popen([*common, '--record', f'--device={sink}.monitor',
+                                          '--stream-name=octa_probe_capture'], stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE)
+            stack.callback(recording.stderr.close)
+            stack.callback(recording.stdout.close)
+            stack.callback(stop, recording)
+            wait_for(lambda: any(stream['properties'].get('media.name') == 'octa_probe_capture'
+                                 for stream in audio.document('source-outputs')), 'probe capture startup')
+            with pattern.open('rb') as payload:
+                playback = subprocess.Popen([*common, '--playback', f'--device={sink}',
+                                             '--stream-name=octa_probe_playback'], stdin=payload,
+                                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            stack.callback(playback.stderr.close)
+            stack.callback(stop, playback)
+            wait_for(lambda: any(stream['properties'].get('media.name') == 'octa_probe_playback'
+                                 for stream in audio.document('sink-inputs')), 'probe playback startup')
+            data = bytearray()
+            deadline = time.monotonic() + 5
+            expected = 48000 * 4
+            while len(data) < expected and time.monotonic() < deadline:
+                if select.select([recording.stdout], [], [], .1)[0]:
+                    block = os.read(recording.stdout.fileno(), min(16384, expected - len(data)))
+                    if not block:
+                        raise RuntimeError('The native probe recording ended early.')
+                    data.extend(block)
+            if len(data) != expected:
+                raise RuntimeError('The native probe did not deliver one second of stereo PCM.')
+            return max(abs(sample[0]) for sample in struct.iter_unpack('<h', data))
+
+    def test_holding_capture_is_silent_while_playback_clients_continue(self):
+        owner = audio.load_module('module-null-sink', {'sink_name': 'positive_control', 'channels': 2, 'rate': OLD})
+        try:
+            self.assertGreater(self.monitor_peak('positive_control'), 1000,
+                               'Positive control must detect the actual nonzero playback samples.')
+        finally:
+            audio.pulse('unload-module', owner)
+        controller = audio.Controller('/missing-native-backends', BASE)
+        owner, name = controller.hold({'sink': [], 'source': []}, {'sink': [], 'source': []}, {})
+        try:
+            self.assertEqual(self.monitor_peak(name), 0,
+                             'Held capture clients must not receive the held playback audio.')
+        finally:
+            audio.pulse('unload-module', owner)
 
     def test_chained_remaps_clients_levels_and_defaults_survive_the_joint_transaction(self):
         before = self.state()

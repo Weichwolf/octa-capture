@@ -14,8 +14,10 @@ At 44.1/48/96 kHz there are five playback and six recording stereo pairs;
 Recording 11-12 is the Mixer A return. At 192 kHz only pairs 1-2 and 3-4 remain.
 .PP
 The default device is hw:CARD=OCTACAPTURE.
-\fB\-\-rate\fR briefly pauses affected PulseAudio streams, changes the hardware rate,
+\fB\-\-rate\fR temporarily reroutes affected PulseAudio streams, changes the hardware rate,
 then restores pair assignments, endpoint/client volumes and mutes.
+The temporary capture monitor is muted before routing clients to it, so held
+playback does not become recording input during the interruption.
 Stop streams on unavailable higher pairs before requesting 192 kHz.
 Direct ALSA clients must release their own streams; PipeWire coordination is unverified.
 .PP

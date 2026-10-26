@@ -135,6 +135,35 @@ class Peer:
         return copy.deepcopy(result)
 
 
+class HoldingEndpoint(unittest.TestCase):
+    def test_capture_is_silenced_before_any_stream_or_default_moves(self):
+        events = []
+        controller = audio.Controller('/unused', Device('serial:unit', 'UNIT', 0, 'unit'))
+        nodes = {'sink': [{'name': 'output'}], 'source': [{'name': 'input'}]}
+        streams = {kind: [({'index': 1}, nodes[kind][0])] for kind in nodes}
+        info = {'default_sink_name': 'output', 'default_source_name': 'input'}
+        with patch.object(audio, 'load_module', return_value='17'), \
+                patch.object(audio, 'pulse', side_effect=lambda *args: events.append(args)), \
+                patch.object(audio, 'move_stream', side_effect=lambda *args, **_kwargs: events.append(('move', *args))):
+            owner, name = controller.hold(nodes, streams, info)
+        self.assertEqual(owner, '17')
+        self.assertEqual(events[0], ('set-source-mute', name + '.monitor', 1))
+        self.assertEqual([event[0] for event in events[1:]], ['move', 'move', 'set-default-sink', 'set-default-source'])
+
+    def test_failure_to_silence_discards_the_unused_endpoint_without_moving_clients(self):
+        controller = audio.Controller('/unused', Device('serial:unit', 'UNIT', 0, 'unit'))
+        for error in (audio.subprocess.CalledProcessError(1, 'pactl'), KeyboardInterrupt()):
+            with self.subTest(error=type(error).__name__), \
+                    patch.object(audio, 'load_module', return_value='17'), \
+                    patch.object(audio, 'pulse', side_effect=[error, '']) as command, \
+                    patch.object(audio, 'move_stream') as move:
+                with self.assertRaises(type(error)):
+                    controller.hold({}, {}, {})
+                move.assert_not_called()
+                self.assertEqual(command.call_args_list[-1], unittest.mock.call('unload-module', '17'))
+                self.assertEqual(command.call_count, 2)
+
+
 class StreamMoves(unittest.TestCase):
     def setUp(self):
         self.stream = {'index': 7, 'channel_map': 'front-left,front-right', 'mute': True,

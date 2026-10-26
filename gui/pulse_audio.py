@@ -101,6 +101,20 @@ def move_stream(kind, index, destination, *, controls=None):
             raise
 
 
+def holding_endpoint():
+    name = f'octa_clock_{secrets.token_hex(5)}'
+    owner = load_module('module-null-sink', {'sink_name': name, 'channels': 2,
+                        'sink_properties': "device.description='OCTA-CAPTURE rate change'"})
+    try:
+        # This monitor receives held playback. Silence it before any capture
+        # client/default source moves here, so it cannot become a loopback.
+        pulse('set-source-mute', name + '.monitor', 1)
+    except BaseException:
+        pulse('unload-module', owner)
+        raise
+    return owner, name
+
+
 def inherited_controls(nodes):
     """Keep effective gains when replacing a multichannel parent and its remaps."""
     result = copy.deepcopy(nodes)
@@ -239,9 +253,7 @@ class Controller:
                     raise ValueError('Stop streams using channels unavailable at the requested sample rate.')
 
     def hold(self, nodes, streams, info):
-        name = f'octa_clock_{secrets.token_hex(5)}'
-        owner = load_module('module-null-sink', {'sink_name': name, 'channels': 2,
-                            'sink_properties': "device.description='OCTA-CAPTURE rate change'"})
+        owner, name = holding_endpoint()
         try:
             for kind, values in streams.items():
                 for stream, _node in values:

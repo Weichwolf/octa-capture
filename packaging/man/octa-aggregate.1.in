@@ -30,6 +30,8 @@ With \fB\-\-rate\fR and explicit \fB\-\-experimental\fR, require an internally
 clocked EXP master and jointly change both units. Select both by distinct serials.
 Native PulseAudio clients on both cards move to temporary endpoints before either
 card is released. Device serials must agree with PulseAudio/udev identities.
+Temporary capture monitors are muted before moving clients or source defaults,
+preventing held playback from entering recording streams.
 The native octa-pair-clock helper changes only EXP; both clocks and both restored
 stereo profiles are verified before client routes, levels and defaults resume.
 Headless use performs the same native clock operation without creating audio-server endpoints.

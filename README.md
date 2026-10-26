@@ -101,7 +101,8 @@ cmake --install build/release --prefix "$HOME/.local"
 ```
 
 `python3 tools/check-pulse-pair.py` additionally checks client/remap coordination,
-individual client volumes/mutes and recovery using private PulseAudio and D-Bus processes (`pulseaudio`,
+individual client volumes/mutes, capture silence during held playback and recovery
+using private PulseAudio and D-Bus processes (`pulseaudio`,
 `pulseaudio-utils`, `dbus-daemon`). It leaves the desktop server untouched.
 USB identity, clock I/O and ALSA card creation remain modeled; this does not
 verify physical paired streaming.
