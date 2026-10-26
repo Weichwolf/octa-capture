@@ -18,6 +18,11 @@ The [protocol reference](usb-midi-protocol.txt) contains wire details and test l
   builders execute; only the final sender is stubbed. These valid-input checks
   do not verify complete cache/coupling or outer IOCTL validation. Complete IOCTL/property,
   USB and power-management behavior is not yet traced.
+  The original USB rate negotiator also matches 52 actual Linux clock-C cases
+  at all rate pairs/poll boundaries, with 15 additional completion/error cases.
+  Its status acquisition and URB construction execute; USB completion, heap,
+  locks and waits are modeled. Windows can accept a short successful OUT
+  completion followed by matching readback; Linux retains exact-length checks.
 - Windows x86: the package's legacy branch is version 1.5.2 according to its INF
   and English README, whereas x64 is 1.5.3. The x86 kernel inventory contains
   1,120 functions and 3,037 call sites, including unresolved indirect calls.

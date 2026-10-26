@@ -411,6 +411,18 @@ worker 0x1400253a0 calls 0x140005fb0 and 0x140005b00, which sends the same
 Default instead manage staged Windows host properties; Cancel does not undo
 the sample rate and keeps the settings dialog open (GUI 0x14002c1b0).
 
+tools/verify-windows-clock.py executes Windows 0x140005b00 with its original
+interrupt-status precondition and vendor-URB construction. Fifty-two cases
+compare payloads, results and 200-ms waits against the actual Linux clock C
+source: all rate pairs, cached same-rate requests and 0/1/39/40 busy replies.
+Fifteen additional cases cover transport/short-read/clock failures and missing
+polling contexts. URB allocation/free, USB completion, status queues, waits and
+locks are memory-only hosts. The Windows cache commits only successful changes.
+Windows can accept a short successful OUT completion if readback then matches;
+Linux keeps its exact-length guard. Outer worker/IOCTL dispatch and physical
+clock transitions are outside this comparison. Reproduce offline with:
+  python3 tools/verify-windows-clock.py RDWM1110.SYS --clock-test build/strict/clock_test
+
 Windows host settings are distinct from USB/device state. GUI 0x14002b7d0
 collects a 344-byte property structure; 0x14002d0f0 sends that structure plus
 a result DWORD through IOCTL 0x2221ec to each available driver slot (up to

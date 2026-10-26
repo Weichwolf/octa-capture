@@ -7,6 +7,7 @@ extern "C" {
 #include <array>
 #include <cerrno>
 #include <cstdint>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <string_view>
@@ -192,9 +193,41 @@ bool bounded_polling() {
                      transport().calls == busy_limit + 1 && transport().sleeps == busy_limit,
                  "same-rate readiness timeout is bounded without a write");
 }
+
+bool emit_reference() {
+  for (const auto initial : octa::clock_test::rates) {
+    for (const auto requested : octa::clock_test::rates) {
+      for (const auto busy : {0U, 1U, nearly_busy_limit, busy_limit}) {
+        if (initial == requested && busy != 0) { continue; }
+        reset(initial);
+        transport().busy_replies = busy;
+        const auto result =
+            snd_usb_octa_capture_set_rate(&transport().chip, static_cast<int>(requested));
+        if (!require(!transport().invalid_request, "reference trace uses valid USB requests")) {
+          return false;
+        }
+        std::cout << initial << '\t' << requested << '\t' << busy << '\t' << result << '\t'
+                  << transport().writes << '\t' << transport().sleeps << '\t';
+        if (transport().writes != 0) {
+          for (const auto byte : transport().frame) {
+            std::cout << std::hex << std::setfill('0') << std::setw(2)
+                      << static_cast<unsigned int>(byte);
+          }
+          std::cout << std::dec;
+        } else {
+          std::cout << '-';
+        }
+        std::cout << '\n';
+      }
+    }
+  }
+  return true;
+}
 }
 
-int main() {
+int main(int argc, char **argv) {
+  if (argc == 2 && std::string_view(argv[1]) == "--reference") { return emit_reference() ? 0 : 1; }
+  if (argc != 1) { return 1; }
   if (!queries() || !rate_changes() || !invalid_requests() || !faults() || !bounded_polling()) {
     return 1;
   }
