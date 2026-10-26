@@ -100,6 +100,12 @@ cmake --install build/release --prefix "$HOME/.local"
 # HTTP-only launcher: ~/.local/bin/octa-capture-http --open
 ```
 
+`python3 tools/check-pulse-pair.py` additionally checks client/remap coordination,
+individual client volumes/mutes and recovery using private PulseAudio and D-Bus processes (`pulseaudio`,
+`pulseaudio-utils`, `dbus-daemon`). It leaves the desktop server untouched.
+USB identity, clock I/O and ALSA card creation remain modeled; this does not
+verify physical paired streaming.
+
 For an isolated development installation alongside the Debian package, use a
 commit-specific prefix and launch it explicitly:
 

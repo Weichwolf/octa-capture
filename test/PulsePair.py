@@ -99,6 +99,9 @@ class Peer:
             node = self.node(owner, kind, arguments[f'{kind}_name'])
             if kind == 'sink':
                 self.node(owner, 'source', node['name'] + '.monitor')
+            self.sequence += 1
+            self.streams[kind].append({'index': self.sequence, kind: master['index'], 'owner_module': owner,
+                                       'driver': name + '.c', 'channel_map': node['channel_map']})
         return owner
 
     def activate(self, owner, profile):
@@ -129,6 +132,8 @@ class Peer:
             card = self.cards.get(owner)
             self.event('unload:' + (card['name'].split('.')[-1] if card else 'holding'))
             for kind in ('sink', 'source'):
+                self.streams[kind] = [stream for stream in self.streams[kind]
+                                      if str(stream.get('owner_module')) != owner]
                 removed = {node['index'] for node in self.nodes[kind] if str(node['owner_module']) == owner}
                 if any(stream[kind] in removed for stream in self.streams[kind]):
                     raise AssertionError('A module with attached clients was unloaded')
@@ -184,7 +189,8 @@ class Peer:
         result = {'rate': self.rate, 'defaults': copy.deepcopy(self.info), 'streams': {}, 'levels': {}}
         for kind in ('sink', 'source'):
             nodes = {node['index']: node for node in self.nodes[kind]}
-            result['streams'][kind] = {stream['index']: nodes[stream[kind]]['name'] for stream in self.streams[kind]}
+            result['streams'][kind] = {stream['index']: nodes[stream[kind]]['name'] for stream in self.streams[kind]
+                                      if stream['driver'] == 'protocol-native.c'}
             result['levels'][kind] = {node['name']: (node['volume'], node['mute']) for node in self.nodes[kind]}
         return copy.deepcopy(result)
 
@@ -404,6 +410,19 @@ class Coordination(unittest.TestCase):
 
 
 class Identities(unittest.TestCase):
+    def test_internal_remap_streams_require_the_captured_owner_driver_and_exact_master_edge(self):
+        for kind in ('sink', 'source'):
+            nodes = {kind: [{'index': 10, 'name': 'parent'}, {'index': 11, 'name': 'child'}]}
+            modules = [('20', f'module-remap-{kind}', {'master': 'parent'})]
+            stream = {'owner_module': '20', 'driver': f'module-remap-{kind}.c', kind: 10}
+            self.assertFalse(pulse_pair.untracked_module_stream(stream, kind, nodes, modules))
+            for changed in ({'owner_module': '21'}, {'driver': 'module-loopback.c'}, {kind: 11}):
+                with self.subTest(kind=kind, changed=changed):
+                    self.assertTrue(pulse_pair.untracked_module_stream({**stream, **changed}, kind, nodes, modules))
+            self.assertTrue(pulse_pair.untracked_module_stream(stream, kind, nodes, []))
+            modules[0][2]['master'] = 'missing'
+            self.assertTrue(pulse_pair.untracked_module_stream(stream, kind, nodes, modules))
+
     def test_pulse_properties_must_match_current_udev_vid_pid_and_both_serial_forms(self):
         properties = {'alsa.card': '0', 'device.serial': 'Roland_OCTA_BASE',
                       'device.vendor.id': '0582', 'device.product.id': '0120'}

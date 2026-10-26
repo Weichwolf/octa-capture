@@ -229,9 +229,11 @@ octa-aggregate --base serial:BASE_SERIAL --expansion serial:EXP_SERIAL \
 EXP must be the internal master. Both cards' clients move to temporary endpoints
 before either card unloads. After native clock preparation, both stereo profiles,
 serial identities and coherent clocks are checked before restoring any clients.
-Routes, volumes/mutes, defaults, remap chains and monitor recordings are preserved;
-remaps across stereo pairs, multichannel clients and module-owned audio are rejected before
-mutation. Shared ALSA configuration writes are serialized across cards. On
+Routes, endpoint/client volumes and mutes, defaults, remap chains and monitor recordings are preserved;
+remaps across stereo pairs, multichannel clients and untracked module-owned audio
+are rejected before mutation. Internal streams of captured remap modules must
+match their owner, driver and master endpoint. Shared ALSA configuration writes
+are serialized across cards. On
 failure, files unwind in reverse order; the old clock and both cards must recover
 before clients resume. Incomplete recovery retains temporary endpoints. SIGINT/
 SIGTERM request recovery; forced termination cannot guarantee it. A new aggregate
@@ -246,8 +248,12 @@ changed or incoherent companions disable it. Host shutdown cancels pending lock/
 helper waits and allows recovery to finish. This GUI mode does not create the
 combined PCM; the private file above is still required for direct aggregation.
 Fixed graph/process/filesystem tests and an actual Python/native-helper rejection
-in an empty device namespace pass; real joint PulseAudio/hardware operation
-remains unverified. See `octa-aggregate(1)` for limits.
+in an empty device namespace pass. `python3 tools/check-pulse-pair.py` also uses
+a private real PulseAudio server, chained remaps and persistent playback/recording
+clients to check routes, levels, defaults, cancellation, client-gain failures, partial-resume recovery
+and holding-node retention with automatic rescue enabled. Only USB/clock and
+ALSA card creation are replaced with modeled stereo null endpoints; physical
+joint server/hardware operation remains unverified. See `octa-aggregate(1)` for limits.
 
 The C++ `PairPcmReservation` component provides nonblocking ownership of both
 native capture/playback PCMs before a paired clock transaction. It checks

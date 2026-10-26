@@ -71,10 +71,31 @@ def by_pair(nodes, kind):
     return {pair_key(node, kind): node for node in nodes}
 
 
-def move_stream(kind, index, destination):
+def restore_stream_controls(kind, index, original):
     category = 'sink-inputs' if kind == 'sink' else 'source-outputs'
+    current = next((stream for stream in document(category) if stream['index'] == index), None)
+    if current is None:
+        return
+    if original.get('channel_map') != current.get('channel_map'):
+        raise ValueError('A PulseAudio client changed its channel map during the move.')
+    target = 'sink-input' if kind == 'sink' else 'source-output'
+    values = [value['value'] for value in original.get('volume', {}).values()]
+    if values and values != [value['value'] for value in current.get('volume', {}).values()]:
+        pulse(f'set-{target}-volume', index, *values)
+    if 'mute' in original and original['mute'] != current.get('mute'):
+        pulse(f'set-{target}-mute', index, int(original['mute']))
+
+
+def move_stream(kind, index, destination, *, controls=None):
+    category = 'sink-inputs' if kind == 'sink' else 'source-outputs'
+    if controls is None:
+        controls = next((stream for stream in document(category) if stream['index'] == index), None)
+        if controls is None:
+            return
     try:
         pulse('move-sink-input' if kind == 'sink' else 'move-source-output', index, destination)
+        # Moving a recording client to/from a monitor can reset its own gain.
+        restore_stream_controls(kind, index, controls)
     except subprocess.CalledProcessError:
         if any(stream['index'] == index for stream in document(category)):
             raise
@@ -224,7 +245,7 @@ class Controller:
         try:
             for kind, values in streams.items():
                 for stream, _node in values:
-                    move_stream(kind, stream['index'], name if kind == 'sink' else name + '.monitor')
+                    move_stream(kind, stream['index'], name if kind == 'sink' else name + '.monitor', controls=stream)
             for kind in ('sink', 'source'):
                 if info.get(f'default_{kind}_name') in {node['name'] for node in nodes[kind]}:
                     pulse(f'set-default-{kind}', name if kind == 'sink' else name + '.monitor')
@@ -232,7 +253,7 @@ class Controller:
         except BaseException:
             for kind, values in streams.items():
                 for stream, node in values:
-                    move_stream(kind, stream['index'], node['name'])
+                    move_stream(kind, stream['index'], node['name'], controls=stream)
             for kind in ('sink', 'source'):
                 if info.get(f'default_{kind}_name') in {node['name'] for node in nodes[kind]}:
                     pulse(f'set-default-{kind}', info[f'default_{kind}_name'])
@@ -264,6 +285,7 @@ class Controller:
             if default:
                 pulse(f'set-default-{kind}', target(default)['name'])
             previous = {stream['index']: node for stream, node in streams[kind]}
+            controls = {stream['index']: stream for stream, _node in streams[kind]}
             fallback = default or next((node for node in nodes[kind]
                                        if pair_key(node, kind) ==
                                        ('playback' if kind == 'sink' else 'recording', 1, 2, False)), None)
@@ -272,7 +294,7 @@ class Controller:
             for stream in document(category):
                 if stream['index'] in previous or (stream[kind] == temporary and fallback):
                     old = previous.get(stream['index'], fallback)
-                    move_stream(kind, stream['index'], target(old)['name'])
+                    move_stream(kind, stream['index'], target(old)['name'], controls=controls.get(stream['index']))
 
     def restore_clients(self, owner, nodes, streams, info, holding):
         self.restore_levels(owner, nodes)
@@ -336,7 +358,7 @@ class Controller:
                 for kind, values in streams.items():
                     for stream, old in values:
                         if old['name'] in {node['name'] for node in restored_nodes[kind]}:
-                            move_stream(kind, stream['index'], old['name'])
+                            move_stream(kind, stream['index'], old['name'], controls=stream)
                 for kind in ('sink', 'source'):
                     if info.get(f'default_{kind}_name') in {node['name'] for node in nodes[kind]}:
                         pulse(f'set-default-{kind}', info[f'default_{kind}_name'])

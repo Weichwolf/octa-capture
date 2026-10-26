@@ -135,6 +135,64 @@ class Peer:
         return copy.deepcopy(result)
 
 
+class StreamMoves(unittest.TestCase):
+    def setUp(self):
+        self.stream = {'index': 7, 'channel_map': 'front-left,front-right', 'mute': True,
+                       'volume': {'front-left': {'value': 21000}, 'front-right': {'value': 34000}}}
+
+    def test_move_preserves_client_volume_and_mute_in_both_directions(self):
+        for kind, category, target in (('sink', 'sink-inputs', 'sink-input'),
+                                       ('source', 'source-outputs', 'source-output')):
+            changed = {**self.stream, 'mute': False,
+                       'volume': {'front-left': {'value': 65536}, 'front-right': {'value': 65536}}}
+            with self.subTest(kind=kind), patch.object(audio, 'document', side_effect=[[self.stream], [changed]]) as read, \
+                    patch.object(audio, 'pulse') as command:
+                audio.move_stream(kind, 7, 'destination')
+                self.assertEqual(read.call_args_list, [unittest.mock.call(category)] * 2)
+                self.assertEqual(command.call_args_list, [unittest.mock.call(f'move-{target}', 7, 'destination'),
+                    unittest.mock.call(f'set-{target}-volume', 7, 21000, 34000),
+                    unittest.mock.call(f'set-{target}-mute', 7, 1)])
+
+    def test_unchanged_controls_do_not_issue_redundant_updates(self):
+        with patch.object(audio, 'document', return_value=[self.stream]), patch.object(audio, 'pulse') as command:
+            audio.move_stream('source', 7, 'destination')
+            command.assert_called_once_with('move-source-output', 7, 'destination')
+
+    def test_disappeared_client_is_ignored_before_or_after_a_move(self):
+        with patch.object(audio, 'document', return_value=[]), patch.object(audio, 'pulse') as command:
+            audio.move_stream('source', 7, 'destination')
+            command.assert_not_called()
+        with patch.object(audio, 'document', side_effect=[[self.stream], []]), patch.object(audio, 'pulse') as command:
+            audio.move_stream('source', 7, 'destination')
+            command.assert_called_once_with('move-source-output', 7, 'destination')
+
+    def test_live_client_command_failure_is_propagated_but_exit_is_ignored(self):
+        error = audio.subprocess.CalledProcessError(1, 'pactl')
+        for clients in ([], [self.stream]):
+            with self.subTest(clients=bool(clients)), \
+                    patch.object(audio, 'document', side_effect=[[self.stream], clients]), \
+                    patch.object(audio, 'pulse', side_effect=error):
+                if clients:
+                    with self.assertRaises(audio.subprocess.CalledProcessError):
+                        audio.move_stream('source', 7, 'destination')
+                else:
+                    audio.move_stream('source', 7, 'destination')
+
+    def test_recovery_can_supply_the_original_snapshot_after_an_earlier_failed_restore(self):
+        changed = {**self.stream, 'volume': {'front-left': {'value': 65536}, 'front-right': {'value': 65536}}}
+        with patch.object(audio, 'document', return_value=[changed]), patch.object(audio, 'pulse') as command:
+            audio.move_stream('source', 7, 'old-source', controls=self.stream)
+            self.assertEqual(command.call_args_list, [unittest.mock.call('move-source-output', 7, 'old-source'),
+                                                     unittest.mock.call('set-source-output-volume', 7, 21000, 34000)])
+
+    def test_channel_map_changes_are_rejected_before_applying_per_channel_controls(self):
+        changed = {**self.stream, 'channel_map': 'front-right,front-left'}
+        with patch.object(audio, 'document', return_value=[changed]), patch.object(audio, 'pulse') as command:
+            with self.assertRaisesRegex(ValueError, 'channel map'):
+                audio.move_stream('source', 7, 'old-source', controls=self.stream)
+            command.assert_called_once_with('move-source-output', 7, 'old-source')
+
+
 class Pairing(unittest.TestCase):
     def test_startup_uses_device_clock_instead_of_saved_desktop_rate(self):
         peer = Peer()

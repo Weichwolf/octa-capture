@@ -108,6 +108,20 @@ def ordered_modules(owner, nodes, modules):
     return result
 
 
+def untracked_module_stream(stream, kind, nodes, modules):
+    """Allow only native clients, peak readers and captured remap master edges."""
+    if stream.get('driver') == 'protocol-native.c' or stream.get('resample_method') == 'peaks':
+        return False
+    owner = str(stream.get('owner_module'))
+    expected = f'module-remap-{kind}'
+    arguments = next((arguments for index, name, arguments in modules
+                      if index == owner and name == expected), None)
+    if arguments is None or stream.get('driver') != expected + '.c':
+        return True
+    master = next((node for node in nodes[kind] if node['name'] == arguments.get('master')), None)
+    return master is None or stream[kind] != master['index']
+
+
 class Transaction:
     def __init__(self, binary, plan, *, cancelled=None):
         self.binary, self.plan = Path(binary), plan
@@ -149,13 +163,13 @@ class Transaction:
             if original.get(unit.owner, (None,))[0] != 'module-alsa-card':
                 raise ValueError('The selected PulseAudio card has an unsupported owner.')
             unit.nodes, unit.streams, _old = controller.snapshot(unit.owner, original)
+            unit.modules = ordered_modules(unit.owner, unit.nodes, original)
             for kind, category in (('sink', 'sink-inputs'), ('source', 'source-outputs')):
                 indices = {node['index'] for node in unit.nodes[kind]}
-                if any(stream[kind] in indices and stream.get('driver') != 'protocol-native.c' and
-                       stream.get('resample_method') != 'peaks' for stream in audio.document(category)):
+                if any(stream[kind] in indices and untracked_module_stream(stream, kind, unit.nodes, unit.modules)
+                       for stream in audio.document(category)):
                     raise ValueError('Stop module-owned PulseAudio streams before changing the paired clock.')
             controller.validate_streams(unit.streams, rate)
-            unit.modules = ordered_modules(unit.owner, unit.nodes, original)
             unit.remaps = remap_plan(unit)
             for _index, _name, arguments in unit.modules:
                 audio.module_arguments(arguments)
@@ -181,22 +195,23 @@ class Transaction:
         if unit.holding is None:
             return
         nodes = {'sink': [], 'source': []}
+        modules = []
         if unit.owner in current:
             nodes, _streams, _modules = unit.controller.snapshot(unit.owner, current)
+            modules = ordered_modules(unit.owner, nodes, current)
         for kind, category in (('sink', 'sink-inputs'), ('source', 'source-outputs')):
             attached = {node['index'] for node in nodes[kind]}
-            previous = {stream['index'] for stream, _node in unit.streams[kind]}
+            previous = {stream['index']: stream for stream, _node in unit.streams[kind]}
             destination = unit.holding[1] + ('.monitor' if kind == 'source' else '')
             temporary = next((node['index'] for node in audio.document(f'{kind}s') if node['name'] == destination), None)
             for stream in audio.document(category):
                 if stream[kind] == temporary:
                     continue
-                if stream[kind] in attached and stream.get('driver') != 'protocol-native.c' and \
-                        stream.get('resample_method') != 'peaks':
+                if stream[kind] in attached and untracked_module_stream(stream, kind, nodes, modules):
                     raise ValueError('An untracked module stream prevents safe paired audio recovery.')
                 if stream['index'] in previous or (stream[kind] in attached and
                         stream.get('driver') == 'protocol-native.c' and stream.get('resample_method') != 'peaks'):
-                    audio.move_stream(kind, stream['index'], destination)
+                    audio.move_stream(kind, stream['index'], destination, controls=previous.get(stream['index']))
             if self.info.get(f'default_{kind}_name') in {node['name'] for node in unit.nodes[kind]}:
                 audio.pulse(f'set-default-{kind}', destination)
 
@@ -256,11 +271,13 @@ class Transaction:
             fallback = default or next((node for node in old_nodes if audio.pair_key(node, kind) ==
                                        ('playback' if kind == 'sink' else 'recording', 1, 2, False)), None)
             previous = {stream['index']: node for stream, node in unit.streams[kind]}
+            controls = {stream['index']: stream for stream, _node in unit.streams[kind]}
             temporary = next((node['index'] for node in audio.document(f'{kind}s') if
                               node['name'] == unit.holding[1] + ('.monitor' if kind == 'source' else '')), None)
             for stream in audio.document(category):
                 if stream['index'] in previous or (stream[kind] == temporary and fallback):
-                    audio.move_stream(kind, stream['index'], target(previous.get(stream['index'], fallback)))
+                    audio.move_stream(kind, stream['index'], target(previous.get(stream['index'], fallback)),
+                                      controls=controls.get(stream['index']))
             if default:
                 audio.pulse(f'set-default-{kind}', target(default))
 

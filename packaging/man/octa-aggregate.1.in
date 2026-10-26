@@ -38,7 +38,8 @@ This mode installs device-specific stereo profiles and updates their private
 ALSA definitions and ~/.asoundrc under a shared configuration lock. Remap chains,
 their independent gains and playback-monitor recordings are preserved. Remaps
 spanning different stereo pairs must be unloaded or reconfigured; multichannel
-clients and module-owned audio streams must be stopped first. No channel mapping
+clients and untracked module-owned audio streams must be stopped first. Captured
+remap streams must match their module owner, driver and master endpoint. No channel mapping
 is guessed. Direct ALSA clients must
 release their streams themselves. PipeWire coordination is not supported yet.
 .PP
