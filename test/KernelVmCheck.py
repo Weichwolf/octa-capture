@@ -14,7 +14,7 @@ def console(usb=False):
     lines = [f'OCTA_VM_MODULE_CYCLE {index}' for index in (1, 2, 3)]
     if usb:
         lines += [f'OCTA_VM_USB_CYCLE {index}' for index in (1, 2, 3)]
-        lines += ['OCTA_VM_STATUS_READ_PASS'] * 8
+        lines += ['OCTA_VM_STATUS_READ_PASS'] * 10
         lines += ['OCTA_VM_USB_EXPANSION_PASS']
         lines += ['FAULT_INJECTION: forcing a failure.', ' octa_status_get+0x10/0x20 [snd_octa_capture]',
                   'OCTA_VM_STATUS_ALLOCATION_PASS']
@@ -22,6 +22,10 @@ def console(usb=False):
         lines += ['OCTA_VM_STATUS_ERROR_PASS disconnect', 'OCTA_VM_STATUS_UNPLUG_PASS',
                   'OCTA_VM_STATUS_RECOVERY_PASS', 'OCTA_VM_PCM_FAILURE_PASS']
         lines += ['OCTA_VM_PCM_ALT_STALL 1 2', 'OCTA_VM_PCM_ALT_STALL 0 2'] * 2
+        for target, function in (('pcm-meter', 'snd_usb_octa_capture_add_pcm_controls'),
+                                 ('audio-stream', 'snd_usb_add_audio_stream')):
+            lines += ['FAULT_INJECTION: forcing a failure.', f' {function}+0x10/0x20 [snd_octa_capture]',
+                      f'OCTA_VM_PROBE_ALLOCATION_PASS {target}']
     return '\n'.join([*lines, CHECK['MARKER']])
 
 
@@ -38,7 +42,8 @@ class Evidence(unittest.TestCase):
                        'OCTA_VM_STATUS_UNPLUG_PASS', 'OCTA_VM_STATUS_RECOVERY_PASS',
                        'OCTA_VM_PCM_FAILURE_PASS', 'OCTA_VM_PCM_ALT_STALL 1 2',
                        'OCTA_VM_PCM_ALT_STALL 0 2', 'OCTA_VM_USB_EXPANSION_PASS',
-                       'OCTA_VM_STATUS_ALLOCATION_PASS', CHECK['MARKER']):
+                       'OCTA_VM_STATUS_ALLOCATION_PASS', 'OCTA_VM_PROBE_ALLOCATION_PASS pcm-meter',
+                       'OCTA_VM_PROBE_ALLOCATION_PASS audio-stream', CHECK['MARKER']):
             self.assertFalse(CHECK['verify_output'](0, text.replace(marker, '', 1), True), marker)
         self.assertFalse(CHECK['verify_output'](0, text + '\nOCTA_VM_STATUS_READ_PASS', True))
         self.assertFalse(CHECK['verify_output'](0, text + '\nOCTA_VM_PCM_ALT_STALL 1 2', True))
@@ -76,6 +81,23 @@ class Evidence(unittest.TestCase):
         for report in ('BUG:', 'WARNING:', 'KASAN:', 'UBSAN:', 'Oops:',
                        'Kernel panic', 'general protection fault'):
             self.assertFalse(CHECK['verify_output'](0, text + '\n' + report, True), report)
+
+
+    def test_probe_failures_require_their_own_confirmed_allocation_stacks(self):
+        text = console(True)
+        for target, function in (('pcm-meter', 'snd_usb_octa_capture_add_pcm_controls'),
+                                 ('audio-stream', 'snd_usb_add_audio_stream')):
+            marker = f'OCTA_VM_PROBE_ALLOCATION_PASS {target}'
+            frame = f' {function}+0x10/0x20 [snd_octa_capture]'
+            for replacement in ('', frame.replace(' ', ' ? ', 1), frame.replace(function, 'unrelated')):
+                changed = text.replace(frame, replacement)
+                self.assertFalse(CHECK['verify_output'](0, changed, True), (target, replacement))
+            self.assertFalse(CHECK['verify_output'](0, text + '\n' + marker, True))
+            moved = text.replace(frame, '').replace(marker, marker + '\n' + frame)
+            self.assertFalse(CHECK['verify_output'](0, moved, True), target)
+        swapped = text.replace('PASS pcm-meter', 'PASS temporary').replace('PASS audio-stream', 'PASS pcm-meter')
+        swapped = swapped.replace('PASS temporary', 'PASS audio-stream')
+        self.assertFalse(CHECK['verify_output'](0, swapped, True))
 
 
 class Executable(unittest.TestCase):

@@ -522,6 +522,59 @@ void allocation_status() {
   std::puts("OCTA_VM_STATUS_ALLOCATION_PASS");
 }
 
+void unbind_interfaces() {
+  constexpr const char *unbind = "/sys/bus/usb/drivers/snd-octa-capture/unbind";
+  for (unsigned int index = 0; index < 5; ++index) {
+    const auto name = "1-1:1." + std::to_string(index);
+    const auto driver = "/sys/bus/usb/devices/" + name + "/driver";
+    if (access(driver.c_str(), F_OK) == 0) {
+      write_setting({.path = unbind, .value = name});
+    } else {
+      require(errno == ENOENT, "Unclaimed modeled interface");
+    }
+  }
+  require(access("/dev/snd/controlC0", F_OK) == -1 && errno == ENOENT,
+          "All interfaces released before reprobe");
+}
+
+void allocation_probe(std::string_view target) {
+  require(target == "pcm-meter" || target == "audio-stream", "Known probe allocation target");
+  unbind_interfaces();
+  const int bind = checked(open("/sys/bus/usb/drivers/snd-octa-capture/bind", O_WRONLY | O_CLOEXEC),
+                           "Open modeled interface bind");
+  const int task = checked(open("/proc/self/fail-nth", O_WRONLY | O_CLOEXEC), "Probe task ordinal");
+  constexpr std::array settings = {
+      Setting{.path = "/sys/kernel/debug/failslab/probability", .value = "0"},
+      Setting{.path = "/sys/kernel/debug/failslab/task-filter", .value = "Y"},
+      Setting{.path = "/sys/kernel/debug/failslab/cache-filter", .value = "Y"},
+      Setting{.path = "/sys/kernel/debug/failslab/ignore-gfp-wait", .value = "N"},
+      Setting{.path = "/sys/kernel/debug/failslab/interval", .value = "1"},
+      Setting{.path = "/sys/kernel/debug/failslab/times", .value = "1"},
+      Setting{.path = "/sys/kernel/debug/failslab/space", .value = "0"},
+      Setting{.path = "/sys/kernel/debug/failslab/verbose", .value = "2"},
+      Setting{.path = "/sys/kernel/slab/kmalloc-512/failslab", .value = "1"}};
+  for (const auto &setting : settings) { write_setting(setting); }
+  constexpr std::string_view interface = "1-1:1.0";
+  const char *const ordinal = target == "pcm-meter" ? "2" : "3";
+  // Per-task fail-nth starts fresh; failslab's global interval counter does not.
+  require(write(task, ordinal, 1) == 1, "Select current probe allocation ordinal");
+  const auto result = write(bind, interface.data(), interface.size());
+  const int actual_error = errno;
+  require(write(task, "0", 1) == 1, "Clear probe allocation ordinal");
+  write_setting({.path = "/sys/kernel/slab/kmalloc-512/failslab", .value = "0"});
+  checked(close(task), "Close probe task filter");
+  std::cout << "PROBE_ALLOCATION " << target << " result=" << result << " errno=" << actual_error
+            << '\n';
+  require(result == -1 && actual_error == ENOMEM, "Probe propagates allocation failure");
+  require(access("/dev/snd/controlC0", F_OK) == -1 && errno == ENOENT,
+          "Failed probe leaves no registered card");
+  require(write(bind, interface.data(), interface.size()) == static_cast<ssize_t>(interface.size()),
+          "Rebind succeeds after allocation failure");
+  checked(close(bind), "Close modeled interface bind");
+  read_status(scenario("normal"));
+  std::cout << "OCTA_VM_PROBE_ALLOCATION_PASS " << target << '\n';
+}
+
 struct PcmSetting {
   unsigned int parameter;
   unsigned int value;
@@ -686,6 +739,11 @@ int main(int argc, char **argv) {
   if (std::string_view(argv[1]) == "allocation-status") {
     require(argc == 2, "Allocation check accepts no scenario");
     allocation_status();
+    return 0;
+  }
+  if (std::string_view(argv[1]) == "allocation-probe") {
+    require(argc == 3, "Probe allocation target required");
+    allocation_probe(argv[2]);
     return 0;
   }
   const auto test = scenario(argc == 3 ? argv[2] : "normal");

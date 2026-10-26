@@ -357,6 +357,16 @@ must return `ENOMEM` without changing any caller bytes, then recover on the same
 open handle after injection is disabled. This covers the status DMA-buffer
 allocation, not arbitrary allocation sites or runtime-PM recovery.
 
+Two more fixed failures target PCM-meter allocation and the later audio-stream
+allocation during probe. The helper first unbinds every claimed interface of
+the modeled device, then uses per-task `/proc/self/fail-nth` with only the
+`kmalloc-512` cache selected. Global failure probability remains zero. Each
+probe must return `ENOMEM`, leave no registered card, then rebind and pass 20
+status reads. The checker requires the corresponding confirmed kernel frames
+and exactly three forced failures across the suite. Allocation ordinals are
+specific to this VM kernel; shifted paths fail verification. These checks cover
+probe cleanup before streaming, not arbitrary allocation sites or memory leaks.
+
 At 48 kHz, the fixture also accepts legal S24_3LE hardware parameters with
 256/1024-frame period/buffer sizes, then stalls audio alternate activation.
 Playback and capture each repeat prepare, `HW_FREE` and reconfiguration twice

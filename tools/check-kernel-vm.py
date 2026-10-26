@@ -99,6 +99,8 @@ def usb_script():
               'usb_start normal', '/bin/usb-fixture reject-pcm', '/bin/usb-fixture allocation-status',
               '/bin/usb-fixture read-status', 'usb_stop',
               'echo OCTA_VM_STATUS_RECOVERY_PASS']
+    lines += ['for target in pcm-meter audio-stream; do', '  usb_start normal',
+              '  /bin/usb-fixture allocation-probe "$target"', '  usb_stop', 'done']
     return lines
 
 
@@ -145,12 +147,19 @@ def interrupted(_number, _frame):
     raise KeyboardInterrupt
 
 
+def allocation_evidence(text, function, marker):
+    boundary = r'FAULT_INJECTION:|OCTA_VM_(?:STATUS_ALLOCATION_PASS|PROBE_ALLOCATION_PASS)'
+    segment = r'(?:(?!' + boundary + r').)*'
+    return re.search(r'FAULT_INJECTION: forcing a failure\.' + segment + r'\n[ \t]+' + re.escape(function) +
+                     r'\+[^\n]*\[snd_octa_capture\]' + segment + re.escape(marker), text, re.DOTALL) is not None
+
+
 def verify_output(result, text, usb):
     lines = text.splitlines()
     cycles = all(lines.count(f'OCTA_VM_MODULE_CYCLE {number}') == 1 for number in (1, 2, 3))
     if usb:
         cycles = cycles and all(lines.count(f'OCTA_VM_USB_CYCLE {number}') == 1 for number in (1, 2, 3))
-        cycles = cycles and lines.count('OCTA_VM_STATUS_READ_PASS') == 8
+        cycles = cycles and lines.count('OCTA_VM_STATUS_READ_PASS') == 10
         cycles = cycles and lines.count('OCTA_VM_USB_EXPANSION_PASS') == 1
         cycles = cycles and all(lines.count(f'OCTA_VM_STATUS_ERROR_PASS {name}') == 1 for name in STATUS_ERRORS)
         cycles = cycles and lines.count('OCTA_VM_STATUS_ERROR_PASS disconnect') == 1
@@ -161,11 +170,12 @@ def verify_output(result, text, usb):
         cycles = cycles and lines.count('OCTA_VM_PCM_ALT_STALL 0 2') == 2
         cycles = cycles and sum(line.startswith('OCTA_VM_PCM_ALT_STALL ') for line in lines) == 4
         cycles = cycles and lines.count('OCTA_VM_STATUS_ALLOCATION_PASS') == 1
-        cycles = cycles and len(re.findall(r'FAULT_INJECTION: forcing a failure\.', text)) == 1
-        cycles = cycles and re.search(r'FAULT_INJECTION: forcing a failure\.(?:(?!OCTA_VM_STATUS_ALLOCATION_PASS).)*'
-                                      r'\n[ \t]+octa_status_get\+[^\n]*\[snd_octa_capture\]'
-                                      r'(?:(?!OCTA_VM_STATUS_ALLOCATION_PASS).)*OCTA_VM_STATUS_ALLOCATION_PASS',
-                                      text, re.DOTALL) is not None
+        cycles = cycles and len(re.findall(r'FAULT_INJECTION: forcing a failure\.', text)) == 3
+        cycles = cycles and allocation_evidence(text, 'octa_status_get', 'OCTA_VM_STATUS_ALLOCATION_PASS')
+        for target, function in (('pcm-meter', 'snd_usb_octa_capture_add_pcm_controls'),
+                                 ('audio-stream', 'snd_usb_add_audio_stream')):
+            marker = f'OCTA_VM_PROBE_ALLOCATION_PASS {target}'
+            cycles = cycles and lines.count(marker) == 1 and allocation_evidence(text, function, marker)
     return not result and lines.count(MARKER) == 1 and cycles and not REPORT.search(text)
 
 
@@ -229,6 +239,7 @@ def main():
             print('PASS 20 valid status reads after the error/disconnect scenarios and a fresh module/device lifecycle.')
             print('PASS playback/capture PCM setup errors, repeated HW_FREE/reconfiguration and status recovery after four modeled alternate stalls.')
             print('PASS one cache/task-filtered status allocation failure with ENOMEM, untouched caller bytes and same-handle recovery; kernel stack confirms octa_status_get.')
+            print('PASS PCM-meter/audio-stream probe allocation failures with ENOMEM, no registered card and rebind/status recovery; kernel stacks confirm both target allocations.')
 
 
 if __name__ == '__main__':
