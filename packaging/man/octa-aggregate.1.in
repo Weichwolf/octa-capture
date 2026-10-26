@@ -6,6 +6,7 @@ octa\-aggregate \- prepare an experimental base/EXP ALSA configuration
 .nf
 \fBocta-aggregate \-\-base\fR ID \fB\-\-expansion\fR ID [\fB\-\-write-config\fR FILE]
                [\fB\-\-bin-dir\fR DIR] [\fB\-\-help\fR]
+               [\fB\-\-rate\fR HZ \fB\-\-experimental\fR]
 .fi
 .SH DESCRIPTION
 Inspect one base device (0582:0120) and one EXP device (0582:0121) by discovered identity,
@@ -21,12 +22,41 @@ Existing files and symlinks are refused. The PCM name is octa_expand:
 24 capture channels, 20 playback channels, base channels first, EXP poll master,
 S24_3LE with no resampling. Set ALSA_CONFIG_PATH to this file when opening the PCM.
 .PP
-This command does not change hardware rate, pause an audio server, install a desktop
-profile or modify ~/.asoundrc automatically. Other clients must release both devices.
-Regenerate after clock changes, unplug or card renumbering.
-Coupled rate changes and physical pair synchronization, streaming and recovery remain unverified/incomplete.
+Without \fB\-\-rate\fR, inspection/configuration does not change the hardware rate,
+desktop profiles or ~/.asoundrc. Other clients must release both devices before
+using the aggregate PCM. Regenerate after clock changes, unplug or card renumbering.
+.SH JOINT RATE CHANGE
+With \fB\-\-rate\fR and explicit \fB\-\-experimental\fR, require an internally
+clocked EXP master and jointly change both units. Select both by distinct serials.
+Native PulseAudio clients on both cards move to temporary endpoints before either
+card is released. Device serials must agree with PulseAudio/udev identities.
+The native octa-pair-clock helper changes only EXP; both clocks and both restored
+stereo profiles are verified before client routes, levels and defaults resume.
+Headless use performs the same native clock operation without creating audio-server endpoints.
+.PP
+This mode installs device-specific stereo profiles and updates their private
+ALSA definitions and ~/.asoundrc under a shared configuration lock. Remap chains,
+their independent gains and playback-monitor recordings are preserved. Remaps
+spanning different stereo pairs must be unloaded or reconfigured; multichannel
+clients and module-owned audio streams must be stopped first. No channel mapping
+is guessed. Direct ALSA clients must
+release their streams themselves. PipeWire coordination is not supported yet.
+.PP
+On failure, restore both saved configurations in reverse order and verify the old
+paired clock before restoring either card's clients. Failed recovery retains
+temporary endpoints; it does not deliberately rescue clients to unrelated outputs.
+SIGINT/SIGTERM request recovery. The helper gets 75 seconds, then SIGTERM and up
+to 45 seconds for recovery before forced termination. Forced termination does
+not prove restoration. A new --write-config file is prepared before audio changes
+and removed on failure if its inode still belongs to this command; existing files
+are never overwritten. Successful commands emit the final plan.
+.PP
+Joint changes have fixed process/filesystem/audio-graph tests, but real two-unit
+PulseAudio operation, physical synchronization, streaming and recovery remain
+unverified. The GUI still controls units individually and does not invoke this mode.
 
 .SH EXIT STATUS
-Zero indicates success; nonzero indicates a usage, device or operation error.
+Zero indicates success, 130 an interrupted transaction, and other nonzero values
+a usage, device or operation error.
 .SH SEE ALSO
-octa-capture(1), octa-status(1), octa-preset(1)
+octa-capture(1), octa-pair-clock(1), octa-status(1)

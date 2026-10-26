@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import sys
 
@@ -20,6 +21,7 @@ class Clock:
     rate: int
     external: bool
     active: bool
+    setting: int = 0
 
 
 @dataclass(frozen=True)
@@ -66,10 +68,10 @@ def read_clock(binary, device):
             status.get('clock_source') != source or type(status.get('clock_active')) is not bool or \
             status['clock_active'] != active:
         raise ValueError('Inconsistent device clock response.')
-    return Clock(rate, source == 'external', active)
+    return Clock(rate, source == 'external', active, packet[6])
 
 
-def inspect(binary, base_id, expansion_id):
+def inspect(binary, base_id, expansion_id, *, require_master=False):
     base, expansion = selected(discover(), base_id, expansion_id)
     before = tuple(read_clock(binary, device) for device in (base, expansion))
     after = tuple(read_clock(binary, device) for device in (base, expansion))
@@ -80,6 +82,8 @@ def inspect(binary, base_id, expansion_id):
         raise ValueError('Both devices must already use the same 44.1, 48 or 96 kHz rate.')
     if not first.external or not first.active or (second.external and not second.active):
         raise ValueError('Connect EXP COAXIAL OUT to base COAXIAL IN and check DIGITAL AUTO/clock status.')
+    if require_master and (second.external or second.setting != 0):
+        raise ValueError('Paired rate changes require EXP to be the internal clock master.')
     # Status display activation does not establish sample-clock/phase alignment.
     return Plan(base, expansion, first.rate)
 
@@ -131,6 +135,31 @@ def write_new(path, data):
         raise
 
 
+def change_and_configure(binary, base_id, expansion_id, rate, path):
+    from .pulse_pair import change_rate
+    initial = inspect(binary, base_id, expansion_id, require_master=True)
+    created = None
+    if path is not None:
+        write_new(path, configuration(initial.base, initial.expansion, rate))
+        created = path.stat()
+    try:
+        return change_rate(binary, base_id, expansion_id, rate,
+                           expected_devices=(initial.base, initial.expansion))
+    except BaseException:
+        if created is not None:
+            try:
+                current = path.lstat()
+                if (current.st_dev, current.st_ino) == (created.st_dev, created.st_ino):
+                    path.unlink()
+            except FileNotFoundError:
+                pass
+        raise
+
+
+def _interrupt(_number, _frame):
+    raise KeyboardInterrupt
+
+
 def main(default_bin_dir=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base', required=True, help='discovered base device identity, e.g. serial:...')
@@ -138,16 +167,30 @@ def main(default_bin_dir=None):
     parser.add_argument('--bin-dir', type=Path,
                         default=default_bin_dir or Path(__file__).resolve().parent.parent / 'build/release')
     parser.add_argument('--write-config', type=Path, help='new private ALSA config file; no automatic desktop installation')
+    parser.add_argument('--rate', type=int, choices=RATES, help='jointly change both units and coordinate native PulseAudio')
+    parser.add_argument('--experimental', action='store_true', help='enable the experimental joint rate transaction')
     args = parser.parse_args()
     try:
         if os.geteuid() == 0:
             raise ValueError('Run aggregate preparation as the regular desktop user.')
-        plan = inspect(args.bin_dir, args.base, args.expansion)
-        if args.write_config:
+        if args.rate is not None:
+            if not args.experimental:
+                raise ValueError('Use --experimental explicitly with --rate for the unverified physical pair path.')
+            previous = signal.signal(signal.SIGTERM, _interrupt)
+            try:
+                plan = change_and_configure(args.bin_dir, args.base, args.expansion, args.rate, args.write_config)
+            finally:
+                signal.signal(signal.SIGTERM, previous)
+        else:
+            plan = inspect(args.bin_dir, args.base, args.expansion)
+        if args.write_config and args.rate is None:
             write_new(args.write_config, configuration(plan.base, plan.expansion, plan.rate))
         print(json.dumps(plan.document()))
         return 0
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
+    except KeyboardInterrupt:
+        print('Paired rate change interrupted.', file=sys.stderr)
+        return 130
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(f'Aggregate preparation failed: {error}', file=sys.stderr)
         return 1
 

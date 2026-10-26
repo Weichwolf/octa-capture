@@ -6,6 +6,7 @@ import io
 import json
 from pathlib import Path
 import stat
+import signal
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gui.aggregate import Clock, configuration, inspect, main, Plan, read_clock, write_new
 from gui.devices import Device
+from gui import pulse_pair
 
 BASE = Device('serial:BASE', 'OCTACAPTURE', 0, 'BASE')
 EXP = Device('serial:EXP', 'OCTACAPTUREEXP', 1, 'EXP', '0121')
@@ -44,6 +46,14 @@ class Preparation(unittest.TestCase):
     def test_exp_may_itself_follow_an_active_external_clock(self):
         with patch('gui.aggregate.read_clock', return_value=Clock(48000, True, True)):
             self.assertEqual(inspect('/missing', BASE.identity, EXP.identity).rate, 48000)
+
+    def test_rate_changes_require_the_entire_exp_master_setting_to_be_zero(self):
+        for clock in (Clock(48000, True, True, 1), Clock(48000, False, True, 2)):
+            with patch('gui.aggregate.read_clock', side_effect=[Clock(48000, True, True, 1), clock] * 2):
+                with self.assertRaisesRegex(ValueError, 'internal clock master'):
+                    inspect('/missing', BASE.identity, EXP.identity, require_master=True)
+        with patch('gui.aggregate.read_clock', side_effect=[Clock(48000, True, True, 1), Clock(48000, False, False)] * 2):
+            self.assertEqual(inspect('/missing', BASE.identity, EXP.identity, require_master=True).rate, 48000)
 
     def test_missing_ambiguous_or_wrong_personality_is_rejected_before_io(self):
         for devices in ((), (BASE,), (EXP,), (BASE, BASE, EXP), (BASE, replace(EXP, product_id='0120')),
@@ -95,7 +105,7 @@ class ClockResponse(unittest.TestCase):
             return clock
 
     def test_raw_packet_and_decoded_fields_must_agree(self):
-        self.assertEqual(self.read(status()), Clock(48000, True, True))
+        self.assertEqual(self.read(status()), Clock(48000, True, True, 1))
         for changes in ({'sample_rate_hz': True}, {'sample_rate_hz': 96000}, {'clock_source': 'internal'},
                         {'clock_active': 1}, {'clock_active': False}, {'raw_status_hex': '00' * 8},
                         {'raw_status_hex': 'xx' * 8}, {'raw_status_hex': '01'}):
@@ -130,6 +140,64 @@ class Command(unittest.TestCase):
                 patch('gui.aggregate.write_new') as write, patch('sys.stderr', new_callable=io.StringIO):
             self.assertEqual(main(), 1)
             write.assert_not_called()
+
+    def test_rate_change_requires_explicit_experimental_opt_in(self):
+        arguments = ['aggregate', '--base', BASE.identity, '--expansion', EXP.identity, '--rate', '96000']
+        with patch('sys.argv', arguments), patch('gui.aggregate.os.geteuid', return_value=1000), \
+                patch('gui.aggregate.inspect') as inspect_pair, patch.object(pulse_pair, 'change_rate') as change, \
+                patch('sys.stderr', new_callable=io.StringIO):
+            self.assertEqual(main(), 1)
+            inspect_pair.assert_not_called()
+            change.assert_not_called()
+
+    def rate_command(self, path, change):
+        arguments = ['aggregate', '--base', BASE.identity, '--expansion', EXP.identity, '--rate', '96000',
+                     '--experimental', '--write-config', str(path)]
+        with patch('sys.argv', arguments), patch('gui.aggregate.os.geteuid', return_value=1000), \
+                patch('gui.aggregate.inspect', return_value=Plan(BASE, EXP, 48000)), \
+                patch.object(pulse_pair, 'change_rate', side_effect=change) as called, \
+                patch('sys.stdout', new_callable=io.StringIO) as output, \
+                patch('sys.stderr', new_callable=io.StringIO):
+            previous = signal.getsignal(signal.SIGTERM)
+            code = main()
+            self.assertIs(signal.getsignal(signal.SIGTERM), previous)
+            return code, output.getvalue(), called
+
+    def test_configuration_is_written_before_audio_changes_and_uses_the_same_selected_pair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'alsa.conf'
+            def change(*arguments, **keywords):
+                self.assertIn(b'rate 96000', path.read_bytes())
+                self.assertEqual(keywords, {'expected_devices': (BASE, EXP)})
+                return Plan(BASE, EXP, 96000)
+            code, output, called = self.rate_command(path, change)
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(output)['sample_rate_hz'], 96000)
+            called.assert_called_once()
+
+    def test_existing_configuration_fails_before_clock_or_server_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'alsa.conf'
+            path.write_bytes(b'original')
+            code, _output, change = self.rate_command(path, lambda *_args, **_keywords: self.fail('Audio changed'))
+            self.assertEqual(code, 1)
+            change.assert_not_called()
+            self.assertEqual(path.read_bytes(), b'original')
+
+    def test_failed_or_interrupted_change_removes_only_its_new_config_and_restores_signal_handler(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'alsa.conf'
+            for error, expected in ((RuntimeError('Injected clock failure'), 1), (KeyboardInterrupt(), 130)):
+                code, _output, _called = self.rate_command(path, error)
+                self.assertEqual(code, expected)
+                self.assertFalse(path.exists())
+            def replacement(*_arguments, **_keywords):
+                other = path.with_suffix('.other')
+                other.write_bytes(b'concurrent replacement')
+                other.replace(path)
+                raise RuntimeError('Injected failure')
+            self.assertEqual(self.rate_command(path, replacement)[0], 1)
+            self.assertEqual(path.read_bytes(), b'concurrent replacement')
 
 
 class PrivateFile(unittest.TestCase):

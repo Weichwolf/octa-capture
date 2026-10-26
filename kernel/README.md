@@ -193,7 +193,7 @@ Host fuzzing does not replace kernel sanitizer/URB fault testing.
 
 `tools/aggregate-audio.py` prepares a private, opt-in 24-in/20-out ALSA
 configuration for one base unit and one EXP unit at 44.1/48/96 kHz. Its installed
-entry point is `octa-aggregate`. It changes no hardware setting or desktop
+entry point is `octa-aggregate`. Without `--rate`, it changes no hardware setting or desktop
 profile and does not automatically modify `~/.asoundrc`. Both identities and two
 fresh clock snapshots must agree before it creates a new mode-0600 file;
 existing files and symlinks are refused. Run as the regular desktop user:
@@ -215,9 +215,32 @@ Other applications/audio servers must release both PCM devices first.
 The configuration uses ALSA's standard [multi and route plugins](https://www.alsa-project.org/alsa-doc/alsa-lib/pcm_plugins.html),
 with base channels first and EXP as the polling master. Each raw hardware leaf
 restricts the exact rate, S24_3LE format and channel count; no resampler is added.
-The GUI continues to control individual units. Coupled rate/server coordination
-and physical EXP/aggregate timing, routing, streaming and recovery are unfinished
-or unverified; this is an experimental developer path.
+The GUI continues to control individual units. Physical EXP/aggregate timing,
+routing, streaming and recovery remain unverified; this is an experimental
+developer path.
+
+An explicit joint rate change coordinates both native PulseAudio cards:
+
+```bash
+octa-aggregate --base serial:BASE_SERIAL --expansion serial:EXP_SERIAL \
+  --rate 96000 --experimental --write-config /tmp/octa-pair-96k.conf
+```
+
+EXP must be the internal master. Both cards' clients move to temporary endpoints
+before either card unloads. After native clock preparation, both stereo profiles,
+serial identities and coherent clocks are checked before restoring any clients.
+Routes, volumes/mutes, defaults, remap chains and monitor recordings are preserved;
+remaps across stereo pairs, multichannel clients and module-owned audio are rejected before
+mutation. Shared ALSA configuration writes are serialized across cards. On
+failure, files unwind in reverse order; the old clock and both cards must recover
+before clients resume. Incomplete recovery retains temporary endpoints. SIGINT/
+SIGTERM request recovery; forced termination cannot guarantee it. A new aggregate
+file is written before audio changes and removed on failure if still owned.
+Direct ALSA clients must release both devices. PipeWire coordination and GUI
+integration remain unfinished. Headless use adds no audio-server graph.
+Fixed graph/process/filesystem tests and an actual Python/native-helper rejection
+in an empty device namespace pass; real joint PulseAudio/hardware operation
+remains unverified. See `octa-aggregate(1)` for limits.
 
 The C++ `PairPcmReservation` component provides nonblocking ownership of both
 native capture/playback PCMs before a paired clock transaction. It checks
@@ -251,9 +274,9 @@ whether a failed change recovered; SIGINT/SIGTERM request recovery after a
 change attempt. Forced process termination cannot guarantee restoration.
 Filesystem/fake-ALSA tests verify identity changes, fixed settings, error cleanup
 and held-handle disconnect guards. Real paired transitions, physical timing and
-streaming remain unverified. GUI/audio-server coordination remains unfinished;
-`octa-aggregate` still only prepares a configuration and does not invoke this
-transaction. See `octa-pair-clock(1)` for its limits.
+streaming remain unverified. `octa-aggregate --rate HZ --experimental` invokes this
+transaction with joint native PulseAudio coordination; the GUI does not yet use
+it. See `octa-pair-clock(1)` for direct-use limits.
 
 Reproduce the isolated sample-layout check with the real ALSA plugins:
 

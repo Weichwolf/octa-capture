@@ -26,6 +26,10 @@ class Installation(unittest.TestCase):
             subprocess.run([cmake, '--install', build, '--prefix', str(prefix)], check=True,
                            capture_output=True, timeout=10)
             binary = prefix / 'bin'
+            subprocess.run([sys.executable, '-c',
+                            'import sys; sys.path.insert(0, sys.argv[1]); import gui.pulse_pair',
+                            str(prefix / 'libexec/octa-capture')], cwd=foreign, check=True,
+                           capture_output=True, timeout=5)
             for executable in binary.iterdir():
                 manual = prefix / 'share/man/man1' / f'{executable.name}.1.gz'
                 self.assertTrue(manual.is_file(), executable.name)
