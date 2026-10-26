@@ -220,7 +220,7 @@ and physical EXP/aggregate timing, routing, streaming and recovery are unfinishe
 or unverified; this is an experimental developer path.
 
 The C++ `PairPcmReservation` component provides nonblocking ownership of both
-native capture/playback PCMs before a future paired clock transaction. It checks
+native capture/playback PCMs before a paired clock transaction. It checks
 the opened handles' card/device/subdevice metadata, rejects card aliases and
 releases partial acquisitions on failure. Fake-ALSA tests cover ownership moves,
 busy/disconnect/allocation errors and inconsistent metadata under ASan/UBSan.
@@ -231,9 +231,29 @@ by forty polls and an eight-second deadline; interruption or uncertain prepare
 failure triggers restoration of the previous rate. A failed restoration remains
 distinct from the original failure. Scripted transport tests cover all supported
 rate pairs, read/prepare failures, changing roles, deadlines and cancellation;
-these are not physical clock tests. Native transport and CLI/GUI/server
-coordination remain unfinished; the aggregate command above still only prepares
-a configuration.
+these are not physical clock tests.
+
+An experimental native transaction is available separately after releasing both
+units from all audio clients/servers:
+
+```bash
+octa-pair-clock --experimental 48000 BASE_CARD BASE_SERIAL EXP_CARD EXP_SERIAL
+```
+
+Replace the card IDs and serials with the selected physical pair. This path
+requires an internally clocked EXP and prepares its capture PCM with exact
+S24_3LE/12-channel/1024-period/8192-buffer settings, without starting or
+transferring samples. It retains read-only status handles and checks both held
+PCM directions around reads; an open PCM alone does not prevent ALSA from
+reusing a disconnected card number. USB vendor/product/serial and the EXP master
+setting are checked again before preparation, including recovery. JSON reports
+whether a failed change recovered; SIGINT/SIGTERM request recovery after a
+change attempt. Forced process termination cannot guarantee restoration.
+Filesystem/fake-ALSA tests verify identity changes, fixed settings, error cleanup
+and held-handle disconnect guards. Real paired transitions, physical timing and
+streaming remain unverified. GUI/audio-server coordination remains unfinished;
+`octa-aggregate` still only prepares a configuration and does not invoke this
+transaction. See `octa-pair-clock(1)` for its limits.
 
 Reproduce the isolated sample-layout check with the real ALSA plugins:
 

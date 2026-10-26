@@ -44,7 +44,7 @@ class Installation(unittest.TestCase):
             result = subprocess.run([*arguments, '--help'], cwd=foreign, env={**os.environ, 'PATH': os.defpath},
                                     check=True, capture_output=True, text=True, timeout=5)
             self.assertIn('--bin-dir', result.stdout)
-            for name in ('octa-bridge', 'octa-preset', 'octa-status', 'octa-audio-check',
+            for name in ('octa-bridge', 'octa-preset', 'octa-status', 'octa-pair-clock', 'octa-audio-check',
                          'octa-auto-sense', 'octa-panel', 'octa-state', 'octa-dsp', 'octa-control'):
                 self.assertTrue((binary / name).is_file(), name)
             data = root / 'private state'

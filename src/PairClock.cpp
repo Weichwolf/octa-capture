@@ -79,7 +79,8 @@ std::expected<void, StatusReadError> wait_for(PairClockIo &io, std::uint32_t rat
           StatusReadError{.code = -EINTR, .operation = "cancel paired clock change"});
     }
     if (io.now() >= deadline) { break; }
-    if (!clocks && (clocks.error().code == -ENODEV || clocks.error().code == -EACCES)) {
+    if (!clocks && (clocks.error().code == -ENODEV || clocks.error().code == -EACCES ||
+                    clocks.error().code == -EXDEV)) {
       return std::unexpected(clocks.error());
     }
     if (clocks && ready(*clocks, rate)) {

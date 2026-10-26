@@ -66,6 +66,20 @@ bool invalid_ports() {
                  "oversized and NUL-containing control names rejected");
 }
 
+bool retained_handle() {
+  io = {};
+  auto *const control = reinterpret_cast<snd_ctl_t *>(&token);
+  const auto first = octa::read_device_status_handle(control);
+  const auto second = octa::read_device_status_handle(control);
+  io.read_error = -ENODEV;
+  const auto removed = octa::read_device_status_handle(control);
+  const auto null = octa::read_device_status_handle(nullptr);
+  return require(
+      first && second && !removed && removed.error().code == -ENODEV && !null &&
+          null.error().code == -EINVAL && io.opens == 0 && io.closes == 0 && io.reads == 3,
+      "retained hardware handle reads preserve ownership and cannot reopen a reused card number");
+}
+
 bool invalid_metadata() {
   constexpr unsigned int cases = 6;
   for (unsigned int index = 0; index < cases; ++index) {
@@ -171,5 +185,8 @@ extern "C" int snd_ctl_elem_read(snd_ctl_t * /*control*/, snd_ctl_elem_value_t *
 }
 
 int main() {
-  return successful_read() && invalid_ports() && invalid_metadata() && transport_failures() ? 0 : 1;
+  return successful_read() && invalid_ports() && invalid_metadata() && transport_failures() &&
+                 retained_handle()
+             ? 0
+             : 1;
 }

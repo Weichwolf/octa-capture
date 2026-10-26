@@ -2,7 +2,7 @@
 include(GNUInstallDirs)
 
 install(TARGETS octa-auto-sense octa-preset octa-probe octa-pcm-meters
-  octa-pcm-peak-check octa-status octa-audio-check octa-session-check
+  octa-pcm-peak-check octa-status octa-pair-clock octa-audio-check octa-session-check
   octa-meters octa-panel octa-state octa-bridge octa-dsp octa-control
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
@@ -42,7 +42,7 @@ install(FILES "${CMAKE_SOURCE_DIR}/README.md"
   DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/octa-capture" COMPONENT Runtime)
 
 set(OCTA_MAN_PROGRAMS octa-capture octa-capture-http octa-aggregate octa-pulse-pairs
-  octa-control octa-dsp octa-state octa-status octa-probe octa-panel octa-meters
+  octa-control octa-dsp octa-state octa-status octa-pair-clock octa-probe octa-panel octa-meters
   octa-pcm-meters octa-pcm-peak-check octa-audio-check octa-session-check
   octa-auto-sense octa-preset octa-bridge)
 find_program(OCTA_GZIP NAMES gzip REQUIRED)

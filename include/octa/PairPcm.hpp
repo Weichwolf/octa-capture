@@ -40,6 +40,9 @@ public:
   [[nodiscard]] static std::expected<PairPcmReservation, PairPcmError>
   open(const std::array<std::string_view, 2> &card_ids);
   [[nodiscard]] snd_pcm_t *capture(PairUnit unit) const noexcept;
+  // ALSA can reuse a card number after disconnect while old handles remain
+  // open. Check both held directions instead of assuming a number stays pinned.
+  [[nodiscard]] std::expected<void, PairPcmError> check(PairUnit unit) const;
   [[nodiscard]] const std::array<int, 2> &card_indices() const noexcept;
 };
 

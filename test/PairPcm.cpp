@@ -24,6 +24,7 @@ struct Peer {
   std::array<Metadata, 4> metadata = {
       Metadata{.card = 0}, Metadata{.card = 0}, Metadata{.card = 1}, Metadata{.card = 1}};
   std::array<bool, 4> active{};
+  std::array<snd_pcm_state_t, 4> states{};
   unsigned int opens = 0;
   unsigned int metadata_allocations = 0;
   unsigned int metadata_frees = 0;
@@ -108,6 +109,28 @@ bool invalid_names() {
                  "duplicate selectors fail before ALSA");
 }
 
+bool disconnected_directions() {
+  for (std::size_t index = 0; index < 4; ++index) {
+    io = {};
+    {
+      auto pair = octa::PairPcmReservation::open(names);
+      if (!pair || !pair->check(octa::PairUnit::base) || !pair->check(octa::PairUnit::expansion)) {
+        return false;
+      }
+      io.states[index] = SND_PCM_STATE_DISCONNECTED;
+      const auto failed = pair->check(index < 2 ? octa::PairUnit::base : octa::PairUnit::expansion);
+      const auto other = pair->check(index < 2 ? octa::PairUnit::expansion : octa::PairUnit::base);
+      if (!require(
+              !failed && failed.error().code == -ENODEV && other.has_value(),
+              "disconnect of either direction invalidates that unit while preserving the other")) {
+        return false;
+      }
+    }
+    if (!clean(4)) { return false; }
+  }
+  return true;
+}
+
 bool open_failures() {
   for (unsigned int failed = 1; failed <= 4; ++failed) {
     for (const auto error : {-EBUSY, -ENODEV, -EACCES, -ENOMEM}) {
@@ -123,6 +146,27 @@ bool open_failures() {
     }
   }
   return true;
+}
+
+bool retained_metadata() {
+  io = {};
+  {
+    auto pair = octa::PairPcmReservation::open(names);
+    if (!pair) { return false; }
+    io.fail_info = io.opens;
+    const auto removed = pair->check(octa::PairUnit::base);
+    io.fail_info = 0;
+    io.metadata[1].card = 2;
+    const auto replaced = pair->check(octa::PairUnit::base);
+    io.metadata[1].card = 0;
+    const auto recovered = pair->check(octa::PairUnit::base);
+    if (!require(!removed && removed.error().code == -ENODEV && !replaced &&
+                     replaced.error().code == -EXDEV && recovered.has_value(),
+                 "retained descriptors must still answer metadata queries for the original card")) {
+      return false;
+    }
+  }
+  return clean(4);
 }
 
 bool metadata_failures() {
@@ -214,6 +258,14 @@ extern "C" int snd_pcm_close(snd_pcm_t *pcm) {
   return -EINVAL;
 }
 
+extern "C" snd_pcm_state_t snd_pcm_state(snd_pcm_t *pcm) {
+  for (std::size_t index = 0; index < 4; ++index) {
+    if (pcm == handle(index) && io.active[index]) { return io.states[index]; }
+  }
+  io.invalid = true;
+  return SND_PCM_STATE_DISCONNECTED;
+}
+
 extern "C" int snd_pcm_info_malloc(snd_pcm_info_t **ptr) {
   ++io.metadata_allocations;
   if (io.metadata_allocations == io.fail_allocate) { return -ENOMEM; }
@@ -257,7 +309,7 @@ extern "C" unsigned int snd_pcm_info_get_subdevice(const snd_pcm_info_t * /*info
 
 int main() {
   if (!successful_move() || !invalid_names() || !open_failures() || !metadata_failures() ||
-      !metadata_guards()) {
+      !metadata_guards() || !disconnected_directions() || !retained_metadata()) {
     return 1;
   }
   std::cout << "PASS paired native PCM ownership, metadata, move and partial-failure cleanup; no "

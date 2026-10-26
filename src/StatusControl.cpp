@@ -25,8 +25,9 @@ std::expected<Info, StatusReadError> status_info(snd_ctl_t *control) {
   snd_ctl_elem_info_t *raw = nullptr;
   const int allocated = snd_ctl_elem_info_malloc(&raw);
   Info info(raw, &snd_ctl_elem_info_free);
-  if (allocated < 0) {
-    return std::unexpected(StatusReadError{.code = allocated, .operation = "allocate status info"});
+  if (allocated < 0 || !info) {
+    return std::unexpected(StatusReadError{.code = allocated < 0 ? allocated : -EIO,
+                                           .operation = "allocate status info"});
   }
   snd_ctl_elem_info_set_interface(info.get(), SND_CTL_ELEM_IFACE_CARD);
   snd_ctl_elem_info_set_name(info.get(), control_name);
@@ -58,21 +59,29 @@ std::expected<DeviceStatus, StatusReadError> read_device_status(std::string_view
   snd_ctl_t *raw_control = nullptr;
   const int opened = snd_ctl_open(&raw_control, name.c_str(), SND_CTL_READONLY);
   const Control control(raw_control, &snd_ctl_close);
-  if (opened < 0) {
-    return std::unexpected(StatusReadError{.code = opened, .operation = "open status control"});
+  if (opened < 0 || !control) {
+    return std::unexpected(
+        StatusReadError{.code = opened < 0 ? opened : -EIO, .operation = "open status control"});
   }
-  const auto info = status_info(control.get());
+  return read_device_status_handle(control.get());
+}
+
+std::expected<DeviceStatus, StatusReadError> read_device_status_handle(snd_ctl_t *control) {
+  if (control == nullptr) {
+    return std::unexpected(StatusReadError{.code = -EINVAL, .operation = "status control handle"});
+  }
+  const auto info = status_info(control);
   if (!info) { return std::unexpected(info.error()); }
   snd_ctl_elem_value_t *raw_value = nullptr;
   const int allocated = snd_ctl_elem_value_malloc(&raw_value);
   const Value value(raw_value, &snd_ctl_elem_value_free);
-  if (allocated < 0) {
-    return std::unexpected(
-        StatusReadError{.code = allocated, .operation = "allocate status value"});
+  if (allocated < 0 || !value) {
+    return std::unexpected(StatusReadError{.code = allocated < 0 ? allocated : -EIO,
+                                           .operation = "allocate status value"});
   }
   snd_ctl_elem_value_set_interface(value.get(), SND_CTL_ELEM_IFACE_CARD);
   snd_ctl_elem_value_set_name(value.get(), control_name);
-  const int received = snd_ctl_elem_read(control.get(), value.get());
+  const int received = snd_ctl_elem_read(control, value.get());
   if (received < 0) {
     return std::unexpected(StatusReadError{.code = received, .operation = "read status control"});
   }

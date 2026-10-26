@@ -88,6 +88,33 @@ snd_pcm_t *PairPcmReservation::capture(PairUnit unit) const noexcept {
   }
 }
 
+std::expected<void, PairPcmError> PairPcmReservation::check(PairUnit unit) const {
+  std::size_t start = 0;
+  switch (unit) {
+    case PairUnit::base: break;
+    case PairUnit::expansion: start = 2; break;
+    default: return std::unexpected(PairPcmError{.code = -EINVAL, .operation = "paired PCM unit"});
+  }
+  for (std::size_t direction = 0; direction < 2; ++direction) {
+    const auto &pcm = handles_[start + direction];
+    if (!pcm) {
+      return std::unexpected(PairPcmError{.code = -EINVAL, .operation = "paired PCM ownership"});
+    }
+    // Query the retained descriptor as well as the mapped state. A shutdown
+    // descriptor must not be mistaken for a newly registered card at its index.
+    const auto card = card_index(pcm.get());
+    if (!card) { return std::unexpected(card.error()); }
+    if (*card != cards_[start / 2]) {
+      return std::unexpected(
+          PairPcmError{.code = -EXDEV, .operation = "paired PCM identity changed"});
+    }
+    if (snd_pcm_state(pcm.get()) == SND_PCM_STATE_DISCONNECTED) {
+      return std::unexpected(PairPcmError{.code = -ENODEV, .operation = "paired PCM disconnected"});
+    }
+  }
+  return {};
+}
+
 const std::array<int, 2> &PairPcmReservation::card_indices() const noexcept {
   return cards_;
 }

@@ -338,7 +338,7 @@ bool transient_reads() {
 }
 
 bool fatal_reads() {
-  for (const auto error : {-ENODEV, -EACCES}) {
+  for (const auto error : {-ENODEV, -EACCES, -EXDEV}) {
     for (const auto unit : {octa::PairUnit::base, octa::PairUnit::expansion}) {
       Peer peer;
       peer.on_read = [error, unit](Peer &io, octa::PairUnit current) {

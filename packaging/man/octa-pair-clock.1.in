@@ -1,0 +1,41 @@
+.\" SPDX-License-Identifier: GPL-2.0-only
+.TH OCTA-PAIR-CLOCK 1 "" "OCTA-CAPTURE @PROJECT_VERSION@" "OCTA-CAPTURE Manual"
+.SH NAME
+octa\-pair\-clock \- experimentally change a base/EXP pair's hardware rate
+.SH SYNOPSIS
+.B octa-pair-clock --experimental
+.I RATE BASE_CARD BASE_SERIAL EXP_CARD EXP_SERIAL
+.SH DESCRIPTION
+Run as the regular device user after all audio servers and applications have
+released both units. Cards are native ALSA identifiers, not PCM plugin names.
+The base must be USB 0582:0120, the expansion 0582:0121, and both selected serials
+must match the opened card slots. Empty or duplicate serials are rejected.
+.PP
+Connect EXP coaxial output to base coaxial input and select DIGITAL AUTO on the
+base. The base must report an active external clock and EXP must be internally
+clocked. Both must initially report the same supported rate.
+.PP
+Supported rates are 44100, 48000 and 96000 Hz. This command reserves capture and
+playback on both cards, prepares only EXP capture at the exact requested rate,
+and requires two coherent status snapshots from both units. It does not start
+or transfer PCM samples. The original module's hardware rate handshake is used;
+no guessed clock-source command is sent.
+.PP
+After an uncertain change, failure or SIGINT/SIGTERM requests restoration of the
+previous rate while retaining all reservations. Recovery checks the selected
+EXP identity and master role again, and verifies both units. Forced termination
+cannot guarantee recovery. Settling and recovery are each limited to forty polls
+and an eight-second deadline; an individual ALSA operation can add its own wait.
+.PP
+JSON output distinguishes a successful change, failure before mutation, verified
+recovery and failed recovery. A recovered failure still returns an error.
+.SH LIMITATIONS
+Experimental developer interface. Real two-unit clock transitions and streaming
+remain unverified. This command does not pause or restore an audio server, update
+aggregate configuration, or establish measured phase/clock quality. The GUI and
+octa-aggregate do not yet invoke it. Release both units explicitly before use.
+.SH EXIT STATUS
+0 on verified success, 1 on failure, 2 on invalid command syntax or root use.
+.SH SEE ALSO
+.BR octa-aggregate (1),
+.BR octa-status (1)
