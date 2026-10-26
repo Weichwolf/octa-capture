@@ -1,0 +1,19 @@
+SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] Parse sparse lock annotations in private VM kernel-doc
+
+The runtime PM callback keeps its dev parameter and both sparse lock
+annotations. Strip those annotations only while parsing documentation,
+so kernel-doc does not mistake them for part of the last C parameter.
+Compiler inputs and diagnostics remain unchanged.
+
+--- a/scripts/kernel-doc
++++ b/scripts/kernel-doc
+@@ -1747,6 +1747,8 @@
+     $prototype =~ s/DECL_BUCKET_PARAMS\s*\(\s*(\S+)\s*,\s*(\S+)\s*\)/$1, $2/;
+     my $define = $prototype =~ s/^#\s*define\s+//; #ak added
+     $prototype =~ s/__attribute_const__ +//;
++    # Sparse lock annotations are not C function parameters.
++    $prototype =~ s/\b__(?:acquires|releases)\s*\([^()]*\)\s*//g;
+     $prototype =~ s/__attribute__\s*\(\(
+             (?:
+                  [\w\s]++          # attribute name

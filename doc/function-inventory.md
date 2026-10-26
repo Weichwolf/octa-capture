@@ -299,6 +299,12 @@ and full state/clock/policy recovery. Its fixed root-helper lease only changes
 the target device's power policy, is bounded to 120 seconds and restores on
 client loss. Offline policy tests are not hardware evidence; native runtime
 suspend/resume remains unverified. See the kernel README for the helper setup.
+The separate sanitizer VM PM profile confirms an idle-autosuspend limitation:
+the modeled base device remains active, interface 2 retains a PM usage count of
+one and no driver PM callbacks execute. The imported legacy MIDI code takes a
+lifetime `usb_autopm_get_interface_no_resume()` reference during creation.
+The traced `--runtime-pm` VM check rejects this result; base/EXP suspend/status
+wake cycles have not passed. MIDI power accounting and physical PM remain open.
 
 Native small-buffer streaming is not established as stable under CPU load.
 The aperiodic digital test passes all ten sources at 44.1 kHz with verified

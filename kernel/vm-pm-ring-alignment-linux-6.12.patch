@@ -1,0 +1,21 @@
+SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] Align private VM tracing records for instrumented C accesses
+
+Use the ring buffer's existing eight-byte record layout when alignment
+instrumentation is enabled. Four-byte x86 records otherwise expose
+misaligned ftrace_entry members to the C compiler even though x86 hardware
+accepts those instructions. Both record readers and writers already support
+the eight-byte layout; no instrumentation is disabled.
+
+--- a/kernel/trace/ring_buffer.c
++++ b/kernel/trace/ring_buffer.c
+@@ -161,7 +161,8 @@
+ #define RB_MAX_SMALL_DATA	(RB_ALIGNMENT * RINGBUF_TYPE_DATA_TYPE_LEN_MAX)
+ #define RB_EVNT_MIN_SIZE	8U	/* two 32bit words */
+ 
+-#ifndef CONFIG_HAVE_64BIT_ALIGNED_ACCESS
++#if !defined(CONFIG_HAVE_64BIT_ALIGNED_ACCESS) && \
++	!defined(CONFIG_UBSAN_ALIGNMENT)
+ # define RB_FORCE_8BYTE_ALIGNMENT	0
+ # define RB_ARCH_ALIGNMENT		RB_ALIGNMENT
+ #else

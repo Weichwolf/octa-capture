@@ -1,0 +1,32 @@
+SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] Copy the private VM ftrace trampoline pointer without alignment assumptions
+
+The ops address follows generated instructions and a return sequence;
+that byte offset is not necessarily unsigned-long aligned. Preserve the
+same native unsigned-long representation using memcpy, keeping alignment
+instrumentation enabled. This changes only the private VM test kernel.
+
+--- a/arch/x86/kernel/ftrace.c
++++ b/arch/x86/kernel/ftrace.c
+@@ -311,7 +311,8 @@
+ 	unsigned long offset;
+ 	unsigned long npages;
+ 	unsigned long size;
+-	unsigned long *ptr;
++	unsigned long op_value;
++	void *ptr;
+ 	void *trampoline;
+ 	void *ip, *dest;
+ 	/* 48 8b 15 <offset> is movq <offset>(%rip), %rdx */
+@@ -385,8 +386,9 @@
+ 	 * the global function_trace_op variable.
+ 	 */
+ 
+-	ptr = (unsigned long *)(trampoline + size + RET_SIZE);
+-	*ptr = (unsigned long)ops;
++	ptr = trampoline + size + RET_SIZE;
++	op_value = (unsigned long)ops;
++	memcpy(ptr, &op_value, sizeof(op_value));
+ 
+ 	op_offset -= start_offset;
+ 	memcpy(&op_ptr, trampoline + op_offset, OP_REF_SIZE);

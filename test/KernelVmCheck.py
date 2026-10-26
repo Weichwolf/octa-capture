@@ -4,10 +4,13 @@
 from pathlib import Path
 import runpy
 import struct
+import subprocess
+import sys
 import tempfile
 import unittest
 
 CHECK = runpy.run_path(str(Path(__file__).resolve().parent.parent / 'tools/check-kernel-vm.py'))
+SCRIPT = Path(__file__).resolve().parent.parent / 'tools/check-kernel-vm.py'
 
 
 def console(usb=False):
@@ -27,6 +30,89 @@ def console(usb=False):
             lines += ['FAULT_INJECTION: forcing a failure.', f' {function}+0x10/0x20 [snd_octa_capture]',
                       f'OCTA_VM_PROBE_ALLOCATION_PASS {target}']
     return '\n'.join([*lines, CHECK['MARKER']])
+
+
+def pm_console():
+    lines = console().splitlines()[:-1]
+    for mode in ('normal', 'expansion'):
+        lines += [f'OCTA_VM_RUNTIME_PM_FILTER_BEGIN {mode}']
+        lines += [f'{name} [snd_octa_capture]' for name in CHECK['PM_CALLBACKS']]
+        lines += [f'OCTA_VM_RUNTIME_PM_FILTER_END {mode}']
+        for cycle in (1, 2, 3):
+            case = f'{mode} {cycle}'
+            lines += [f'OCTA_VM_RUNTIME_PM_CYCLE_BEGIN {case}', f'OCTA_VM_RUNTIME_PM_SUSPENDED {case}',
+                      'OCTA_VM_STATUS_READ_PASS', f'OCTA_VM_RUNTIME_PM_ACTIVE {case}',
+                      f'OCTA_VM_RUNTIME_PM_TRACE_BEGIN {case}']
+            lines += [f' worker-12 [000] .... 123.456789: {name} <-caller' for name in CHECK['PM_CALLBACKS']]
+            lines += [f'OCTA_VM_RUNTIME_PM_TRACE_END {case}', f'OCTA_VM_RUNTIME_PM_CYCLE {case}']
+        lines += [f'OCTA_VM_RUNTIME_PM_UNIT_PASS {mode}']
+    return '\n'.join([*lines, CHECK['MARKER']])
+
+
+class PowerEvidence(unittest.TestCase):
+    def test_six_ordered_cycles_need_trace_filters_callbacks_and_status_wakeups(self):
+        text = pm_console()
+        self.assertTrue(CHECK['verify_output'](0, text, True, True))
+        self.assertFalse(CHECK['verify_output'](0, text, False, True))
+        self.assertFalse(CHECK['verify_output'](0, console(True), True, True))
+        self.assertFalse(CHECK['verify_output'](1, text, True, True))
+
+    def test_missing_duplicate_or_fragmented_markers_cannot_pass(self):
+        text = pm_console()
+        markers = [line for line in text.splitlines() if line.startswith('OCTA_VM_')]
+        for marker in markers:
+            for changed in (text.replace(marker, '', 1), text + '\n' + marker,
+                            text.replace(marker, marker + 'x', 1)):
+                self.assertFalse(CHECK['verify_output'](0, changed, True, True), marker)
+
+    def test_callbacks_require_timestamped_module_specific_evidence_in_every_cycle(self):
+        text = pm_console()
+        for name in CHECK['PM_CALLBACKS']:
+            frame = f' worker-12 [000] .... 123.456789: {name} <-caller'
+            for changed in (text.replace(frame, '', 1), text.replace(frame, name, 1),
+                            text.replace(f'{name} [snd_octa_capture]', f'{name} [snd_usb_audio]', 1)):
+                self.assertFalse(CHECK['verify_output'](0, changed, True, True), name)
+        self.assertFalse(CHECK['verify_output'](0, text + '\nFAULT_INJECTION: forcing a failure.', True, True))
+        self.assertFalse(CHECK['verify_output'](0, text + '\nOCTA_VM_RUNTIME_PM_SUSPEND_TIMEOUT', True, True))
+
+    def test_read_and_callback_order_are_part_of_the_evidence(self):
+        text = pm_console()
+        shifted = text.replace('OCTA_VM_STATUS_READ_PASS\nOCTA_VM_RUNTIME_PM_ACTIVE normal 1',
+                               'OCTA_VM_RUNTIME_PM_ACTIVE normal 1\nOCTA_VM_STATUS_READ_PASS', 1)
+        self.assertFalse(CHECK['verify_output'](0, shifted, True, True))
+        before = '123.456789: usb_audio_suspend'
+        after = '123.456789: usb_audio_resume'
+        swapped = text.replace(before, '123.456789: temporary', 1).replace(after, before, 1)
+        swapped = swapped.replace('123.456789: temporary', after, 1)
+        self.assertFalse(CHECK['verify_output'](0, swapped, True, True))
+
+
+class PowerGuards(unittest.TestCase):
+    def command(self, directory):
+        return [sys.executable, str(SCRIPT), str(directory), '--qemu', sys.executable,
+                '--busybox', sys.executable, '--runtime-pm']
+
+    def test_runtime_checks_require_the_guest_usb_fixture_before_creating_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = subprocess.run(self.command(root), capture_output=True, text=True, timeout=3)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('--runtime-pm requires --usb-fixture', result.stderr)
+            self.assertEqual(list(root.iterdir()), [])
+
+    def test_minimal_profile_cannot_be_used_as_power_management_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            kernel = root / 'kernel-build'
+            (kernel / 'include/config').mkdir(parents=True)
+            (kernel / 'include/config/kernel.release').write_text('6.12.113-octa-kasan-vm\n')
+            (kernel / '.config').write_text('\n'.join('CONFIG_' + name + '=y'
+                                                      for name in (*CHECK['REQUIRED'], *CHECK['PM_REQUIRED'])))
+            result = subprocess.run([*self.command(root), '--usb-fixture', sys.executable],
+                                    capture_output=True, text=True, timeout=3)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('separate PM build profile', result.stderr)
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ['build.lock', 'kernel-build'])
 
 
 class Evidence(unittest.TestCase):
@@ -79,7 +165,7 @@ class Evidence(unittest.TestCase):
         text = console(True)
         self.assertFalse(CHECK['verify_output'](1, text, True))
         for report in ('BUG:', 'WARNING:', 'KASAN:', 'UBSAN:', 'Oops:',
-                       'Kernel panic', 'general protection fault'):
+                       'Kernel panic', 'general protection fault', 'OCTA_VM_MODULE_LIFECYCLE_FAIL'):
             self.assertFalse(CHECK['verify_output'](0, text + '\n' + report, True), report)
 
 

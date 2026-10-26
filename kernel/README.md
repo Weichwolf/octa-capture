@@ -375,6 +375,38 @@ The kernel image is `build/kernel-vm/kernel-build/arch/x86/boot/bzImage`;
 These are VM-only artifacts. Building them does not establish runtime sanitizer,
 USB fault, suspend/resume or physical device coverage; those checks remain open.
 
+The default minimal VM disables PM. A separate profile enables runtime PM,
+system-suspend support, PM usage diagnostics and module function tracing,
+with its own `-pm-octa-kasan-vm` release and matching module:
+
+```bash
+python3 tools/build-kernel-vm.py build/kernel-vm/source build/kernel-vm-pm \
+  --power-management --jobs 2
+python3 tools/check-kernel-vm.py build/kernel-vm-pm --busybox /bin/busybox \
+  --usb-fixture build/release/kernel_usb_fixture --runtime-pm
+```
+
+The PM checker requires three suspended/status-wake cycles for each modeled
+base/EXP unit, exact status readback, module-specific suspend/resume traces and
+suspended-device teardown.
+Missing, duplicate or reordered evidence fails verification. This tests neither
+physical power management nor running audio/MIDI; system sleep remains separate.
+The current module fails this check: the modeled base device stays active,
+interface 2 retains a PM usage count of one, and no driver PM callbacks run.
+The imported legacy MIDI code takes a lifetime
+`usb_autopm_get_interface_no_resume()` reference in `__snd_usbmidi_create`.
+Idle USB autosuspend is therefore not established; changing this policy requires
+balanced MIDI-open/close, pending-URB and disconnect handling. Do not remove the
+reference merely to make the status-only test pass.
+Use a different output directory to preserve the minimal VM and its calibrated
+allocation-failure cases. Do not overlap builds using the same private source.
+`vm-pm-linux-6.12.patch` teaches the private kernel-doc parser to recognize sparse
+lock annotations; the C parameters and lock annotations remain intact.
+`vm-pm-alignment-linux-6.12.patch` uses a byte copy for the intentionally
+unaligned ftrace trampoline pointer. `vm-pm-ring-alignment-linux-6.12.patch` selects
+the trace ring buffer's existing eight-byte record layout when alignment
+instrumentation is enabled. UBSAN alignment checking remains enabled.
+
 For a bounded module lifecycle check, use QEMU, a statically linked x86_64
 BusyBox (Debian package `busybox-static`) and KVM access:
 

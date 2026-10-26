@@ -54,6 +54,26 @@ class Patch(unittest.TestCase):
 
 
 class Build(unittest.TestCase):
+    def test_default_configuration_preserves_the_existing_minimal_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            path = BUILD['configuration'](output, False)
+            self.assertEqual(path, BUILD['ROOT'] / 'kernel/vm.config')
+            self.assertEqual(list(output.iterdir()), [])
+
+    def test_power_profile_keeps_base_input_unchanged_and_uses_a_distinct_release(self):
+        base = BUILD['ROOT'] / 'kernel/vm.config'
+        original = base.read_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            path = BUILD['configuration'](Path(directory), True)
+            lines = path.read_text().splitlines()
+            self.assertEqual(path.parent, Path(directory))
+            self.assertTrue(all(option in lines for option in BUILD['PM_REQUIRED']))
+            self.assertTrue(all(option in lines for option in BUILD['REQUIRED']))
+            self.assertEqual([line for line in lines if line.startswith('CONFIG_LOCALVERSION=')],
+                             ['CONFIG_LOCALVERSION="-pm-octa-kasan-vm"'])
+        self.assertEqual(base.read_bytes(), original)
+
     def test_running_build_lock_prevents_source_changes_and_another_build(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

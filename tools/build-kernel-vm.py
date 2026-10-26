@@ -16,6 +16,21 @@ REQUIRED = ('CONFIG_KASAN=y', 'CONFIG_KASAN_GENERIC=y', 'CONFIG_UBSAN=y', 'CONFI
             'CONFIG_FAULT_INJECTION_DEBUG_FS=y', 'CONFIG_SLUB_DEBUG=y',
             'CONFIG_USB_DUMMY_HCD=y', 'CONFIG_USB_RAW_GADGET=y', 'CONFIG_USB_MON=y', 'CONFIG_SND_USB_AUDIO=m',
             'CONFIG_MODULES=y', 'CONFIG_IKCONFIG_PROC=y', 'CONFIG_X86_5LEVEL=y', 'CONFIG_WERROR=y')
+PM_REQUIRED = ('CONFIG_PM=y', 'CONFIG_PM_SLEEP=y', 'CONFIG_SUSPEND=y',
+               'CONFIG_PM_DEBUG=y', 'CONFIG_PM_ADVANCED_DEBUG=y',
+               'CONFIG_FUNCTION_TRACER=y', 'CONFIG_DYNAMIC_FTRACE=y')
+
+
+def configuration(directory, power_management):
+    base = ROOT / 'kernel/vm.config'
+    if not power_management:
+        return base
+    # Keep the existing minimal VM and its calibrated fault ordinals untouched.
+    lines = [line for line in base.read_text().splitlines() if not line.startswith('CONFIG_LOCALVERSION=')]
+    lines += [*PM_REQUIRED, 'CONFIG_FTRACE=y', 'CONFIG_LOCALVERSION="-pm-octa-kasan-vm"']
+    path = directory / 'pm.config'
+    path.write_text('\n'.join(lines) + '\n')
+    return path
 
 
 def prepare_source(source, patch, run):
@@ -33,6 +48,8 @@ def main():
     parser.add_argument('source', type=Path, help='extracted, matching Linux 6.12 source tree')
     parser.add_argument('directory', type=Path, help='private VM build directory outside the source tree')
     parser.add_argument('--jobs', type=int, choices=range(1, 9), default=2)
+    parser.add_argument('--power-management', action='store_true',
+                        help='build the separate suspend/runtime-PM profile with function tracing')
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
     directory = args.directory.resolve()
@@ -55,11 +72,16 @@ def main():
 
         prepare_source(source, ROOT / 'kernel/vm-linux-6.12.patch', run)
         prepare_source(source, ROOT / 'kernel/vm-alignment-linux-6.12.patch', run)
+        if args.power_management:
+            prepare_source(source, ROOT / 'kernel/vm-pm-linux-6.12.patch', run)
+            prepare_source(source, ROOT / 'kernel/vm-pm-alignment-linux-6.12.patch', run)
+            prepare_source(source, ROOT / 'kernel/vm-pm-ring-alignment-linux-6.12.patch', run)
         make = ['make', '-C', source, 'O=' + str(kernel), 'LLVM=-19', 'ARCH=x86_64']
-        environment = os.environ | {'KCONFIG_ALLCONFIG': str(ROOT / 'kernel/vm.config')}
+        environment = os.environ | {'KCONFIG_ALLCONFIG': str(configuration(directory, args.power_management))}
         run([*make, 'allnoconfig'], env=environment)
         config = (kernel / '.config').read_text().splitlines()
-        missing = [option for option in REQUIRED if option not in config]
+        required = REQUIRED + (PM_REQUIRED if args.power_management else ())
+        missing = [option for option in required if option not in config]
         if missing:
             raise ValueError('Required VM kernel options were not enabled: ' + ', '.join(missing))
         run([*make, '-j' + str(args.jobs), 'W=1', 'KCFLAGS=-Werror', 'bzImage', 'modules'])
