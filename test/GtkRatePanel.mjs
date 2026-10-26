@@ -65,6 +65,37 @@ export async function checkRates(model, reference, checkGeometry, dialogReferenc
       node => getComputedStyle(node).visibility === (high ? 'hidden' : 'visible')), 'Reverb availability');
     document.querySelector('#view-switch').click();
   }
+  const pairRates = [44100, 48000, 96000];
+  const pair = {experimental: true, available: true, base_id: 'serial:BASE', expansion_id: 'serial:EXP',
+    selected_role: 'expansion', sample_rate_hz: 48000, allowed_rates: pairRates};
+  const choices = expected => [...document.querySelectorAll('[data-rate-select]')].every(select =>
+    JSON.stringify([...select.options].map(option => Number(option.value))) === JSON.stringify(expected));
+  function setPair(role, available = true) {
+    model.pair = role === null ? null : pair;
+    pair.selected_role = role; pair.available = available;
+    pair.allowed_rates = !available ? [] : role === 'base' ? [48000] : pairRates;
+    pair.error = available ? null : 'EXP disconnected';
+    Object.assign(model.status, {clock_source: role === 'base' ? 'external' : 'internal',
+      raw_status_hex: role === 'base' ? '01000080bb000101' : '01000080bb000001'});
+  }
+  setPair('expansion');
+  await until(() => choices(pairRates));
+  const settings = document.querySelector('#settings');
+  settings.showModal();
+  await until(() => !document.querySelector('#settings-pair').hidden);
+  check(document.querySelector('#settings-pair').textContent.includes('apply to both'), 'Paired Linux settings explanation');
+  const close = settings.querySelector('footer button').getBoundingClientRect();
+  check(close.top >= 0 && close.bottom <= innerHeight, 'Paired settings Close remains inside the WebKit viewport');
+  setPair('base');
+  await until(() => choices([48000]));
+  check(document.querySelector('#settings-pair').textContent.includes('Select the EXP'), 'Base cannot set the paired clock');
+  setPair('base', false);
+  await until(() => choices([]));
+  check([...document.querySelectorAll('[data-rate-select]')].every(select => select.disabled), 'Missing companion disables both selectors');
+  setPair(null);
+  await until(() => choices([44100, 48000, 96000, 192000]));
+  check(document.querySelector('#settings-pair').hidden, 'Single-unit settings retain their original layout');
+  settings.close();
   check(unexpected.length === 0, `Unexpected requests: ${unexpected.join(', ')}`);
-  return {rates: 4, transitions: 5, device_writes: 0, geometry, dialogs};
+  return {rates: 4, transitions: 5, paired_transitions: 4, device_writes: 0, geometry, dialogs};
 }

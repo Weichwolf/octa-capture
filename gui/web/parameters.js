@@ -10,6 +10,23 @@ export function availableSampleRates(status) {
   return packet[6] ? [rate] : rates;
 }
 
+export function availablePanelRates(status, pair) {
+  const available = availableSampleRates(status);
+  if (pair === undefined || pair === null) return available;
+  const rates = [44100, 48000, 96000];
+  if (!available.length || pair.experimental !== true || pair.available !== true ||
+    !['base', 'expansion'].includes(pair.selected_role) || !Array.isArray(pair.allowed_rates) ||
+    !/^serial:[A-Za-z0-9_-]{1,64}$/.test(pair.base_id) ||
+    !/^serial:[A-Za-z0-9_-]{1,64}$/.test(pair.expansion_id) || pair.base_id === pair.expansion_id ||
+    !rates.includes(pair.sample_rate_hz) || pair.sample_rate_hz !== status.sample_rate_hz ||
+    !pair.allowed_rates.includes(pair.sample_rate_hz) ||
+    pair.allowed_rates.some((rate, index, values) => !rates.includes(rate) || (index > 0 && rate <= values[index - 1]))) return [];
+  const setting = parseInt(status.raw_status_hex.slice(12, 14), 16);
+  if (pair.selected_role === 'base' && (!(setting & 1) || status.clock_source !== 'external' || status.clock_active !== true)) return [];
+  if (pair.selected_role === 'expansion' && (setting !== 0 || status.clock_source !== 'internal' || typeof status.clock_active !== 'boolean')) return [];
+  return available.filter(rate => pair.allowed_rates.includes(rate) && rates.includes(rate));
+}
+
 export const VOLUME = Object.freeze([
   0, 23, 64, 188, 377, 567, 758, 950, 1143, 1337, 1533, 1729,
   1926, 2125, 2324, 2525, 2726, 2929, 3133, 3338, 3544, 3751, 3959, 4169,

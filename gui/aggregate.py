@@ -53,7 +53,11 @@ def read_clock(binary, device):
                             capture_output=True, check=True, timeout=5).stdout
     if len(output) > 4096:
         raise ValueError('Oversized device clock response.')
-    status = json.loads(output)
+    return decode_clock(json.loads(output))
+
+
+def decode_clock(status):
+    """Require the typed clock fields and complete raw setting byte to agree."""
     raw = status.get('raw_status_hex') if type(status) is dict else None
     if type(raw) is not str or len(raw) != 16:
         raise ValueError('Missing device clock packet.')

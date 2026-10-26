@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {ATTACK, RELEASE, RATIO_TEXT, PRE_DELAY, VOLUME, volumeIndex, volumeText,
   parameterText, panToWire, wireToPan, compressorOutput, sensitivityIndex, preDelayText, reverbTimeText, outputJackStates,
-  availableSampleRates} from '../gui/web/parameters.js';
+  availableSampleRates, availablePanelRates} from '../gui/web/parameters.js';
 
 assert.equal(VOLUME.length, 1025);
 assert.equal(VOLUME[0], 0);
@@ -89,3 +89,24 @@ for (const status of [null, false, [], {}, {raw_status_hex: []}, {raw_status_hex
   {sample_rate_hz: 48000, raw_status_hex: '01000080bb000001 '},
   {sample_rate_hz: 0, raw_status_hex: '0100000000000001'}]) assert.deepEqual(availableSampleRates(status), []);
 console.log('PASS 64 original clock-availability vectors and unavailable/malformed-status guards');
+
+const pairRates = [44100, 48000, 96000];
+const pair = {experimental: true, available: true, base_id: 'serial:BASE', expansion_id: 'serial:EXP',
+  selected_role: 'expansion', allowed_rates: pairRates, sample_rate_hz: 48000};
+for (const {status, allowed} of clocks.cases) {
+  assert.deepEqual(availablePanelRates(status), allowed, 'Single-unit GUI keeps the original rate rules');
+  const packet = Buffer.from(status.raw_status_hex, 'hex'), rate = status.sample_rate_hz;
+  for (const role of ['base', 'expansion']) {
+    const configured = {...pair, selected_role: role, sample_rate_hz: rate,
+      allowed_rates: role === 'base' ? [rate] : pairRates};
+    const ready = pairRates.includes(rate) && (role === 'base' ? (packet[6] & 1) && status.clock_active : packet[6] === 0);
+    assert.deepEqual(availablePanelRates(status, configured), ready ? allowed.filter(value => pairRates.includes(value)) : []);
+  }
+}
+const internal = clocks.cases.find(row => row.status.sample_rate_hz === 48000 && row.status.raw_status_hex.endsWith('0001')).status;
+for (const changes of [{available: false}, {experimental: 1}, {allowed_rates: [44100, 48000, 96000, 192000]},
+  {allowed_rates: [48000, 44100]}, {allowed_rates: [48000, 48000]}, {allowed_rates: ['48000']},
+  {selected_role: 'other'}, {base_id: 'usb:1-1'}, {expansion_id: 'serial:BASE'}, {sample_rate_hz: 96000}]) {
+  assert.deepEqual(availablePanelRates(internal, {...pair, ...changes}), [], 'Malformed paired capabilities fail closed');
+}
+console.log('PASS paired base/master restrictions, 192 kHz exclusion and capability guards');

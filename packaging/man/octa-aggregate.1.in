@@ -53,7 +53,8 @@ are never overwritten. Successful commands emit the final plan.
 .PP
 Joint changes have fixed process/filesystem/audio-graph tests, but real two-unit
 PulseAudio operation, physical synchronization, streaming and recovery remain
-unverified. The GUI still controls units individually and does not invoke this mode.
+unverified. Explicit paired GUI launches use the same joint clock coordinator
+while controlling each unit individually; they do not create the aggregate PCM.
 
 .SH EXIT STATUS
 Zero indicates success, 130 an interrupted transaction, and other nonzero values

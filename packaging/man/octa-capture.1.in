@@ -6,6 +6,7 @@ octa\-capture \- open the OCTA-CAPTURE GTK control panel
 .nf
 \fBocta-capture\fR [\fB\-\-bin-dir\fR DIR] [\fB\-\-midi-port\fR PORT]
              [\fB\-\-data-dir\fR DIR] [\fB\-\-help\fR]
+             [\fB\-\-pair-base\fR ID \fB\-\-pair-expansion\fR ID \fB\-\-experimental-pair\fR]
 .fi
 .SH DESCRIPTION
 Open the local HTML control panel inside GTK4/WebKitGTK as the regular desktop user.
@@ -32,7 +33,28 @@ $XDG_STATE_HOME/octa-capture, or ~/.local/state/octa-capture.
 .TP
 .B \-\-help
 Print options without opening the device.
+.SH EXPERIMENTAL PAIRED MODE
+Supply all three pair options with distinct serial:SERIAL identities for a
+0582:0120 base and 0582:0121 EXP. The panel starts on EXP; the existing device
+menu selects either unit and cannot select unrelated devices in this mode.
+Both must have coherent 44.1/48/96 kHz clocks, with internal EXP master and active
+external base. Connect EXP COAXIAL OUT to base COAXIAL IN and use DIGITAL AUTO
+on the base. Missing or changing identities disable paired rate changes.
+.PP
+EXP rate controls invoke the joint native PulseAudio/clock backend. Base controls
+retain the current externally supplied rate. The pair never offers 192 kHz.
+Both units must report fresh idle Auto-Sens status; close other CTRL clients so
+the companion can be checked. Closing the host cancels lock/helper waits and
+waits for restoration; recovery ignores the cancellation flag.
+.PP
+Linux Audio Settings describes the experimental pair and its total capacity;
+capture/playback counts for the selected unit remain separate. This mode does
+not install a combined virtual PCM. Use octa-aggregate(1) to prepare that ALSA
+configuration, releasing PulseAudio/direct clients before using raw hardware.
+Browser/HTTP/backend tests use modeled hardware/audio-server replies; native
+WebKit presentation is checked separately. Physical pair streaming, timing and
+recovery remain unverified. Normal launches keep single-unit behavior.
 .SH EXIT STATUS
 Zero indicates success; nonzero indicates a usage, device or operation error.
 .SH SEE ALSO
-octa-status(1), octa-preset(1)
+octa-status(1), octa-preset(1), octa-aggregate(1), octa-pair-clock(1)

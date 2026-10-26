@@ -7,6 +7,7 @@ octa\-capture\-http \- serve the local OCTA-CAPTURE control panel
 \fBocta-capture-http\fR [\fB\-\-port\fR PORT] [\fB\-\-open\fR]
                   [\fB\-\-bin-dir\fR DIR] [\fB\-\-midi-port\fR PORT]
                   [\fB\-\-data-dir\fR DIR] [\fB\-\-help\fR]
+                  [\fB\-\-pair-base\fR ID \fB\-\-pair-expansion\fR ID \fB\-\-experimental-pair\fR]
 .fi
 .SH DESCRIPTION
 Serve the same panel as octa-capture(1), bound to 127.0.0.1.
@@ -18,6 +19,9 @@ and loads local assets.
 The directory and MIDI options have the meanings documented in octa-capture(1).
 The \fB\-\-open\fR option opens the private link in the default browser.
 SIGINT or SIGTERM shuts down the server and releases its control connection.
+The three pair options enable the experimental paired mode described in
+octa-capture(1). The same token and Host/Origin guards protect its rate actions.
+Server shutdown requests cancellation of paired clock work and waits for recovery.
 
 .SH EXIT STATUS
 Zero indicates success; nonzero indicates a usage, device or operation error.

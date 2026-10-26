@@ -17,6 +17,9 @@ from .auto_sense import AutoSenseJob, MAX_CALIBRATION_SECONDS, ObservedAutoSense
 from .devices import discover
 from .preferences import Preferences
 from .pulse_audio import change_rate
+from .pulse_pair import change_rate as change_pair_rate
+from .pair_mode import PairMode
+from . import aggregate
 
 
 def available_sample_rates(status):
@@ -39,7 +42,10 @@ def available_sample_rates(status):
 
 
 class Application:
-    def __init__(self, bin_dir, data_dir, port='hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1'):
+    def __init__(self, bin_dir, data_dir, port='hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1', *, pair=None):
+        if pair is not None and not isinstance(pair, PairMode):
+            raise ValueError('Invalid paired control-panel configuration.')
+        self._pair = pair
         self.bin_dir = Path(bin_dir).resolve()
         self.data_dir = Path(data_dir).expanduser().resolve()
         self.port = port
@@ -61,7 +67,7 @@ class Application:
         self._auto_job = None
         self._observed_auto = ObservedAutoSense()
         self._auto_thread = None
-        self._selected_identity = None
+        self._selected_identity = pair.expansion if pair else None
         self._preferences = Preferences(self.data_dir)
 
     def _open(self):
@@ -100,13 +106,16 @@ class Application:
         if not job or not job['active']:
             job = self._observed_auto.observe(activity) or job
         blocked = bool(job and (job['active'] or (job.get('origin') == 'device' and job['state'] == 'failed')))
-        return {'connected': True, 'busy': (transaction if busy is None else busy) or blocked, 'state': state,
+        result = {'connected': True, 'busy': (transaction if busy is None else busy) or blocked, 'state': state,
                 'device': device,
                 'status': self._status, 'meters': self.bridge.meters(),
                 'preferences': self._preferences.document(),
                 'capabilities': {'auto_sense': True},
                 'auto_sense_activity': activity,
                 'auto_sense': job}
+        if self._pair:
+            result['pair'] = self._pair.document(self._status, device['id'] if device else None)
+        return result
 
     def snapshot(self):
         self._touch()
@@ -131,6 +140,8 @@ class Application:
                     self._retry_after = time.monotonic() + 1
                     raise
             self._clock_status()
+            if self._pair:
+                self._pair.refresh(self.bin_dir)
             return self._document()
         finally:
             self._operation.release()
@@ -153,12 +164,18 @@ class Application:
     def devices(self):
         self._open()
         devices = []
-        for device in discover():
+        present = discover()
+        if self._pair:
+            present = self._pair.visible(present)
+        for device in present:
             document = device.document(self.port)
             if self._selected_identity is not None:
                 document['selected'] = device.identity == self._selected_identity
             devices.append(document)
-        return {'devices': devices}
+        result = {'devices': devices}
+        if self._pair:
+            result['pair'] = self._pair.document(self._status, self._selected_identity)
+        return result
 
     def preferences(self):
         self._open()
@@ -179,6 +196,8 @@ class Application:
 
     def _sync_selected_device(self):
         devices = discover()
+        if self._pair:
+            devices = self._pair.visible(devices)
         if self._selected_identity is None:
             self._device = next((device for device in devices if device.document(self.port)['selected']), None)
             return
@@ -200,7 +219,10 @@ class Application:
         with self._operation:
             self._open()
             self._require_no_auto_sense()
-            device = next((device for device in discover() if device.identity == body['id']), None)
+            present = discover()
+            if self._pair:
+                present = self._pair.visible(present)
+            device = next((device for device in present if device.identity == body['id']), None)
             if device is None:
                 raise InvalidControl('The selected OCTA-CAPTURE is no longer present.')
             self._selected_identity = device.identity
@@ -304,6 +326,8 @@ class Application:
             self._transaction = value
 
     def _invalidate(self, preserve=False):
+        if self._pair:
+            self._pair.reset()
         if not preserve:
             self._observed_auto.reset()
         with self._cache_lock:
@@ -322,22 +346,33 @@ class Application:
             self._require_no_auto_sense()
             self._sync_selected_device()
             arguments = self._action_arguments(body)
+            plan = None
             if body['action'] == 'sample-rate':
                 status = self._clock_status(refresh=True)
                 allowed = available_sample_rates(status)
+                if self._pair:
+                    plan = self._pair.require_plan(self.bin_dir)
+                    allowed = self._pair.document(status, self._selected_identity)['allowed_rates']
                 if body['rate'] not in allowed:
                     message = f'The device clock currently permits only {allowed[0]} Hz.' if allowed else \
                               'Cannot change sample rate: clock status is unavailable.'
                     raise DeviceError(message)
-            directory = self._directory()
-            arguments = [str(value).replace('{recovery}', str(directory / 'recovery.syx'))
-                         for value in arguments]
+                if self._pair:
+                    self._check_pair_idle(plan)
+            else:
+                directory = self._directory()
+                arguments = [str(value).replace('{recovery}', str(directory / 'recovery.syx'))
+                             for value in arguments]
             self._set_transaction(True)
             try:
                 self.bridge.close()
                 if body['action'] == 'sample-rate':
                     try:
-                        change_rate(self.bin_dir, self.control_port, body['rate'])
+                        if self._pair:
+                            change_pair_rate(self.bin_dir, self._pair.base, self._pair.expansion, body['rate'],
+                                             expected_devices=(plan.base, plan.expansion), cancelled=self._pair.cancelled)
+                        else:
+                            change_rate(self.bin_dir, self.control_port, body['rate'])
                     except (ValueError, RuntimeError) as error:
                         raise DeviceError(str(error)) from error
                     except (OSError, subprocess.SubprocessError) as error:
@@ -349,6 +384,40 @@ class Application:
                 self._set_transaction(False)
                 self._invalidate(preserve=True)
             return self.snapshot()
+
+    def _pair_devices(self):
+        try:
+            return aggregate.selected(discover(), self._pair.base, self._pair.expansion)
+        except ValueError as error:
+            raise DeviceError('A selected unit is disconnected or ambiguous.') from error
+
+    def _check_pair_idle(self, plan):
+        devices = (plan.base, plan.expansion)
+        if self._pair_devices() != devices:
+            raise DeviceError('The selected pair changed before the Auto-Sens check.')
+        for device in devices:
+            self._open()
+            selected = device.identity == self._selected_identity
+            if selected and (device != self._device or device.port != self.port):
+                raise DeviceError('The selected unit changed during the paired clock check. Try again.')
+            bridge = self.bridge if selected else Bridge(self.bin_dir / 'octa-bridge', device.port)
+            try:
+                state = bridge.request('state')['state']
+                activity = bridge.auto_sense_activity()
+                if selected:
+                    self._remember(state)
+                    self._observed_auto.observe(activity)
+            finally:
+                if not selected:
+                    bridge.close()
+            if (type(activity) is not dict or type(activity.get('active')) is not bool or
+                    type(activity.get('channels')) is not int or
+                    type(activity.get('observed_age_ms')) is not int or not 0 <= activity['observed_age_ms'] <= 1000):
+                raise DeviceError('Fresh Auto-Sens status is required from both units before changing their clock.')
+            if activity['active'] or activity['channels'] != 0:
+                raise DeviceError(f'Auto-Sens is running on {device.name}. Finish it before changing the paired clock.')
+        if self._pair_devices() != devices:
+            raise DeviceError('The selected pair changed during the Auto-Sens check.')
 
     def _action_arguments(self, body):
         if type(body) is not dict or type(body.get('action')) is not str:
@@ -369,6 +438,8 @@ class Application:
             rate = integer(body['rate'], 44100, 192000)
             if rate not in (44100, 48000, 96000, 192000):
                 raise InvalidControl('Unsupported sample rate.')
+            if self._pair and rate not in aggregate.RATES:
+                raise InvalidControl('The paired sample rate must be 44.1, 48 or 96 kHz.')
             pcm = self.control_port + (',DEV=0' if 'CARD=' in self.control_port else ',0')
             return [self.bin_dir / 'octa-audio-check', rate, 'prepare-capture', pcm]
         raise InvalidControl('Unknown device operation or fields.')
@@ -450,6 +521,8 @@ class Application:
     def close(self):
         with self._lifecycle:
             self._closed = True
+            if self._pair:
+                self._pair.cancelled.set()
             job, thread = self._auto_job, self._auto_thread
         if job:
             job.request('cancel')

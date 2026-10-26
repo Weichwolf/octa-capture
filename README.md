@@ -50,6 +50,23 @@ uses native file dialogs. Right-click the panel's device name, press Shift+F10
 or use Driver Settings to select a discovered unit. Serial identities survive
 ALSA card renumbering, with automatic same-unit reconnection.
 
+For the experimental base/EXP pair, explicitly select both serial identities:
+
+```bash
+python3 tools/desktop-gui.py --pair-base serial:BASE_SERIAL \
+  --pair-expansion serial:EXP_SERIAL --experimental-pair
+```
+
+The HTTP launcher accepts the same flags. The panel starts on EXP; select the
+base or EXP through the existing device menu. Shared rate changes from EXP use
+the joint backend at 44.1/48/96 kHz; base external-clock controls retain the
+current rate. Missing/incoherent companions disable rate changes. Both Auto-Sens
+states must be idle and readable. Closing the host cancels pending changes and
+waits for recovery. This mode has synthetic browser/HTTP/backend and native
+WebKit checks; physical two-unit operation remains unverified. It controls units
+individually; the [kernel guide](kernel/README.md#experimental-two-unit-alsa-configuration)
+describes the separate combined ALSA configuration.
+
 ## Build and install
 
 For Debian 13 amd64, the combined package installs the GUI, device tools,

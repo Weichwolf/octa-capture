@@ -216,6 +216,8 @@ add_test(NAME gui-meters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiMet
 add_test(NAME gui-parameters COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiParameters.mjs")
 add_test(NAME gui-clock COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiClock.py")
 set_tests_properties(gui-clock PROPERTIES TIMEOUT 10)
+add_test(NAME gui-pair-mode COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiPairMode.py")
+set_tests_properties(gui-pair-mode PROPERTIES TIMEOUT 15)
 add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   --config "${CMAKE_SOURCE_DIR}/gui/web/.eslintrc.json"
   "${CMAKE_SOURCE_DIR}/gui/web/app.js" "${CMAKE_SOURCE_DIR}/gui/web/faders.js" "${CMAKE_SOURCE_DIR}/gui/web/parameters.js"
@@ -242,6 +244,7 @@ add_test(NAME gui-javascript COMMAND "${OCTA_ESLINT}" --max-warnings=0
   "${CMAKE_SOURCE_DIR}/test/GuiInputMonitor.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiFooter.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiClockBrowser.mjs"
+  "${CMAKE_SOURCE_DIR}/test/GuiPairBrowser.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiAutoSense.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiShortcuts.mjs"
   "${CMAKE_SOURCE_DIR}/test/GuiMenuBar.mjs"

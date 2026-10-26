@@ -15,6 +15,7 @@ from .navigation import local_document, local_download
 from .server import LocalServer
 from .window_controls import WindowControls
 from .pointer_controls import PointerControls
+from . import pair_mode
 
 
 def gtk_modules():
@@ -179,12 +180,14 @@ def main(*, default_bin_dir=None):
     parser.add_argument('--midi-port', default='hw:CARD=OCTACAPTURE,DEV=0,SUBDEV=1')
     parser.add_argument('--data-dir', type=Path,
                         default=Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'octa-capture')
+    pair_mode.add_arguments(parser)
     args = parser.parse_args()
+    pair = pair_mode.from_arguments(parser, args)
     try:
         gtk_modules()
     except (ImportError, ValueError) as error:
         parser.exit(1, f'GTK4/WebKitGTK is unavailable: {error}\n'
                     'Debian packages: python3-gi gir1.2-gtk-4.0 gir1.2-webkit-6.0\n')
-    application = Application(args.bin_dir, args.data_dir, args.midi_port)
+    application = Application(args.bin_dir, args.data_dir, args.midi_port, pair=pair)
     server = LocalServer(application, port=0)
     return Desktop(application, server).run()

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import {PREAMP_MAX, VOLUME, volumeIndex,
   volumeText, parameterText, panToWire, wireToPan, panText, outputJackStates, sensitivityIndex, preDelayText, reverbTimeText,
-  availableSampleRates} from './parameters.js';
+  availablePanelRates} from './parameters.js';
 import {MeterBallistics, METER_TICK_MS, meterDb, meterY} from './meters.js';
 import {PopupMenus, PanelMenuBar} from './menus.js';
 import {PanelWarnings} from './warnings.js';
@@ -59,6 +59,11 @@ function notify(message) {
   toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 6500);
 }
 
+function clearNotice() {
+  clearTimeout(toastTimer);
+  $('#toast').hidden = true;
+}
+
 async function api(path, body, binary = false) {
   const headers = {'Authorization': `Bearer ${token || ''}`};
   const options = {headers, cache: 'no-store', credentials: 'omit'};
@@ -101,6 +106,7 @@ function setConnected(value, message = 'The device could not be found.') {
   if (!value) {
     for (const select of all('[data-rate-select]')) { select.disabled = true; select.value = ''; }
     $('#footer-clock').textContent = '--';
+    syncPairNote();
     $('#settings-device').disabled = !canSelectDevice() || !$('#settings-device').value;
     if ($('#settings').open) void settingsDevices();
     reverbDelay?.sync(reverbDelay.value, false, true);
@@ -725,8 +731,19 @@ function confirmation(message) {
 
 function canOperate() { return connected && !busy && !writing; }
 function canSelectDevice() { return !(connected && busy) && !localBusy && !writing && pending.size === 0; }
+function syncPairNote(pair = documentState?.pair) {
+  const note = $('#settings-pair');
+  note.hidden = pair === undefined || pair === null;
+  if (note.hidden) return;
+  const prefix = 'Base + EXP (experimental)';
+  note.textContent = !connected ? `${prefix}: the selected unit is unavailable.` :
+    pair.available !== true ? `${prefix}: ${typeof pair.error === 'string' ? pair.error : 'Paired clock status is unavailable.'}` :
+      `${prefix}: 24 in / 20 out total. ${pair.selected_role === 'base' ?
+        'Select the EXP unit to change the shared rate.' : 'Sample-rate changes apply to both units.'}`;
+}
 function syncSampleRates() {
-  const allowed = availableSampleRates(documentState?.status);
+  const allowed = availablePanelRates(documentState?.status, documentState?.pair);
+  syncPairNote();
   const rate = [44100, 48000, 96000, 192000][parseInt(documentState?.state.payload_hex.slice(4, 6), 16)];
   for (const select of all('[data-rate-select]')) {
     if (!rateOptions.has(select)) rateOptions.set(select, [...select.options].map(option => option.cloneNode(true)));
@@ -760,8 +777,11 @@ async function operation(body, message) {
   if (message && !await confirmation(message)) return;
   if (!canOperate()) return;
   setOperationBusy(true); revision++;
-  try { update(await api('/api/action', body)); }
-  catch (error) { notify(error.message); }
+  try {
+    const result = await api('/api/action', body);
+    revision++; clearNotice(); update(result);
+  }
+  catch (error) { revision++; notify(error.message); }
   finally { setOperationBusy(false); void refresh(); }
 }
 
@@ -994,7 +1014,7 @@ function setupDialogs() {
     select.addEventListener('change', async () => {
       const rate = Number(select.value);
       const current = [44100, 48000, 96000, 192000][parseInt(documentState?.state.payload_hex.slice(4, 6), 16)];
-      if (!canOperate() || !availableSampleRates(documentState?.status).includes(rate)) {
+      if (!canOperate() || !availablePanelRates(documentState?.status, documentState?.pair).includes(rate)) {
         syncSampleRates(); return;
       }
       if (rate !== current) await operation({action: 'sample-rate', rate});
@@ -1106,6 +1126,7 @@ async function deviceMenu(event) {
   const rect = anchor.getBoundingClientRect();
   try {
     const result = await api('/api/devices');
+    syncPairNote(result.pair ?? documentState?.pair);
     const items = result.devices.map(device => ({label: device.name, checked: device.selected,
       disabled: !canSelectDevice(),
       run: () => { void selectDevice(device.id); }}));
@@ -1119,8 +1140,12 @@ async function selectDevice(id) {
   if (!canSelectDevice()) return;
   setOperationBusy(true); revision++;
   closeMenus();
-  try { bus = 0; update(await api('/api/device', {id})); }
-  catch (error) { notify(error.message); }
+  try {
+    bus = 0;
+    const result = await api('/api/device', {id});
+    revision++; clearNotice(); update(result);
+  }
+  catch (error) { revision++; notify(error.message); }
   finally { setOperationBusy(false); void refresh(); }
 }
 
@@ -1130,6 +1155,7 @@ async function settingsDevices() {
   select.disabled = true;
   try {
     const result = await api('/api/devices');
+    syncPairNote(result.pair ?? documentState?.pair);
     const options = result.devices.map(device => {
       const option = el('option', '', device.name);
       option.value = device.id; option.selected = device.selected;

@@ -24,6 +24,7 @@ import webbrowser
 
 from .application import Application
 from .backend import DeviceError, InvalidControl
+from . import pair_mode
 
 
 ASSETS = {'/': ('index.html', 'text/html; charset=utf-8'),
@@ -339,10 +340,12 @@ def main(*, default_bin_dir=None):
     parser.add_argument('--data-dir', type=Path,
                         default=Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'octa-capture')
     parser.add_argument('--open', action='store_true', help='open the private link in the default browser')
+    pair_mode.add_arguments(parser)
     args = parser.parse_args()
+    pair = pair_mode.from_arguments(parser, args)
     if not 0 <= args.port <= 65535:
         parser.error('Port must be 0..65535.')
-    application = Application(args.bin_dir, args.data_dir, args.midi_port)
+    application = Application(args.bin_dir, args.data_dir, args.midi_port, pair=pair)
     server = LocalServer(application, args.port)
     url = f'{server.origin}/#token={server.token}'
     print(f'OCTA-CAPTURE Control Panel: {url}', flush=True)

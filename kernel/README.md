@@ -236,8 +236,15 @@ failure, files unwind in reverse order; the old clock and both cards must recove
 before clients resume. Incomplete recovery retains temporary endpoints. SIGINT/
 SIGTERM request recovery; forced termination cannot guarantee it. A new aggregate
 file is written before audio changes and removed on failure if still owned.
-Direct ALSA clients must release both devices. PipeWire coordination and GUI
-integration remain unfinished. Headless use adds no audio-server graph.
+Direct ALSA clients must release both devices. PipeWire coordination remains
+unfinished. Headless use adds no audio-server graph. GTK/HTTP can explicitly
+enable the same pair with `--pair-base serial:BASE --pair-expansion serial:EXP
+--experimental-pair`; the existing device menu selects individual panels and
+starts on EXP. The base retains its external rate; EXP offers only 44.1/48/96 kHz.
+Both units' Auto-Sens activity is checked before a GUI rate change. Missing,
+changed or incoherent companions disable it. Host shutdown cancels pending lock/
+helper waits and allows recovery to finish. This GUI mode does not create the
+combined PCM; the private file above is still required for direct aggregation.
 Fixed graph/process/filesystem tests and an actual Python/native-helper rejection
 in an empty device namespace pass; real joint PulseAudio/hardware operation
 remains unverified. See `octa-aggregate(1)` for limits.
@@ -275,8 +282,8 @@ change attempt. Forced process termination cannot guarantee restoration.
 Filesystem/fake-ALSA tests verify identity changes, fixed settings, error cleanup
 and held-handle disconnect guards. Real paired transitions, physical timing and
 streaming remain unverified. `octa-aggregate --rate HZ --experimental` invokes this
-transaction with joint native PulseAudio coordination; the GUI does not yet use
-it. See `octa-pair-clock(1)` for direct-use limits.
+transaction with joint native PulseAudio coordination. Explicit paired GUI
+launches use the same coordinator. See `octa-pair-clock(1)` for direct-use limits.
 
 Reproduce the isolated sample-layout check with the real ALSA plugins:
 

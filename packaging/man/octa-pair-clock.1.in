@@ -32,8 +32,8 @@ recovery and failed recovery. A recovered failure still returns an error.
 .SH LIMITATIONS
 Experimental developer interface. Real two-unit clock transitions and streaming
 remain unverified. This command does not pause or restore an audio server, update
-aggregate configuration, or establish measured phase/clock quality. The GUI does
-not yet invoke it. octa-aggregate --rate HZ --experimental coordinates both native
+aggregate configuration, or establish measured phase/clock quality. Explicit
+paired GUI launches and octa-aggregate --rate HZ --experimental coordinate both native
 PulseAudio cards around this helper; direct use requires explicitly releasing both units.
 .SH EXIT STATUS
 0 on verified success, 1 on failure, 2 on invalid command syntax or root use.

@@ -40,6 +40,9 @@ class Installation(unittest.TestCase):
                 result = subprocess.run([str(binary / name), '--help'], cwd=foreign,
                                         check=True, capture_output=True, text=True, timeout=5)
                 self.assertIn('--bin-dir', result.stdout)
+                if name in ('octa-capture', 'octa-capture-http'):
+                    self.assertIn('--experimental-pair', result.stdout)
+                    self.assertIn('--pair-base', result.stdout)
             desktop = prefix / 'share/applications/org.octa_capture.ControlPanel.desktop'
             command = next(line[5:] for line in desktop.read_text().splitlines() if line.startswith('Exec='))
             arguments = shlex.split(command)
