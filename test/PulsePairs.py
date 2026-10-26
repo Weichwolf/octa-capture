@@ -143,7 +143,7 @@ class Pairing(unittest.TestCase):
         controller.files.preference.read_text.return_value = '96000'
         controller.status = lambda: peer.rate
         controller.switch = Mock()
-        with patch.object(audio, 'device_lock', return_value=nullcontext()), \
+        with patch.object(audio, 'configuration_lock', return_value=nullcontext()), \
                 patch.object(audio, 'pulse', peer.pulse), patch.object(audio, 'document', peer.document), \
                 patch.object(audio, 'modules', lambda: copy.deepcopy(peer.loaded)):
             controller.ensure()
@@ -319,6 +319,31 @@ class Pairing(unittest.TestCase):
             _, meters, _ = controller.snapshot(peer.owner, peer.loaded)
         controller.validate_streams(meters, 192000)
         self.assertEqual(meters['source'], [], 'Desktop level monitors are not recordings')
+
+    def test_new_holding_clients_keep_the_selected_unit_when_defaults_belong_elsewhere(self):
+        peer = Peer()
+        peer.info.update(default_sink_name='unrelated-output', default_source_name='unrelated-input')
+        controller = audio.Controller(Path('/unused'), Device('serial:unit', 'OCTACAPTURE', 0, 'unit'))
+        controller.files = Mock(profile=Path('/own/profile'))
+        controller.status = lambda: peer.rate
+        def prepare(rate):
+            for kind in ('sink', 'source'):
+                node = next(node for node in peer.nodes[kind] if node['name'].startswith('octa_clock_'))
+                peer.streams[kind].append({'index': 2, kind: node['index'], 'driver': 'protocol-native.c',
+                                           'channel_map': 'front-left,front-right'})
+            peer.prepare(rate)
+        controller.prepare = prepare
+        with patch.object(audio, 'pulse', peer.pulse), patch.object(audio, 'document', peer.document), \
+                patch.object(audio, 'modules', lambda: copy.deepcopy(peer.loaded)), \
+                patch.object(audio, 'load_module', peer.load):
+            controller.switch(peer.document('cards')[0], 48000, 44100,
+                              copy.deepcopy(peer.loaded), copy.deepcopy(peer.info))
+        state = peer.state()
+        self.assertEqual(state['defaults']['default_sink_name'], 'unrelated-output')
+        self.assertEqual(state['defaults']['default_source_name'], 'unrelated-input')
+        for values in state['streams'].values():
+            self.assertEqual(len(values), 2)
+            self.assertTrue(all(name.startswith('alsa_') and name.endswith('1-2') for name in values))
 
     def test_failed_recovery_keeps_streams_paused_instead_of_rescuing_elsewhere(self):
         peer = Peer()

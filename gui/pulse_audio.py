@@ -3,7 +3,7 @@
 
 import argparse
 import copy
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import fcntl
 import json
 import os
@@ -105,12 +105,28 @@ def inherited_controls(nodes):
 
 
 @contextmanager
-def device_lock(card_id):
+def _file_lock(filename):
     runtime = Path(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'))
-    path = runtime / f'octa-pulse-{card_id}.lock'
+    path = runtime / filename
     descriptor = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def device_lock(card_id):
+    if not re.fullmatch(r'[A-Za-z0-9_]{1,15}', card_id):
+        raise ValueError('Invalid ALSA card identifier for an audio lock.')
+    return _file_lock(f'octa-pulse-{card_id}.lock')
+
+
+@contextmanager
+def configuration_lock(card_ids):
+    # Every controller writes the shared ~/.asoundrc. Acquire this lock before
+    # sorted card locks; the dot keeps its name distinct from every card ID.
+    with _file_lock('octa-pulse.configuration.lock'), ExitStack() as stack:
+        for card in sorted(set(card_ids)):
+            stack.enter_context(device_lock(card))
         yield
 
 
@@ -137,7 +153,7 @@ class Controller:
         return matches[0] if matches else None
 
     def ensure(self, requested=None):
-        with device_lock(self.device.card_id):
+        with configuration_lock((self.device.card_id,)):
             card = self.card()
             current = self.status()
             # Reconnection follows the hardware; only an explicit request changes its clock.
@@ -210,13 +226,10 @@ class Controller:
             pulse('unload-module', owner)
             raise
 
-    def restore_clients(self, owner, nodes, streams, info, holding):
-        for kind, category in (('sink', 'sink-inputs'), ('source', 'source-outputs')):
+    def restore_levels(self, owner, nodes):
+        for kind in ('sink', 'source'):
             targets = [node for node in document(f'{kind}s') if str(node.get('owner_module')) == str(owner)]
             pairs = by_pair(targets, kind)
-            def target(old):
-                key = pair_key(old, kind)
-                return pairs.get(key) or pairs[('playback' if kind == 'sink' else 'recording', 1, 2, False)]
             for old in nodes[kind]:
                 if len(old['channel_map'].split(',')) != 2:
                     continue
@@ -226,16 +239,45 @@ class Controller:
                 destination = selected['name']
                 pulse(f'set-{kind}-volume', destination, *(value['value'] for value in old['volume'].values()))
                 pulse(f'set-{kind}-mute', destination, int(old['mute']))
+
+    def resume_clients(self, owner, nodes, streams, info, holding):
+        for kind, category in (('sink', 'sink-inputs'), ('source', 'source-outputs')):
+            targets = [node for node in document(f'{kind}s') if str(node.get('owner_module')) == str(owner)]
+            pairs = by_pair(targets, kind)
+            def target(old):
+                key = pair_key(old, kind)
+                return pairs.get(key) or pairs[('playback' if kind == 'sink' else 'recording', 1, 2, False)]
             default = next((node for node in nodes[kind] if node['name'] == info.get(f'default_{kind}_name')), None)
             if default:
                 pulse(f'set-default-{kind}', target(default)['name'])
             previous = {stream['index']: node for stream, node in streams[kind]}
+            fallback = default or next((node for node in nodes[kind]
+                                       if pair_key(node, kind) ==
+                                       ('playback' if kind == 'sink' else 'recording', 1, 2, False)), None)
             temporary = next((node['index'] for node in document(f'{kind}s')
                               if node['name'] == (holding if kind == 'sink' else holding + '.monitor')), None)
             for stream in document(category):
-                if stream['index'] in previous or (stream[kind] == temporary and default):
-                    old = previous.get(stream['index'], default)
+                if stream['index'] in previous or (stream[kind] == temporary and fallback):
+                    old = previous.get(stream['index'], fallback)
                     move_stream(kind, stream['index'], target(old)['name'])
+
+    def restore_clients(self, owner, nodes, streams, info, holding):
+        self.restore_levels(owner, nodes)
+        self.resume_clients(owner, nodes, streams, info, holding)
+
+    def profile_arguments(self, arguments, rate):
+        result = {**arguments, 'device_id': self.device.card_id, 'profile_set': str(self.files.profile),
+                  'profile': PROFILE, 'use_ucm': 'no', 'rate': rate, 'tsched': 'no',
+                  'format': 's24le', 'avoid_resampling': 'no'}
+        module_arguments(result)
+        return result
+
+    def validate_endpoints(self, owner, rate):
+        actual = ([node for node in document('sinks') if str(node.get('owner_module')) == str(owner)],
+                  [node for node in document('sources') if str(node.get('owner_module')) == str(owner)
+                   and not node['name'].endswith('.monitor')])
+        if tuple(map(len, actual)) != tuple(count // 2 for count in channel_counts(rate)):
+            raise ValueError('PulseAudio did not restore the expected stereo endpoints.')
 
     def switch(self, card, rate, previous_rate, original_modules, info):
         old_owner = str(card['owner_module'])
@@ -243,10 +285,7 @@ class Controller:
         self.validate_streams(streams, rate)
         for _name, arguments in old_modules:
             module_arguments(arguments)
-        arguments = {**original_modules[old_owner][1], 'profile_set': str(self.files.profile),
-                     'profile': PROFILE, 'use_ucm': 'no', 'rate': rate, 'tsched': 'no',
-                     'format': 's24le', 'avoid_resampling': 'no'}
-        module_arguments(arguments)
+        arguments = self.profile_arguments(original_modules[old_owner][1], rate)
         holding_owner, holding = self.hold(nodes, streams, info)
         new_owner = None
         unloaded = False
@@ -259,11 +298,9 @@ class Controller:
             new_owner = load_module('module-alsa-card', arguments)
             # Device-specific udev defaults keep each new card off until this point.
             activate_profile(new_owner, PROFILE)
-            actual = ([node for node in document('sinks') if str(node.get('owner_module')) == new_owner],
-                      [node for node in document('sources') if str(node.get('owner_module')) == new_owner
-                       and not node['name'].endswith('.monitor')])
-            if tuple(map(len, actual)) != tuple(count // 2 for count in channel_counts(rate)) or self.status() != rate:
-                raise ValueError('PulseAudio did not restore the expected stereo endpoints and hardware clock.')
+            self.validate_endpoints(new_owner, rate)
+            if self.status() != rate:
+                raise ValueError('PulseAudio did not restore the expected hardware clock.')
             self.restore_clients(new_owner, inherited_controls(nodes), streams, info, holding)
             restored = True
         except BaseException:
