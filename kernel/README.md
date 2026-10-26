@@ -224,8 +224,16 @@ native capture/playback PCMs before a future paired clock transaction. It checks
 the opened handles' card/device/subdevice metadata, rejects card aliases and
 releases partial acquisitions on failure. Fake-ALSA tests cover ownership moves,
 busy/disconnect/allocation errors and inconsistent metadata under ASan/UBSan.
-Clock changes and CLI/GUI integration of this component remain unfinished;
-the aggregate command above still only prepares a configuration.
+`PairClock` adds the transaction policy: two stable preflight snapshots, an
+internally clocked EXP master, active external base, supported equal rates,
+EXP-only preparation and two coherent completion snapshots. Settling is bounded
+by forty polls and an eight-second deadline; interruption or uncertain prepare
+failure triggers restoration of the previous rate. A failed restoration remains
+distinct from the original failure. Scripted transport tests cover all supported
+rate pairs, read/prepare failures, changing roles, deadlines and cancellation;
+these are not physical clock tests. Native transport and CLI/GUI/server
+coordination remain unfinished; the aggregate command above still only prepares
+a configuration.
 
 Reproduce the isolated sample-layout check with the real ALSA plugins:
 

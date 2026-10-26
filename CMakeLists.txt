@@ -44,6 +44,12 @@ add_executable(pair_pcm_test test/PairPcm.cpp)
 target_link_libraries(pair_pcm_test PRIVATE octa_pair_pcm)
 add_library(octa_status STATIC src/StatusControl.cpp)
 target_link_libraries(octa_status PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
+set(octa_pair_clock_sources "${CMAKE_SOURCE_DIR}/include/octa/PairClock.hpp"
+  "${CMAKE_SOURCE_DIR}/src/PairClock.cpp" "${CMAKE_SOURCE_DIR}/test/PairClock.cpp")
+add_library(octa_pair_clock STATIC src/PairClock.cpp)
+target_link_libraries(octa_pair_clock PUBLIC octa_protocol octa_pair_pcm)
+add_executable(pair_clock_test test/PairClock.cpp)
+target_link_libraries(pair_clock_test PRIVATE octa_pair_clock)
 add_library(octa_pcm_meters STATIC src/PcmMeterControl.cpp)
 target_link_libraries(octa_pcm_meters PUBLIC octa_protocol PRIVATE PkgConfig::ALSA)
 add_executable(octa-pcm-meters src/PcmMeterMain.cpp)
@@ -164,6 +170,8 @@ add_test(NAME gui-devices COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/t
 add_test(NAME aggregate-audio COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/AggregateAudio.py")
 add_test(NAME pair-pcm COMMAND pair_pcm_test)
 set_tests_properties(pair-pcm PROPERTIES TIMEOUT 10)
+add_test(NAME pair-clock COMMAND pair_clock_test)
+set_tests_properties(pair-clock PROPERTIES TIMEOUT 10)
 set_tests_properties(aggregate-audio PROPERTIES TIMEOUT 10)
 add_test(NAME gui-preferences COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/test/GuiPreferences.py")
 add_test(NAME gui-warnings COMMAND "${OCTA_NODE}" "${CMAKE_SOURCE_DIR}/test/GuiWarnings.mjs")
@@ -329,6 +337,7 @@ add_custom_target(format-check
     ${octa_peak_sources}
     ${octa_aggregate_sources}
     ${octa_pair_pcm_sources}
+    ${octa_pair_clock_sources}
     ${octa_midi_framing_sources}
     ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
@@ -406,6 +415,7 @@ add_custom_target(format
     ${octa_peak_sources}
     ${octa_aggregate_sources}
     ${octa_pair_pcm_sources}
+    ${octa_pair_clock_sources}
     ${octa_midi_framing_sources}
     ${octa_fuzz_sources}
     "${CMAKE_SOURCE_DIR}/include/octa/Protocol.hpp"
@@ -482,6 +492,7 @@ add_custom_target(lint
     ${octa_peak_sources}
     ${octa_aggregate_sources}
     ${octa_pair_pcm_sources}
+    ${octa_pair_clock_sources}
     ${octa_midi_framing_sources}
     "${CMAKE_SOURCE_DIR}/src/Protocol.cpp"
     "${CMAKE_SOURCE_DIR}/src/DeviceStatus.cpp"
