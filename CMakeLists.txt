@@ -352,6 +352,7 @@ set(octa_bridge_sources
 
 add_custom_target(format-check
   COMMAND "${OCTA_CLANG_FORMAT}" --dry-run --Werror
+    "${CMAKE_SOURCE_DIR}/test/CtrlSequencerVm.cpp"
     "${CMAKE_SOURCE_DIR}/test/KernelUsbFixture.cpp"
     "${CMAKE_SOURCE_DIR}/tools/reference-midi-host.c"
     ${octa_clock_sources} ${octa_clock_shims}

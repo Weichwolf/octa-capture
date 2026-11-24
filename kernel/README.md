@@ -499,6 +499,30 @@ KASAN and UBSAN alignment instrumentation. Streaming, other transport failures,
 physical-controller unplug, broader allocation fault injection and power management
 still need separate sanitizer checks.
 
+## Private CTRL sequencer policy
+
+The standalone MIDI helper reserves subdevice 1 for the OCTA base/EXP control
+protocol. Its ALSA sequencer port has only `NO_EXPORT`, without read/write or
+subscription capabilities. JACK's sequencer bridge therefore leaves it alone;
+raw-MIDI control access and normal DIN MIDI remain available. Reload an older
+module after closing its audio/MIDI clients to apply the policy.
+
+The separate sanitizer VM profile checks both modeled USB personalities:
+generic bridge subscriptions to CTRL fail with `EPERM`, raw CTRL still opens,
+and the DIN port retains its public duplex capabilities and can be subscribed.
+
+```bash
+python3 tools/build-kernel-vm.py build/kernel-vm/source build/kernel-vm-ctrl \
+  --control-sequencer --jobs 2
+cmake --build build/release --target kernel_usb_fixture ctrl_sequencer_fixture
+python3 tools/check-ctrl-sequencer-vm.py build/kernel-vm-ctrl \
+  --busybox /bin/busybox --usb-fixture build/release/kernel_usb_fixture \
+  --seq-fixture build/release/ctrl_sequencer_fixture
+```
+
+This tests sequencer policy on a legal dummy USB model, not physical audio/DIN
+streaming or complete device behavior.
+
 ## Passive USB timing observation
 
 `tools/observe-usb-prbs.py --device 1-1 --seconds 360` passively observes the

@@ -50,7 +50,7 @@ def static_executable(path):
     return image
 
 
-def module_order(kernel, standalone, release):
+def module_order(kernel, standalone, release, extra=()):
     modinfo = shutil.which('modinfo') or '/usr/sbin/modinfo'
     paths = {path.stem.replace('-', '_'): path for path in kernel.rglob('*.ko')}
     paths['snd_octa_capture'] = standalone / 'snd-octa-capture.ko'
@@ -73,7 +73,7 @@ def module_order(kernel, standalone, release):
         visiting.remove(name)
         ordered[name] = path
 
-    for name in ('snd_usb_audio', 'snd_octa_capture'):
+    for name in ('snd_usb_audio', 'snd_octa_capture', *extra):
         visit(name)
     return ordered
 

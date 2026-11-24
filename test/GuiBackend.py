@@ -75,6 +75,21 @@ class Controls(unittest.TestCase):
 
 
 class Transport(unittest.TestCase):
+    def test_startup_preserves_busy_permission_and_disconnect_errors(self):
+        for mode, message in (('startup-busy', 'control MIDI port is busy'),
+                              ('startup-denied', 'Permission denied'),
+                              ('startup-missing', 'device is disconnected'),
+                              ('startup-unknown', 'control connection failed')):
+            with self.subTest(mode=mode):
+                peer = self.bridge(mode)
+                start = time.monotonic()
+                with self.assertRaisesRegex(DeviceError, message):
+                    peer.request('state')
+                self.assertLess(time.monotonic() - start, 3)
+                self.assertIsNone(peer._process)
+                with self.assertRaisesRegex(DeviceError, message):
+                    peer.request('state')
+
     def test_auto_sense_is_unknown_until_observed_and_invalidated_on_close(self):
         peer = self.bridge('auto-sense')
         self.assertIsNone(peer.auto_sense_activity())

@@ -69,6 +69,12 @@ describes the separate combined ALSA configuration.
 
 ## Build and install
 
+The private Control MIDI subdevice is reserved for the panel and command-line
+tools. It is not exported to ALSA sequencer bridges such as JACK; the normal
+DIN MIDI port remains bridgeable. A busy control port is reported separately
+from a missing device. After upgrading an older module, close audio/MIDI clients
+and reload the module or reboot once to apply this port policy.
+
 For Debian 13 amd64, the combined package installs the GUI, device tools,
 Linux 6.12 DKMS sources, hotplug activation and the regular-user stereo-pair
 service. It uses the same unprivileged `sbuild` workflow as the local btop
