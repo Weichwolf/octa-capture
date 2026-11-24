@@ -109,6 +109,20 @@ class Selection(unittest.TestCase):
         discovery.start()
         self.addCleanup(discovery.stop)
 
+    def test_busy_retry_keeps_the_reason_and_the_present_device(self):
+        message = 'The OCTA-CAPTURE control MIDI port is busy.'
+        self.old.request.side_effect = DeviceError(message)
+        for _ in range(3):
+            with self.assertRaisesRegex(DeviceError, 'control MIDI port is busy'):
+                self.application.snapshot()
+            self.assertEqual(len(self.application.devices()['devices']), 2)
+        self.old.request.assert_called_once_with('state')
+        self.application._retry_after = 0
+        self.old.request.side_effect = None
+        self.old.request.return_value = {'state': {'gain': 42}}
+        self.application._clock_status = Mock(return_value=None)
+        self.assertEqual(self.application.snapshot()['state'], {'gain': 42})
+
     def test_startup_and_reconnection_read_device_state_without_restoring_old_settings(self):
         self.application._clock_status = Mock(return_value=None)
         first = {'gain': 17, 'stereo_link': True}

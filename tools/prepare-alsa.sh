@@ -37,6 +37,7 @@ cp -- "$source_dir/sound/usb/"*.c "$source_dir/sound/usb/"*.h "$staging_dir/"
 cp -- "$source_dir/sound/usb/Makefile" "$staging_dir/Makefile"
 patch --batch --fuzz=0 --directory="$staging_dir" -p3 < "$patch_file"
 patch --batch --fuzz=0 --directory="$staging_dir" -p3 < "$repo_dir/kernel/midi.patch"
+patch --batch --fuzz=0 --directory="$staging_dir" -p3 < "$repo_dir/kernel/midi-ctrl.patch"
 # Copy the device-specific sources into the private ALSA tree.
 cp -- "$repo_dir/kernel/"*.c "$repo_dir/kernel/"*.h "$staging_dir/"
 

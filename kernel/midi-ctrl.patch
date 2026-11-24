@@ -1,0 +1,24 @@
+SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] Keep the OCTA private CTRL port out of sequencer bridges
+
+JACK's ALSA sequencer bridge otherwise opens both raw-MIDI subdevices,
+preventing the control panel from opening its exclusive CTRL connection.
+Only the second subdevice of the OCTA base/EXP IDs is private. Normal
+DIN MIDI capabilities and direct raw-MIDI CTRL access remain available.
+
+---
+--- a/sound/usb/midi.c
++++ b/sound/usb/midi.c
+@@ -1811,6 +1811,12 @@
+ 	struct snd_usb_midi *umidi = rmidi->private_data;
+ 	struct port_info *port_info;
+ 
++	/* CTRL is a private protocol endpoint, never a generic sequencer port. */
++	if (number == 1 && (umidi->usb_id == USB_ID(0x0582, 0x0120) ||
++			    umidi->usb_id == USB_ID(0x0582, 0x0121))) {
++		seq_port_info->capability = SNDRV_SEQ_PORT_CAP_NO_EXPORT;
++		return;
++	}
+ 	/* TODO: read port flags from descriptors */
+ 	port_info = find_port_info(umidi, number);
+ 	if (port_info) {

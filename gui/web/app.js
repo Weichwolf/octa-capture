@@ -1176,7 +1176,8 @@ async function refresh() {
     const result = await api('/api/state');
     if (startRevision === revision && !writing && !pending.size) update(result);
   } catch (error) {
-    setConnected(false, error.status === 403 ? 'Open this control panel using its private launch link.' : 'The device could not be found.');
+    setConnected(false, error.status === 403 ? 'Open this control panel using its private launch link.' :
+      error.status === 503 ? error.message : 'The local control panel backend could not be reached.');
     updateMeters(null);
   } finally { leave('state'); }
 }

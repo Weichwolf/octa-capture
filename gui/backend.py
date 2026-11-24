@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections import deque
+import errno
 import json
 import math
 from pathlib import Path
@@ -19,6 +20,18 @@ class DeviceError(RuntimeError):
 
 class InvalidControl(ValueError):
     """A browser request does not describe a supported typed control."""
+
+
+def device_error_message(code):
+    if type(code) is int:
+        if code == -errno.EBUSY:
+            return ('The OCTA-CAPTURE control MIDI port is busy. '
+                    'Close other control panels or MIDI bridges using its Control port.')
+        if code in (-errno.EACCES, -errno.EPERM):
+            return 'Permission denied when opening the OCTA-CAPTURE control MIDI port.'
+        if code in (-errno.ENODEV, -errno.ENOENT):
+            return 'The OCTA-CAPTURE device is disconnected.'
+    return 'The OCTA-CAPTURE control connection failed.'
 
 
 PREAMP_PARAMETERS = {
@@ -146,6 +159,8 @@ class Bridge:
                 response = json.loads(line)
                 if type(response) is not dict:
                     raise DeviceError('Invalid device response.')
+                if response.get('id') == 0 and response.get('ok') is False and not self._ready.is_set():
+                    raise DeviceError(device_error_message(response.get('code')))
                 if response.get('event') == 'ready':
                     self._ready.set()
                 elif response.get('event') == 'meters':
@@ -221,8 +236,9 @@ class Bridge:
         self._reader = threading.Thread(target=self._read, args=(self._process,), daemon=True)
         self._reader.start()
         if not self._ready.wait(5) or self._failure:
+            message = self._failure or 'The OCTA-CAPTURE device is not available.'
             self._stop()
-            raise DeviceError('The OCTA-CAPTURE device is not available.')
+            raise DeviceError(message)
         self._exchange('meters', [1])
 
     def _update_pcm(self, pcm):

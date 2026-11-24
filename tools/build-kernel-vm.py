@@ -19,16 +19,22 @@ REQUIRED = ('CONFIG_KASAN=y', 'CONFIG_KASAN_GENERIC=y', 'CONFIG_UBSAN=y', 'CONFI
 PM_REQUIRED = ('CONFIG_PM=y', 'CONFIG_PM_SLEEP=y', 'CONFIG_SUSPEND=y',
                'CONFIG_PM_DEBUG=y', 'CONFIG_PM_ADVANCED_DEBUG=y',
                'CONFIG_FUNCTION_TRACER=y', 'CONFIG_DYNAMIC_FTRACE=y')
+SEQ_REQUIRED = ('CONFIG_SND_SEQUENCER=y', 'CONFIG_SND_SEQ_MIDI=m')
 
 
-def configuration(directory, power_management):
+def configuration(directory, power_management, control_sequencer=False):
     base = ROOT / 'kernel/vm.config'
-    if not power_management:
+    if not power_management and not control_sequencer:
         return base
     # Keep the existing minimal VM and its calibrated fault ordinals untouched.
     lines = [line for line in base.read_text().splitlines() if not line.startswith('CONFIG_LOCALVERSION=')]
-    lines += [*PM_REQUIRED, 'CONFIG_FTRACE=y', 'CONFIG_LOCALVERSION="-pm-octa-kasan-vm"']
-    path = directory / 'pm.config'
+    profile = 'pm' if power_management else 'ctrl-seq'
+    if power_management:
+        lines += [*PM_REQUIRED, 'CONFIG_FTRACE=y']
+    else:
+        lines += SEQ_REQUIRED
+    lines += [f'CONFIG_LOCALVERSION="-{profile}-octa-kasan-vm"']
+    path = directory / f'{profile}.config'
     path.write_text('\n'.join(lines) + '\n')
     return path
 
@@ -48,8 +54,11 @@ def main():
     parser.add_argument('source', type=Path, help='extracted, matching Linux 6.12 source tree')
     parser.add_argument('directory', type=Path, help='private VM build directory outside the source tree')
     parser.add_argument('--jobs', type=int, choices=range(1, 9), default=2)
-    parser.add_argument('--power-management', action='store_true',
+    profiles = parser.add_mutually_exclusive_group()
+    profiles.add_argument('--power-management', action='store_true',
                         help='build the separate suspend/runtime-PM profile with function tracing')
+    profiles.add_argument('--control-sequencer', action='store_true',
+                          help='build the separate ALSA sequencer control-port regression profile')
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
     directory = args.directory.resolve()
@@ -77,10 +86,12 @@ def main():
             prepare_source(source, ROOT / 'kernel/vm-pm-alignment-linux-6.12.patch', run)
             prepare_source(source, ROOT / 'kernel/vm-pm-ring-alignment-linux-6.12.patch', run)
         make = ['make', '-C', source, 'O=' + str(kernel), 'LLVM=-19', 'ARCH=x86_64']
-        environment = os.environ | {'KCONFIG_ALLCONFIG': str(configuration(directory, args.power_management))}
+        environment = os.environ | {'KCONFIG_ALLCONFIG': str(configuration(directory, args.power_management,
+                                                                         args.control_sequencer))}
         run([*make, 'allnoconfig'], env=environment)
         config = (kernel / '.config').read_text().splitlines()
         required = REQUIRED + (PM_REQUIRED if args.power_management else ())
+        required += SEQ_REQUIRED if args.control_sequencer else ()
         missing = [option for option in required if option not in config]
         if missing:
             raise ValueError('Required VM kernel options were not enabled: ' + ', '.join(missing))

@@ -1,3 +1,13 @@
+octa-capture (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Keep the private CTRL MIDI port out of ALSA sequencer bridges so JACK
+    can run alongside the control panel while retaining normal DIN MIDI.
+  * Report busy and permission-denied control access accurately, retaining
+    the cause across retries instead of reporting a missing device.
+  * Refine fader and rotary artwork against both reference control panels.
+
+ -- Weichwolf <56591353+Weichwolf@users.noreply.github.com>  Tue, 24 Nov 2026 11:14:02 +0100
+
 octa-capture (0.1.0-1~trixie13) trixie; urgency=medium
 
   * Add explicit experimental base/EXP clock coordination to the native

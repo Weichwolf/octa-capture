@@ -54,6 +54,17 @@ class Patch(unittest.TestCase):
 
 
 class Build(unittest.TestCase):
+    def test_control_sequencer_profile_is_separate_from_calibrated_fault_tests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = BUILD['configuration'](Path(directory), False, True)
+            lines = path.read_text().splitlines()
+            self.assertEqual(path.name, 'ctrl-seq.config')
+            self.assertIn('CONFIG_SND_SEQUENCER=y', lines)
+            self.assertIn('CONFIG_SND_SEQ_MIDI=m', lines)
+            self.assertEqual([line for line in lines if line.startswith('CONFIG_LOCALVERSION=')],
+                             ['CONFIG_LOCALVERSION="-ctrl-seq-octa-kasan-vm"'])
+            self.assertNotIn('CONFIG_PM=y', lines)
+
     def test_default_configuration_preserves_the_existing_minimal_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)

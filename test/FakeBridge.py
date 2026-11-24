@@ -10,6 +10,12 @@ def emit(value):
     print(json.dumps(value), flush=True)
 
 
+startup_errors = {'startup-busy': -16, 'startup-denied': -13, 'startup-missing': -19,
+                  'startup-unknown': True}
+if sys.argv[1] in startup_errors:
+    emit({'id': 0, 'ok': False, 'code': startup_errors[sys.argv[1]], 'error': 'Device command failed.'})
+    sys.exit(1)
+
 emit({'event': 'ready'})
 for line in sys.stdin:
     serial, operation, *arguments = line.split()

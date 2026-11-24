@@ -61,6 +61,7 @@ class Application:
         self._status = None
         self._status_updated = 0
         self._retry_after = 0
+        self._retry_error = 'The OCTA-CAPTURE device is not available.'
         self._closed = False
         self._last_client = time.monotonic()
         self._transaction = False
@@ -128,16 +129,17 @@ class Application:
         try:
             self._open()
             if time.monotonic() < self._retry_after:
-                raise DeviceError('The OCTA-CAPTURE device is not available.')
+                raise DeviceError(self._retry_error)
             if self._cached is None or time.monotonic() - self._updated >= 0.25:
                 try:
                     self._sync_selected_device()
                     self._remember(self.bridge.request('state')['state'])
-                except DeviceError:
+                except DeviceError as error:
                     with self._cache_lock:
                         self._cached = None
                         self._cached_device = None
                     self._retry_after = time.monotonic() + 1
+                    self._retry_error = str(error)
                     raise
             self._clock_status()
             if self._pair:
