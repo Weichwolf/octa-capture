@@ -45,7 +45,9 @@ def pm_console():
                       f'OCTA_VM_RUNTIME_PM_TRACE_BEGIN {case}']
             lines += [f' worker-12 [000] .... 123.456789: {name} <-caller' for name in CHECK['PM_CALLBACKS']]
             lines += [f'OCTA_VM_RUNTIME_PM_TRACE_END {case}', f'OCTA_VM_RUNTIME_PM_CYCLE {case}']
-        lines += [f'OCTA_VM_RUNTIME_PM_UNIT_PASS {mode}']
+        lines += [f'OCTA_VM_MIDI_PM_PASS {mode}', f'OCTA_VM_RUNTIME_PM_UNIT_PASS {mode}']
+    lines += [f'OCTA_VM_MIDI_PENDING_{phase} {mode}' for mode in ('normal', 'expansion')
+              for phase in ('ONLY', 'REOPEN', 'UNPLUG_PASS')]
     return '\n'.join([*lines, CHECK['MARKER']])
 
 
@@ -85,6 +87,22 @@ class PowerEvidence(unittest.TestCase):
         swapped = text.replace(before, '123.456789: temporary', 1).replace(after, before, 1)
         swapped = swapped.replace('123.456789: temporary', after, 1)
         self.assertFalse(CHECK['verify_output'](0, swapped, True, True))
+
+    def test_midi_lifecycle_markers_require_their_own_ordered_intervals(self):
+        text = pm_console()
+        for mode in ('normal', 'expansion'):
+            marker = f'OCTA_VM_MIDI_PM_PASS {mode}'
+            final = f'OCTA_VM_RUNTIME_PM_UNIT_PASS {mode}'
+            moved = text.replace(marker, '', 1).replace(final, final + '\n' + marker, 1)
+            self.assertFalse(CHECK['verify_output'](0, moved, True, True))
+            markers = [f'OCTA_VM_MIDI_PENDING_{phase} {mode}'
+                       for phase in ('ONLY', 'REOPEN', 'UNPLUG_PASS')]
+            moved = text.replace(markers[0], '', 1).replace(markers[1], markers[1] + '\n' + markers[0], 1)
+            self.assertFalse(CHECK['verify_output'](0, moved, True, True))
+        first = 'OCTA_VM_MIDI_PENDING_ONLY normal'
+        moved = text.replace(first, '', 1).replace('OCTA_VM_RUNTIME_PM_UNIT_PASS expansion',
+                                                first + '\nOCTA_VM_RUNTIME_PM_UNIT_PASS expansion', 1)
+        self.assertFalse(CHECK['verify_output'](0, moved, True, True))
 
 
 class PowerGuards(unittest.TestCase):

@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <fstream>
 #include <initializer_list>
 #include <iostream>
 #include <limits>
@@ -35,6 +36,7 @@
 extern "C" {
 #include <signal.h>
 #include <stdlib.h>
+#include <sys/poll.h>
 #include <sys/wait.h>
 }
 
@@ -55,6 +57,15 @@ constexpr std::uint8_t implicit_feedback =
 constexpr std::uint8_t async_playback = USB_ENDPOINT_SYNC_ASYNC | USB_ENDPOINT_XFER_ISOC;
 constexpr std::uint8_t sentinel = 0xa5;
 constexpr unsigned int pcm_rate_hz = 48000;
+constexpr int power_poll_attempts = 100;
+constexpr int power_observe_ms = 200;
+constexpr int midi_echo_timeout_ms = 1000;
+constexpr std::uint16_t expansion_product_id = 0x0121;
+constexpr std::array<std::uint8_t, 3> midi_left_on{0x90, 0x3c, 0x64};
+constexpr std::array<std::uint8_t, 3> midi_right_on{0x91, 0x40, 0x65};
+constexpr std::array<std::uint8_t, 3> midi_left_off{0x80, 0x3c, 0};
+constexpr std::array<std::uint8_t, 3> midi_right_off{0x81, 0x40, 0};
+enum class MidiAccess : std::uint8_t { input = O_RDONLY, output = O_WRONLY, duplex = O_RDWR };
 
 enum class StatusMode : std::uint8_t {
   normal,
@@ -72,6 +83,7 @@ struct Scenario {
   StatusMode mode;
   int error;
   std::uint16_t product_id = 0x0120;
+  bool stall_midi = false;
 };
 
 constexpr std::array scenarios = {
@@ -84,7 +96,13 @@ constexpr std::array scenarios = {
     Scenario{.name = "missing-one", .mode = StatusMode::missing_one, .error = EAGAIN},
     Scenario{.name = "timeout", .mode = StatusMode::timeout, .error = ETIMEDOUT},
     Scenario{.name = "disconnect", .mode = StatusMode::timeout, .error = 0},
-    Scenario{.name = "expansion", .mode = StatusMode::normal, .error = 0, .product_id = 0x0121}};
+    Scenario{.name = "expansion", .mode = StatusMode::normal, .error = 0, .product_id = 0x0121},
+    Scenario{.name = "midi-stall", .mode = StatusMode::normal, .error = 0, .stall_midi = true},
+    Scenario{.name = "midi-stall-expansion",
+             .mode = StatusMode::normal,
+             .error = 0,
+             .product_id = 0x0121,
+             .stall_midi = true}};
 
 [[noreturn]] void fail(const char *message) {
   std::perror(message);
@@ -252,10 +270,71 @@ struct Event {
 static_assert(offsetof(Io, data) == sizeof(usb_raw_ep_io));
 static_assert(offsetof(Event, data) == sizeof(usb_raw_event));
 
+class MidiGadget {
+public:
+  MidiGadget(int fd, bool stall) : fd_(fd), stall_(stall) {}
+
+  void alternate(std::uint16_t setting) {
+    if (worker_ > 0) {
+      checked(kill(worker_, SIGTERM), "Stop MIDI worker");
+      int result = 0;
+      checked(waitpid(worker_, &result, 0), "Reap MIDI worker");
+      require(WIFSIGNALED(result) && WTERMSIG(result) == SIGTERM, "MIDI worker stopped");
+      for (const int ep : {out_, in_}) {
+        checked(ioctl(fd_, USB_RAW_IOCTL_EP_DISABLE, static_cast<unsigned long>(ep)),
+                "Disable MIDI endpoint");
+      }
+    }
+    usb_endpoint_descriptor endpoint{};
+    endpoint.bLength = USB_DT_ENDPOINT_SIZE;
+    endpoint.bDescriptorType = USB_DT_ENDPOINT;
+    endpoint.bmAttributes = setting == 0 ? USB_ENDPOINT_XFER_BULK : USB_ENDPOINT_XFER_INT;
+    endpoint.wMaxPacketSize = setting == 0 ? 512 : 64;
+    endpoint.bInterval = setting == 0 ? 0 : 1;
+    endpoint.bEndpointAddress = midi_in_ep;
+    in_ = checked(ioctl(fd_, USB_RAW_IOCTL_EP_ENABLE, &endpoint), "Enable MIDI input");
+    endpoint.bEndpointAddress = midi_in_ep & USB_ENDPOINT_NUMBER_MASK;
+    out_ = checked(ioctl(fd_, USB_RAW_IOCTL_EP_ENABLE, &endpoint), "Enable MIDI output");
+    const pid_t parent = getpid();
+    worker_ = checked(fork(), "Fork MIDI worker");
+    if (worker_ == 0) {
+      checked(prctl(PR_SET_PDEATHSIG, SIGTERM), "MIDI parent death signal");
+      require(getppid() == parent, "MIDI parent still alive");
+      echo_packets(endpoint.wMaxPacketSize);
+    }
+  }
+
+private:
+  int fd_;
+  bool stall_;
+  int out_{-1};
+  int in_{-1};
+  pid_t worker_{-1};
+
+  [[noreturn]] void echo_packets(std::uint16_t packet_size) const {
+    if (stall_) {
+      for (;;) { pause(); }
+    }
+    for (;;) {
+      Io io{};
+      io.ep = static_cast<std::uint16_t>(out_);
+      io.length = packet_size;
+      const int count = checked(ioctl(fd_, USB_RAW_IOCTL_EP_READ, &io), "Read MIDI packets");
+      require(count > 0 && count % 4 == 0, "Complete MIDI event packets");
+      io.ep = static_cast<std::uint16_t>(in_);
+      io.length = static_cast<std::uint32_t>(count);
+      require(checked(ioctl(fd_, USB_RAW_IOCTL_EP_WRITE, &io), "Echo MIDI packets") == count,
+              "Complete MIDI echo");
+    }
+  }
+};
+
 class Gadget {
 public:
   explicit Gadget(const Scenario &test)
-      : fd_(checked(open("/dev/raw-gadget", O_RDWR | O_CLOEXEC), "raw gadget")), test_(test) {}
+      : fd_(checked(open("/dev/raw-gadget", O_RDWR | O_CLOEXEC), "raw gadget")),
+        test_(test),
+        midi_(fd_, test.stall_midi) {}
 
   void run() {
     usb_raw_init init{};
@@ -282,6 +361,7 @@ public:
 private:
   const int fd_;
   const Scenario test_;
+  MidiGadget midi_;
   std::array<std::uint8_t, 5> alts_{};
   int status_ep_{-1};
   pid_t writer_{-1};
@@ -367,6 +447,7 @@ private:
       return;
     }
     if (status_interface) { status(request.wValue == 1); }
+    if (midi) { midi_.alternate(request.wValue); }
     alts_[request.wIndex] = static_cast<std::uint8_t>(request.wValue);
     ack();
   }
@@ -381,6 +462,7 @@ private:
     } else if (request.bRequestType == 0 && request.bRequest == USB_REQ_SET_CONFIGURATION &&
                request.wValue == 1) {
       checked(ioctl(fd_, USB_RAW_IOCTL_CONFIGURE, 0UL), "CONFIGURE");
+      midi_.alternate(0);
       ack();
       return;
     } else if (request.bRequestType == 1 && request.bRequest == USB_REQ_SET_INTERFACE &&
@@ -482,6 +564,141 @@ void write_setting(const Setting &setting) {
               static_cast<ssize_t>(setting.value.size()),
           "Write complete VM fault setting");
   checked(close(fd), "Close VM fault setting");
+}
+
+std::string sysfs_word(const char *path) {
+  std::ifstream input(path);
+  std::string value;
+  require(static_cast<bool>(input >> value), "Read VM power attribute");
+  return value;
+}
+
+void wait_power(std::string_view state) {
+  for (int attempt = 0; attempt < power_poll_attempts; ++attempt) {
+    if (sysfs_word("/sys/bus/usb/devices/1-1/power/runtime_status") == state) { return; }
+    checked(poll(nullptr, 0, 10), "Wait for VM power state");
+  }
+  require(false, "Expected USB power state");
+}
+
+void midi_holds(unsigned int count) {
+  const auto expected = std::to_string(count);
+  constexpr auto path = "/sys/bus/usb/devices/1-1:1.2/power/runtime_usage";
+  for (int attempt = 0; attempt < power_poll_attempts; ++attempt) {
+    if (sysfs_word(path) == expected) {
+      checked(poll(nullptr, 0, power_observe_ms), "Observe MIDI power hold");
+      require(sysfs_word(path) == expected, "Stable exact MIDI power usage count");
+      require(sysfs_word("/sys/bus/usb/devices/1-1/power/runtime_status") == "active",
+              "MIDI users and pending URBs keep the device active");
+      return;
+    }
+    checked(poll(nullptr, 0, 10), "Wait for MIDI usage count");
+  }
+  require(false, "Expected MIDI power hold count");
+}
+
+int midi_open(int subdevice, MidiAccess access) {
+  const auto flags = static_cast<int>(access);
+  snd_ctl_elem_info status{};
+  const int control = status_control(status);
+  checked(ioctl(control, SNDRV_CTL_IOCTL_RAWMIDI_PREFER_SUBDEVICE, &subdevice), "Prefer MIDI port");
+  const int fd =
+      checked(open("/dev/snd/midiC0D0", flags | O_NONBLOCK | O_CLOEXEC), "Open MIDI port");
+  checked(close(control), "Close MIDI preference control");
+  for (const int stream : {SNDRV_RAWMIDI_STREAM_INPUT, SNDRV_RAWMIDI_STREAM_OUTPUT}) {
+    if ((stream == SNDRV_RAWMIDI_STREAM_INPUT && flags == O_WRONLY) ||
+        (stream == SNDRV_RAWMIDI_STREAM_OUTPUT && flags == O_RDONLY)) {
+      continue;
+    }
+    snd_rawmidi_info info{};
+    info.stream = stream;
+    checked(ioctl(fd, SNDRV_RAWMIDI_IOCTL_INFO, &info), "MIDI port INFO");
+    require(info.card == 0 && info.subdevice == static_cast<unsigned int>(subdevice) &&
+                info.subdevices_count == 2,
+            "Exact modeled MIDI port identity");
+    snd_rawmidi_params parameters{};
+    parameters.stream = stream;
+    parameters.buffer_size = 256;
+    parameters.avail_min = 1;
+    parameters.no_active_sensing = 1;
+    checked(ioctl(fd, SNDRV_RAWMIDI_IOCTL_PARAMS, &parameters), "MIDI port PARAMS");
+  }
+  return fd;
+}
+
+void midi_exchange(int fd, const std::array<std::uint8_t, 3> &message) {
+  std::array<std::uint8_t, 3> received{};
+  require(read(fd, received.data(), received.size()) == -1 && errno == EAGAIN,
+          "Prime empty MIDI input");
+  require(write(fd, message.data(), message.size()) == static_cast<ssize_t>(message.size()),
+          "Write complete MIDI message");
+  pollfd descriptor{.fd = fd, .events = POLLIN, .revents = 0};
+  require(checked(poll(&descriptor, 1, midi_echo_timeout_ms), "Wait for MIDI echo") == 1 &&
+              descriptor.revents == POLLIN,
+          "MIDI echo readable without transport errors");
+  require(read(fd, received.data(), received.size()) == static_cast<ssize_t>(received.size()) &&
+              received == message,
+          "Exact MIDI echo on selected cable");
+}
+
+void midi_pm(const Scenario &test) {
+  require(sysfs_word("/sys/bus/usb/devices/1-1/idProduct") ==
+              (test.product_id == expansion_product_id ? "0121" : "0120"),
+          "Selected MIDI fixture personality");
+  wait_power("suspended");
+  // Linux 6.12 arms seven input URBs; each open direction holds one PM reference.
+  for (const auto access : {MidiAccess::input, MidiAccess::output}) {
+    const int fd = midi_open(0, access);
+    midi_holds(access == MidiAccess::input ? 8 : 1);
+    checked(close(fd), "Close single MIDI direction");
+    wait_power("suspended");
+  }
+  const int left = midi_open(0, MidiAccess::duplex);
+  int right = midi_open(1, MidiAccess::duplex);
+  midi_holds(11);
+  midi_exchange(left, midi_left_on);
+  midi_exchange(right, midi_right_on);
+  checked(close(right), "Close one duplex MIDI cable");
+  midi_holds(9);
+  midi_exchange(left, midi_left_off);
+  right = midi_open(1, MidiAccess::duplex);
+  midi_holds(11);
+  midi_exchange(right, midi_right_off);
+  checked(close(left), "Close first MIDI cable");
+  midi_holds(9);
+  checked(close(right), "Close final MIDI cable");
+  wait_power("suspended");
+  require(sysfs_word("/sys/bus/usb/devices/1-1:1.2/power/runtime_usage") == "0",
+          "No MIDI power holds remain after close");
+  std::cout << "OCTA_VM_MIDI_PM_PASS " << test.name << '\n' << std::flush;
+}
+
+void midi_pending_unplug(pid_t gadget) {
+  const std::string_view mode =
+      sysfs_word("/sys/bus/usb/devices/1-1/idProduct") == "0121" ? "expansion" : "normal";
+  wait_power("suspended");
+  const int output = midi_open(0, MidiAccess::output);
+  midi_holds(1);
+  constexpr std::array<std::uint8_t, 3> message{0x90, 0x3c, 0x64};
+  require(write(output, message.data(), message.size()) == static_cast<ssize_t>(message.size()),
+          "Queue a MIDI message on the stalled endpoint");
+  midi_holds(2);
+  checked(close(output), "Close MIDI with a pending output URB");
+  midi_holds(1);
+  std::cout << "OCTA_VM_MIDI_PENDING_ONLY " << mode << '\n' << std::flush;
+  const int input = midi_open(1, MidiAccess::input);
+  midi_holds(9);
+  std::cout << "OCTA_VM_MIDI_PENDING_REOPEN " << mode << '\n' << std::flush;
+  checked(kill(gadget, SIGTERM), "Unplug with a retained MIDI handle and pending URBs");
+  for (int attempt = 0;
+       attempt < power_poll_attempts && access("/sys/bus/usb/devices/1-1", F_OK) == 0;
+       ++attempt) {
+    checked(poll(nullptr, 0, 10), "Wait for MIDI disconnect");
+  }
+  require(access("/sys/bus/usb/devices/1-1", F_OK) == -1 && errno == ENOENT,
+          "MIDI device removed before closing its last handle");
+  checked(close(input), "Close retained MIDI handle after disconnect");
+  std::cout << "OCTA_VM_MIDI_PENDING_UNPLUG_PASS " << mode << '\n' << std::flush;
 }
 
 void allocation_status() {
@@ -731,6 +948,11 @@ int main(int argc, char **argv) {
     disconnect_read(process_id(argv[2]));
     return 0;
   }
+  if (std::string_view(argv[1]) == "midi-pending-unplug") {
+    require(argc == 3, "MIDI gadget process ID required");
+    midi_pending_unplug(process_id(argv[2]));
+    return 0;
+  }
   if (std::string_view(argv[1]) == "reject-pcm") {
     require(argc == 2, "PCM check accepts no scenario");
     reject_pcm();
@@ -752,6 +974,8 @@ int main(int argc, char **argv) {
     gadget.run();
   } else if (std::string_view(argv[1]) == "read-status") {
     read_status(test);
+  } else if (std::string_view(argv[1]) == "midi-pm") {
+    midi_pm(test);
   } else {
     require(false, "Unknown command");
   }

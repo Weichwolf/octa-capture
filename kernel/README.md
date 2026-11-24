@@ -386,18 +386,23 @@ python3 tools/check-kernel-vm.py build/kernel-vm-pm --busybox /bin/busybox \
   --usb-fixture build/release/kernel_usb_fixture --runtime-pm
 ```
 
-The PM checker requires three suspended/status-wake cycles for each modeled
-base/EXP unit, exact status readback, module-specific suspend/resume traces and
-suspended-device teardown.
-Missing, duplicate or reordered evidence fails verification. This tests neither
-physical power management nor running audio/MIDI; system sleep remains separate.
-The current module fails this check: the modeled base device stays active,
-interface 2 retains a PM usage count of one, and no driver PM callbacks run.
-The imported legacy MIDI code takes a lifetime
-`usb_autopm_get_interface_no_resume()` reference in `__snd_usbmidi_create`.
-Idle USB autosuspend is therefore not established; changing this policy requires
-balanced MIDI-open/close, pending-URB and disconnect handling. Do not remove the
-reference merely to make the status-only test pass.
+The PM VM passes three suspended/status-wake cycles for each modeled base/EXP
+unit: 120 exact status replies, module-specific suspend/resume traces and
+suspended-device teardown. It also checks MIDI input-only/output-only and two
+simultaneous duplex cables, exact loopback bytes, closing/reopening either cable,
+and return to idle suspend. Exact PM usage counts include every open direction
+and the seven pending Linux 6.12 MIDI input URBs. A stalled output retains its
+power hold after the final output close; unplug with that URB and a reopened
+input handle must complete, including the late close and module unload.
+Missing, duplicate or reordered evidence fails verification.
+
+`midi-pm.patch` replaces the inherited lifetime MIDI power hold only for the
+OCTA base/EXP IDs. Each successful open and submitted URB holds power; failed
+submissions, completions, cancellation and close release their own references.
+Resume happens outside MIDI lifecycle locks, the interface remains referenced
+until late closes finish, and input retry timers cannot rearm closed endpoints.
+These VM results do not prove physical USB/DIN MIDI, device power recovery,
+running audio, DSP commands or system sleep.
 Use a different output directory to preserve the minimal VM and its calibrated
 allocation-failure cases. Do not overlap builds using the same private source.
 `vm-pm-linux-6.12.patch` teaches the private kernel-doc parser to recognize sparse
@@ -486,8 +491,9 @@ data, running-stream faults or physical-device streaming.
 
 This is a legal descriptor/status model, not a recording of the device's full
 descriptors or a firmware emulator. MIDI packet sizes and strings are fixture
-values. The model rejects audio streaming alternates and does not service MIDI,
-physical audio, DSP controls or external clocks. Fixed malformed replies exist
+values. Its MIDI endpoints echo legal USB event packets without modeling DIN
+timing or CTRL/DSP command semantics. The model rejects audio streaming
+alternates and does not implement physical audio or external clocks. Fixed malformed replies exist
 only on the guest's dummy USB bus. This is deterministic testing, not fuzzing;
 no malformed traffic is sent to physical hardware.
 
@@ -496,8 +502,9 @@ generic/standalone module load/unload cycles and the synthetic USB/status
 cycles without kernel warnings or KASAN/UBSAN reports.
 Clock, status, monitor and PCM meter objects contain
 KASAN and UBSAN alignment instrumentation. Streaming, other transport failures,
-physical-controller unplug, broader allocation fault injection and power management
-still need separate sanitizer checks.
+physical-controller unplug, broader allocation fault injection and system sleep
+still need separate sanitizer checks. Synthetic runtime PM and MIDI lifecycle
+coverage uses the separate PM profile described above.
 
 ## Passive USB timing observation
 

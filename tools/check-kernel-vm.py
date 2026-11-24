@@ -157,7 +157,12 @@ def usb_pm_script():
               '    echo "OCTA_VM_RUNTIME_PM_CYCLE $mode $cycle"', '  done',
               '  echo nop > "$trace/current_tracer"', '  echo > "$trace/set_ftrace_filter"',
               '  echo 0 > "$device/power/autosuspend_delay_ms"', '  echo auto > "$device/power/control"',
-              '  wait_suspended', '  usb_stop', '  echo "OCTA_VM_RUNTIME_PM_UNIT_PASS $mode"', 'done']
+              '  wait_suspended', '  /bin/usb-fixture midi-pm "$mode"', '  wait_suspended',
+              '  usb_stop', '  echo "OCTA_VM_RUNTIME_PM_UNIT_PASS $mode"', 'done',
+              'for mode in normal expansion; do', '  scenario=midi-stall',
+              '  test "$mode" != expansion || scenario=midi-stall-expansion', '  usb_start "$scenario"',
+              '  echo 0 > "$device/power/autosuspend_delay_ms"', '  echo auto > "$device/power/control"',
+              '  wait_suspended', '  /bin/usb-fixture midi-pending-unplug "$gadget"', '  usb_finish', 'done']
     return lines
 
 
@@ -242,6 +247,11 @@ def pm_evidence(text):
         previous_unit = lines.index(f'OCTA_VM_RUNTIME_PM_UNIT_PASS {mode}')
         if previous_unit <= filters_end[mode]:
             return False
+        midi = f'OCTA_VM_MIDI_PM_PASS {mode}'
+        final_cycle = f'OCTA_VM_RUNTIME_PM_CYCLE {mode} 3'
+        if (lines.count(midi) != 1 or lines.count(final_cycle) != 1 or
+                not lines.index(final_cycle) < lines.index(midi) < previous_unit):
+            return False
     previous = -1
     for case in PM_CASES:
         markers = [f'OCTA_VM_RUNTIME_PM_{phase} {case}' for phase in phases]
@@ -260,7 +270,15 @@ def pm_evidence(text):
         if positions[-1] >= lines.index(f'OCTA_VM_RUNTIME_PM_UNIT_PASS {case.split()[0]}'):
             return False
         previous = positions[-1]
-    return True
+    pending = [f'OCTA_VM_MIDI_PENDING_{phase} {mode}' for mode in ('normal', 'expansion')
+               for phase in ('ONLY', 'REOPEN', 'UNPLUG_PASS')]
+    if (sum(line.startswith('OCTA_VM_MIDI_PM_PASS ') for line in lines) != 2 or
+            any(sum(line.startswith(f'OCTA_VM_MIDI_PENDING_{phase} ') for line in lines) != 2
+                for phase in ('ONLY', 'REOPEN', 'UNPLUG_PASS')) or
+            any(lines.count(marker) != 1 for marker in pending)):
+        return False
+    positions = [lines.index(marker) for marker in pending]
+    return positions == sorted(positions) and positions[0] > previous_unit
 
 
 def verify_output(result, text, usb, runtime_pm=False):
@@ -351,7 +369,9 @@ def main():
         print('PASS sanitizer VM boot and three generic/standalone module load/unload cycles. No device streaming was tested.')
         if args.runtime_pm:
             print('PASS six synthetic runtime suspend/status-wake cycles across base/EXP, traced driver/PCM callbacks, 120 status replies and suspended-device teardown.')
-            print('The legal gadget does not model audio streaming, CTRL MIDI or physical power management.')
+            print('PASS base/EXP MIDI input/output and dual-cable power holds, exact loopback bytes, close/reopen and idle suspend recovery.')
+            print('PASS pending MIDI URBs retain power after the final output close; unplug and late input close complete for base/EXP.')
+            print('The legal gadget does not model audio streaming, DSP commands, physical DIN MIDI or physical power management.')
         elif fixture:
             print('PASS three synthetic USB probe/concurrent-status/disconnect cycles (120 status reads). No physical device was tested.')
             print('PASS synthetic 0582:0121 expansion binding, 20 status reads and teardown. Actual EXP descriptors/streaming remain unverified.')

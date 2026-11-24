@@ -1,0 +1,221 @@
+SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] Balance OCTA MIDI power holds across ports and URBs
+
+Resume before taking MIDI lifecycle locks. Hold power for every successful
+port open and pending URB; release completed, cancelled and rejected URBs
+asynchronously. Retain the interface until late raw-MIDI closes complete.
+Stop input retry timers from rearming a closed endpoint. Other device IDs
+retain the imported ALSA lifetime power policy.
+
+---
+--- a/sound/usb/midi.c
++++ b/sound/usb/midi.c
+@@ -114,6 +114,7 @@
+ 	unsigned int opened[2];
+ 	unsigned char disconnected;
+ 	unsigned char input_running;
++	bool runtime_pm;
+ 
+ 	struct snd_kcontrol *roland_load_ctl;
+ };
+@@ -174,9 +175,17 @@
+ /*
+  * Submits the URB, with error handling.
+  */
+-static int snd_usbmidi_submit_urb(struct urb *urb, gfp_t flags)
+-{
+-	int err = usb_submit_urb(urb, flags);
++static int snd_usbmidi_submit_urb(struct snd_usb_midi *umidi,
++				  struct urb *urb, gfp_t flags)
++{
++	int err;
++
++	/* An open port or the previous completion keeps the device awake. */
++	if (umidi->runtime_pm)
++		usb_autopm_get_interface_no_resume(umidi->iface);
++	err = usb_submit_urb(urb, flags);
++	if (err < 0 && umidi->runtime_pm)
++		usb_autopm_put_interface_async(umidi->iface);
+ 	if (err < 0 && err != -ENODEV)
+ 		dev_err(&urb->dev->dev, "usb_submit_urb: %d\n", err);
+ 	return err;
+@@ -253,12 +262,17 @@
+ 				mod_timer(&ep->umidi->error_timer,
+ 					  jiffies + ERROR_DELAY_JIFFIES);
+ 			}
+-			return;
+-		}
+-	}
+-
+-	urb->dev = ep->umidi->dev;
+-	snd_usbmidi_submit_urb(urb, GFP_ATOMIC);
++			goto put_pm;
++		}
++	}
++
++	if (READ_ONCE(ep->umidi->input_running)) {
++		urb->dev = ep->umidi->dev;
++		snd_usbmidi_submit_urb(ep->umidi, urb, GFP_ATOMIC);
++	}
++put_pm:
++	if (ep->umidi->runtime_pm)
++		usb_autopm_put_interface_async(ep->umidi->iface);
+ }
+ 
+ static void snd_usbmidi_out_urb_complete(struct urb *urb)
+@@ -282,10 +296,13 @@
+ 			if (err != -ENODEV)
+ 				mod_timer(&ep->umidi->error_timer,
+ 					  jiffies + ERROR_DELAY_JIFFIES);
+-			return;
++			goto put_pm;
+ 		}
+ 	}
+ 	snd_usbmidi_do_output(ep);
++put_pm:
++	if (ep->umidi->runtime_pm)
++		usb_autopm_put_interface_async(ep->umidi->iface);
+ }
+ 
+ /*
+@@ -316,7 +333,7 @@
+ 			dump_urb("sending", urb->transfer_buffer,
+ 				 urb->transfer_buffer_length);
+ 			urb->dev = ep->umidi->dev;
+-			if (snd_usbmidi_submit_urb(urb, GFP_ATOMIC) < 0)
++			if (snd_usbmidi_submit_urb(ep->umidi, urb, GFP_ATOMIC) < 0)
+ 				break;
+ 			ep->active_urbs |= 1 << urb_index;
+ 		}
+@@ -350,13 +367,13 @@
+ 	}
+ 	for (i = 0; i < MIDI_MAX_ENDPOINTS; ++i) {
+ 		struct snd_usb_midi_in_endpoint *in = umidi->endpoints[i].in;
+-		if (in && in->error_resubmit) {
++		if (in && umidi->input_running && in->error_resubmit) {
+ 			in->error_resubmit = 0;
+ 			for (j = 0; j < INPUT_URBS; ++j) {
+ 				if (atomic_read(&in->urbs[j]->use_count))
+ 					continue;
+ 				in->urbs[j]->dev = umidi->dev;
+-				snd_usbmidi_submit_urb(in->urbs[j], GFP_ATOMIC);
++				snd_usbmidi_submit_urb(umidi, in->urbs[j], GFP_ATOMIC);
+ 			}
+ 		}
+ 		if (umidi->endpoints[i].out)
+@@ -1148,8 +1165,8 @@
+ 	snd_usbmidi_input_start(&umidi->list);
+ }
+ 
+-static int substream_open(struct snd_rawmidi_substream *substream, int dir,
+-			  int open)
++static int substream_update(struct snd_rawmidi_substream *substream, int dir,
++			    int open)
+ {
+ 	struct snd_usb_midi *umidi = substream->rmidi->private_data;
+ 	struct snd_kcontrol *ctl;
+@@ -1192,6 +1209,27 @@
+ 	mutex_unlock(&umidi->mutex);
+ 	up_read(&umidi->disc_rwsem);
+ 	return 0;
++}
++
++/* Resume outside locks taken by the USB suspend/resume callbacks. */
++static int substream_open(struct snd_rawmidi_substream *substream, int dir,
++			  int open)
++{
++	struct snd_usb_midi *umidi = substream->rmidi->private_data;
++	int err;
++
++	if (!umidi->runtime_pm)
++		return substream_update(substream, dir, open);
++	if (open) {
++		err = usb_autopm_get_interface(umidi->iface);
++		if (err < 0)
++			return err;
++	}
++	err = substream_update(substream, dir, open);
++	/* Closing after disconnect still releases the successful open's hold. */
++	if (!open || err < 0)
++		usb_autopm_put_interface(umidi->iface);
++	return err;
+ }
+ 
+ static int snd_usbmidi_output_open(struct snd_rawmidi_substream *substream)
+@@ -1536,6 +1574,8 @@
+ 		kfree(ep->out);
+ 	}
+ 	mutex_destroy(&umidi->mutex);
++	if (umidi->runtime_pm)
++		usb_put_intf(umidi->iface);
+ 	kfree(umidi);
+ }
+ 
+@@ -2439,15 +2479,20 @@
+ 	unsigned int i, j;
+ 
+ 	umidi = list_entry(p, struct snd_usb_midi, list);
+-	if (!umidi->input_running)
++	spin_lock_irq(&umidi->disc_lock);
++	if (!umidi->input_running) {
++		spin_unlock_irq(&umidi->disc_lock);
+ 		return;
++	}
++	/* A retry timer must not re-arm an endpoint while we kill its URBs. */
++	WRITE_ONCE(umidi->input_running, 0);
++	spin_unlock_irq(&umidi->disc_lock);
+ 	for (i = 0; i < MIDI_MAX_ENDPOINTS; ++i) {
+ 		struct snd_usb_midi_endpoint *ep = &umidi->endpoints[i];
+ 		if (ep->in)
+ 			for (j = 0; j < INPUT_URBS; ++j)
+ 				usb_kill_urb(ep->in->urbs[j]);
+ 	}
+-	umidi->input_running = 0;
+ }
+ EXPORT_SYMBOL(snd_usbmidi_input_stop);
+ 
+@@ -2462,9 +2507,9 @@
+ 	for (i = 0; i < INPUT_URBS; ++i) {
+ 		struct urb *urb = ep->urbs[i];
+ 		spin_lock_irqsave(&umidi->disc_lock, flags);
+-		if (!atomic_read(&urb->use_count)) {
++		if (umidi->input_running && !atomic_read(&urb->use_count)) {
+ 			urb->dev = ep->umidi->dev;
+-			snd_usbmidi_submit_urb(urb, GFP_ATOMIC);
++			snd_usbmidi_submit_urb(umidi, urb, GFP_ATOMIC);
+ 		}
+ 		spin_unlock_irqrestore(&umidi->disc_lock, flags);
+ 	}
+@@ -2479,11 +2524,15 @@
+ 	int i;
+ 
+ 	umidi = list_entry(p, struct snd_usb_midi, list);
+-	if (umidi->input_running || !umidi->opened[1])
++	spin_lock_irq(&umidi->disc_lock);
++	if (umidi->input_running || !umidi->opened[1]) {
++		spin_unlock_irq(&umidi->disc_lock);
+ 		return;
++	}
++	WRITE_ONCE(umidi->input_running, 1);
++	spin_unlock_irq(&umidi->disc_lock);
+ 	for (i = 0; i < MIDI_MAX_ENDPOINTS; ++i)
+ 		snd_usbmidi_input_start_ep(umidi, umidi->endpoints[i].in);
+-	umidi->input_running = 1;
+ }
+ EXPORT_SYMBOL(snd_usbmidi_input_start);
+ 
+@@ -2656,7 +2705,13 @@
+ 	if (err < 0)
+ 		goto exit;
+ 
+-	usb_autopm_get_interface_no_resume(umidi->iface);
++	if (usb_id == USB_ID(0x0582, 0x0120) ||
++	    usb_id == USB_ID(0x0582, 0x0121)) {
++		usb_get_intf(umidi->iface);
++		umidi->runtime_pm = true;
++	} else {
++		usb_autopm_get_interface_no_resume(umidi->iface);
++	}
+ 
+ 	list_add_tail(&umidi->list, midi_list);
+ 	if (num_rawmidis)
